@@ -47,3 +47,23 @@ Whenever a Button is rendered as a link, say so:
 ```
 
 The reverse case — `<DropdownMenuTrigger render={<Button …/>} />` — needs nothing, because that *does* produce a native button.
+
+## `DropdownMenuLabel` must live inside a `DropdownMenuGroup`
+
+Base UI's `Menu.GroupLabel` labels a group and reads that group's context, so using it loose inside the content throws at runtime:
+
+> MenuGroupContext is missing. Menu group parts must be used within `<Menu.Group>` or `<Menu.RadioGroup>`.
+
+It compiles fine — nothing in the types requires the parent — so this only shows up when the menu is actually opened. Wrap the label together with the items it describes:
+
+```tsx
+<DropdownMenuContent>
+  <DropdownMenuGroup>
+    <DropdownMenuLabel>…</DropdownMenuLabel>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem>…</DropdownMenuItem>
+  </DropdownMenuGroup>
+</DropdownMenuContent>
+```
+
+Grouping the label with its items is also the correct semantics, not merely a workaround for the error.
