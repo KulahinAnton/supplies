@@ -2,6 +2,7 @@ import "dotenv/config";
 import { prisma } from "@/lib/prisma";
 import { addStock, consume } from "@/lib/stock-service";
 import { getDashboard, getItemViews, getShoppingView } from "@/lib/queries";
+import { itemQuantity } from "@/lib/stock";
 import { renderMessage } from "@/lib/messages";
 import { formatQuantityWithUnit } from "@/lib/format";
 
@@ -37,6 +38,9 @@ async function main() {
   });
 
   console.log("\n1. Multi-batch add (one purchase, three expiry dates)");
+  const waterBefore = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: water.id } }),
+  );
   const before = await prisma.stockBatch.count({ where: { itemId: water.id } });
   const added = await addStock(actor, water.id, [
     { quantity: "2", expiresAt: "2027-01-10" },
@@ -74,12 +78,17 @@ async function main() {
   check("quantities summed to 3", mergedBatch.quantity.toString() === "3", mergedBatch.quantity.toString());
 
   console.log("\n3. FEFO consume skips the expired batch");
+  // Set up our own stock rather than relying on what the seed left behind —
+  // otherwise a second run of this script finds the milk already drunk.
+  const nextYear = new Date().getUTCFullYear() + 1;
+  await addStock(actor, milk.id, [{ quantity: "2", expiresAt: `${nextYear}-06-01` }]);
+
   const milkBatches = await prisma.stockBatch.findMany({
-    where: { itemId: milk.id },
+    where: { itemId: milk.id, quantity: { gt: 0 } },
     orderBy: { expiresAt: "asc" },
   });
   const expiredBatch = milkBatches[0];
-  const goodBatch = milkBatches[1];
+  const goodBatch = milkBatches.find((b) => b.id !== expiredBatch.id)!;
   const took = await consume(actor, milk.id, "1");
   check("consume ok", took.ok, took.ok ? "" : renderMessage(took.error));
   const expiredAfter = await prisma.stockBatch.findUniqueOrThrow({
@@ -137,10 +146,12 @@ async function main() {
   const dashboard = await getDashboard(household.id);
   const views = await getItemViews(household.id);
   const waterView = views.find((item) => item.id === water.id)!;
+  // Relative, not absolute: this script is meant to be re-runnable against a
+  // database it has already touched, so it must not assume a fresh seed.
   check(
-    "water totals 20 pcs after the add",
-    waterView.quantity.toString() === "20",
-    formatQuantityWithUnit(waterView.quantity, waterView.unit),
+    "water grew by exactly the 10 added",
+    waterView.quantity.equals(waterBefore.plus(10)),
+    `${waterBefore} → ${formatQuantityWithUnit(waterView.quantity, waterView.unit)}`,
   );
   check("water is OK on stock", waterView.stock === "OK");
   const milkView = views.find((item) => item.id === milk.id)!;

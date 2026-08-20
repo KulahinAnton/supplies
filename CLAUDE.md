@@ -2,7 +2,9 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–10 implemented and running against a live Postgres. Two migrations applied, seed idempotent, `pnpm test` (111), `pnpm test:db` (25 integration checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass. The only paths never exercised are the ones needing a real Telegram token: the bot's command handlers and actual message delivery.
+> **Status.** Features 0–11 implemented against a live Postgres. Three migrations applied, seed idempotent, `pnpm test` (141), `pnpm test:db` (26 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+>
+> Not yet exercised: the bot.s command handlers and message delivery (need a real Telegram token), and the **drag gesture** of Feature 11 — its wiring, collision strategy and the server action behind it are verified, but a real finger/mouse drag has not been performed.
 
 ## Stack
 
@@ -35,7 +37,7 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 
 1. `pnpm db:up` — Postgres 17 on port 5434.
 2. `cp .env.example .env` and fill `AUTH_SECRET` (`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`).
-3. `pnpm db:migrate` — applies the two existing migrations.
+3. `pnpm db:migrate` — applies the existing migrations.
 4. `pnpm db:seed` — demo household, login `anton@example.com` / `supplies123`.
 
 ## Gotcha: `server-only` breaks the scripts
@@ -49,6 +51,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 ## Layout
 
 - `app/login|register|join/[token]|forgot-password|reset-password` — public auth pages; each bounces a signed-in visitor via `validSessionOrNull()` (NOT the raw JWT)
+- `hooks/use-collapsed-groups.ts` — per-device collapse state for shopping groups (localStorage via `useSyncExternalStore`, so no setState-in-effect and no hydration mismatch)
 - `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expiring · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `settings/`
 - `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified)
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
@@ -56,6 +59,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `lib/prisma.ts` — Prisma singleton (pg adapter); `lib/generated/prisma/` — generated client (gitignored)
 - **Pure engine, colocated tests, no DB:** `lib/stock.ts` (`itemQuantity`, `availableQuantity`, `stockState`, `fefoOrder`, `planConsume`, `planCorrection`, `planDiscard`), `lib/expiry.ts` (batch/item states, urgency), `lib/shopping.ts` (candidates), `lib/period.ts` (date-only, UTC), `lib/format.ts` (uk-UA, plurals), `lib/telegram-link.ts` (signed link tokens), `lib/barcode-source.ts` (`parseOffProduct`)
 - `lib/stock-service.ts` — **the single stock write path**, called by both the server actions and the bot. Takes an `Actor` instead of reading a session, which is what makes "one implementation, two front ends" real
+- `lib/shopping-groups.ts` — pure grouping (Feature 11): `null` groupId means «Загальна група»
 - `lib/actions/` — server actions (session guard + validation + `revalidatePath`); `lib/validation/` — zod schemas shared client/server
 - `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)

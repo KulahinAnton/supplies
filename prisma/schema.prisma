@@ -46,6 +46,7 @@ model Household {
   locations StorageLocation[]
   items     Item[]
   shopping  ShoppingListItem[]
+  shoppingGroups ShoppingGroup[]
 }
 
 model User {
@@ -177,9 +178,28 @@ model StockMovement {
   @@index([itemId, occurredAt])
 }
 
+/// Feature 11 — a user-named bucket on the shopping list, most often a shop.
+/// «Загальна група» is NOT a row here: it is `ShoppingListItem.groupId = null`,
+/// so it cannot be renamed, deleted, or missing for a household.
+model ShoppingGroup {
+  id          String   @id @default(uuid())
+  householdId String
+  name        String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  household   Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items       ShoppingListItem[]
+
+  @@unique([householdId, name])
+}
+
 model ShoppingListItem {
   id          String    @id @default(uuid())
   householdId String
+  /// Feature 11 — null means «Загальна група». Deleting a group sets this back
+  /// to null rather than removing the row: the thing still needs buying.
+  groupId     String?
   /// Exactly one of itemId / freeText is set.
   itemId      String?
   freeText    String?
@@ -190,12 +210,14 @@ model ShoppingListItem {
   checkedById String?
   checkedAt   DateTime?
 
-  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  item        Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  group       ShoppingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  item        Item?          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   addedBy     User      @relation("ShoppingAddedBy", fields: [addedById], references: [id], onDelete: Cascade)
   checkedBy   User?     @relation("ShoppingCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
 
   @@index([householdId, isChecked])
+  @@index([groupId])
 }
 
 model TelegramLink {

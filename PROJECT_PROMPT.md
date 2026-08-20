@@ -205,6 +205,18 @@ Mirrors AquaBill's bot layout (`bot/index.ts`, `bot.ts`, `auth.ts`, `session.ts`
 - **No images are stored.** Decoding happens in the browser; only the digits are sent to the server.
 - In the bot, a photo of a barcode goes through the same decode path server-side, then into the existing `/add` flow.
 
+### Feature 11 — Shopping list groups
+
+The list is one flat column today. Once it holds more than a handful of rows that stops matching how shopping actually happens: some things come from the supermarket, some from the pharmacy, some from the market down the road. Groups let the family split the list by **whatever axis they choose** — most obviously the shop, but the name is free text, so "На дачу" or "Терміново" work just as well.
+
+- **`ShoppingGroup`**: `id`, `householdId`, `name`, `sortOrder`, `createdAt`; unique `[householdId, name]`. Household-scoped like everything else, so the whole family sees the same groups.
+- **Every list row belongs to a group.** `ShoppingListItem.groupId` is **nullable, and null means «Загальна група»** — the implicit default that everything lands in. It is deliberately *not* a row in the table: an implicit default cannot be renamed, deleted, or accidentally left missing for a household, and it needs no backfill for lists that already exist.
+- **Nothing is auto-sorted into a group.** New rows — manual, from a low-stock suggestion, or from the bot — start in «Загальна група». The family moves them; the app never guesses which shop sells what.
+- **Moving a row is drag and drop.** The app is mobile-first, so this must work under a finger, not only a mouse — HTML5 drag events are desktop-only in practice and are not sufficient. A non-drag fallback (a "move to group" control) ships alongside it, because drag is a poor fit for accessibility and fails badly on a cramped screen.
+- **Groups collapse**, and their collapsed state is a **per-person, per-device preference** (localStorage) — not household data. One person folding away "Аптека" must not fold it for everyone else mid-shop.
+- **Deleting a group never deletes its rows** — they fall back to «Загальна група». Renaming is free. A group holding rows can be deleted without a confirmation scare, because nothing is lost.
+- Ordering within a group stays by `addedAt`; **reordering rows inside a group is out of scope** for v1. Drag is for moving *between* groups.
+
 ## 7. Conventions
 
 - Quantities are Prisma `Decimal(12,3)` — never float math; pass values to Prisma as strings; round to 3 dp.

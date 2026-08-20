@@ -203,7 +203,15 @@ export async function getShoppingView(householdId: string) {
     onList,
   );
 
-  return { rows, candidates };
+  // Feature 11 — the named groups. «Загальна група» is not among them; it is
+  // the implicit `groupId = null` bucket that lib/shopping-groups.ts adds.
+  const groups = await prisma.shoppingGroup.findMany({
+    where: { householdId },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, sortOrder: true },
+  });
+
+  return { rows, candidates, groups };
 }
 
 export async function getCategoriesAndLocations(householdId: string) {

@@ -9,12 +9,13 @@ import {
 
 export default async function ShoppingPage() {
   const session = await requireSession();
-  const { rows, candidates } = await getShoppingView(session.householdId);
+  const { rows, candidates, groups } = await getShoppingView(session.householdId);
 
   const listRows: ListRow[] = rows.map((row) => ({
     id: row.id,
     label: row.item?.name ?? row.freeText ?? "—",
     itemId: row.itemId,
+    groupId: row.groupId,
     unit: row.item?.unit ?? null,
     isChecked: row.isChecked,
     addedBy: row.addedBy.name,
@@ -38,10 +39,11 @@ export default async function ShoppingPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Покупки</h1>
         <p className="text-sm text-muted-foreground">
           Спільний список. Позначили куплене — воно одразу в запасах.
+          Перетягніть товар, щоб перекласти його до іншої групи.
         </p>
       </div>
 
-      <ShoppingList rows={listRows} candidates={suggestions} />
+      <ShoppingList rows={listRows} candidates={suggestions} groups={groups} />
     </div>
   );
 }

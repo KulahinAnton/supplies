@@ -43,6 +43,12 @@ export const MESSAGES = {
   "shopping.alreadyOnList": "Цей товар уже є в списку покупок.",
   "shopping.notFound": "Рядок списку не знайдено.",
 
+  // --- shopping list groups (Feature 11) ---
+  "shoppingGroup.nameRequired": "Вкажіть назву групи.",
+  "shoppingGroup.nameTooLong": "Назва групи задовга (максимум 40 символів).",
+  "shoppingGroup.nameTaken": "Група з такою назвою вже існує.",
+  "shoppingGroup.notFound": "Групу не знайдено.",
+
   // --- auth / household (Feature 1) ---
   "auth.invalidCredentials": "Невірна пошта або пароль.",
   "auth.emailTaken": "Користувач із такою поштою вже існує.",
