@@ -14,7 +14,22 @@ export type OffProduct = {
   quantityText: string | null;
 };
 
-const BASE_URL = () => process.env.OFF_BASE_URL ?? "https://world.openfoodfacts.org";
+/**
+ * Feature 18.1 — Open Food Facts and its siblings, tried in order.
+ *
+ * They share one API shape, so a miss simply falls through to the next and the
+ * first hit wins. Food first because it is by far the largest; the others
+ * cover shampoo, cleaning products and pet food, which this app definitely
+ * holds and OFF proper does not.
+ *
+ * `OFF_BASE_URL` overrides the first entry, which is what the tests use.
+ */
+const SOURCES = () => [
+  process.env.OFF_BASE_URL ?? "https://world.openfoodfacts.org",
+  "https://world.openbeautyfacts.org",
+  "https://world.openproductsfacts.org",
+  "https://world.openpetfoodfacts.org",
+];
 
 type OffResponse = {
   status?: number;
@@ -132,16 +147,31 @@ export function suggestedItemName(product: OffProduct): string | null {
   return `${titled} ${size}`;
 }
 
-/** Network. Returns null for anything unexpected — never throws at a caller. */
-export async function fetchProduct(barcode: string): Promise<OffProduct | null> {
+const USER_AGENT = "Supplies/0.1 (household stock tracker)";
+
+async function fetchFrom(base: string, barcode: string): Promise<OffProduct | null> {
   try {
     const response = await fetch(
-      `${BASE_URL()}/api/v2/product/${encodeURIComponent(barcode)}.json`,
-      { headers: { "User-Agent": "Supplies/0.1 (household stock tracker)" } },
+      `${base}/api/v2/product/${encodeURIComponent(barcode)}.json`,
+      { headers: { "User-Agent": USER_AGENT } },
     );
+    // 404 is the ordinary "not in this database" answer, not an error.
     if (!response.ok) return null;
     return parseOffProduct(await response.json());
   } catch {
     return null;
   }
+}
+
+/**
+ * Network. Walks the sources in order and returns the first hit, or null.
+ * Never throws at a caller: a lookup failure must not block adding an item.
+ */
+export async function fetchProduct(barcode: string): Promise<OffProduct | null> {
+  for (const base of SOURCES()) {
+    const product = await fetchFrom(base, barcode);
+    // A hit with no usable name is no better than a miss — keep looking.
+    if (product && (product.name || product.brand)) return product;
+  }
+  return null;
 }

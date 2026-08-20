@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { fetchProduct, suggestedItemName } from "@/lib/barcode-source";
+import { canContribute } from "@/lib/off-contribute";
 
 /**
  * Feature 10 — what a scanned barcode turns into.
@@ -25,7 +26,9 @@ import { fetchProduct, suggestedItemName } from "@/lib/barcode-source";
 export type BarcodeLookup =
   | { kind: "existing"; itemId: string; name: string }
   | { kind: "product"; suggestedName: string; packSize: string | null }
-  | { kind: "unknown" };
+  /** Feature 18.2 — `canShare` is false unless OFF credentials exist, so the
+   *  UI never offers something that would silently do nothing. */
+  | { kind: "unknown"; canShare: boolean };
 
 export async function lookupBarcodeAction(
   barcode: string,
@@ -53,7 +56,7 @@ export async function lookupBarcodeAction(
   const suggestedName = product ? suggestedItemName(product) : null;
 
   if (!product || !suggestedName) {
-    return actionOk<BarcodeLookup>({ kind: "unknown" });
+    return actionOk<BarcodeLookup>({ kind: "unknown", canShare: canContribute() });
   }
 
   return actionOk<BarcodeLookup>({

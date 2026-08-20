@@ -236,6 +236,26 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 19 — The expiry digest actually runs
+
+Feature 9 described a daily digest and shipped it as a CLI script, which Vercel cannot schedule: its cron calls an HTTP endpoint, not a command. The digest therefore never ran in production.
+
+- The logic moves to `lib/digest.ts`, called by **both** `pnpm digest:run` and a new `GET /api/cron/digest`, so the two cannot drift.
+- The route is guarded by **`CRON_SECRET`** — Vercel sends it as `Authorization: Bearer …`. Without the guard, anyone who found the URL could spam the family's Telegram.
+- `Household.lastDigestOn` still makes it **safe to call repeatedly**: a second run on the same day sends nothing.
+
+**A constraint worth stating plainly: Vercel's Hobby plan runs cron at most once a day.** So `digestHour` cannot be honoured there — the digest arrives when the cron fires, not at each household's chosen hour. `sendDigests({ respectHour })` makes that explicit rather than pretending: the CLI respects the hour (it can be run hourly), the cron route does not.
+
+### Feature 18 — Widening barcode coverage
+
+Open Food Facts alone misses most Ukrainian products — measured: 3 of 4 Ukrainian barcodes absent, both international ones present. Two changes, neither involving a retailer's storefront (no public API, against their terms, and fragile).
+
+**18.1 A chain of free databases.** Open Food Facts has sibling projects sharing one API shape: beauty, general products, pet food. A miss falls through to the next; first hit wins. Cheap, because the parser already exists.
+
+**18.2 Give back what you looked up.** Those databases are empty of Ukrainian goods because they are crowd-sourced and nobody has added them. When a scan finds nothing and you then name the product, the form offers to submit it — **opt-in, unchecked by default**, because sending a household's data to a third party is publishing and must be a decision rather than a side effect. Needs `OFF_USER` / `OFF_PASSWORD`; without them the offer never appears.
+
+That is the honest fix: the *second* scan of a product already works locally, because the barcode is stored on the item. Contributing is what makes the *first* scan work — for you next time, and for everyone else.
+
 ### Feature 17 — The bot as a real interface, not just commands
 
 **17.1 The link is a link.** Settings rendered the `t.me/…` deep link in a read-only text box with a copy button, which made the obvious action — tapping it — impossible. It is now a button that opens Telegram directly. Copying stays, secondary, for linking a chat on a different device from the one showing the page.

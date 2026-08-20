@@ -8,6 +8,7 @@ import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { itemSchema, updateItemSchema } from "@/lib/validation/item";
 import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
+import { canContribute, contributeProduct } from "@/lib/off-contribute";
 
 function refresh(itemId?: string) {
   revalidatePath("/items");
@@ -49,6 +50,12 @@ export async function createItemAction(
     },
     select: { id: true },
   });
+
+  // Feature 18.2 — opt-in, and never allowed to fail the create. The item is
+  // already saved; a rejected contribution is not the user's problem.
+  if (data.shareToOff && data.barcode && canContribute()) {
+    void contributeProduct({ barcode: data.barcode, name: data.name });
+  }
 
   refresh(item.id);
   return actionOk({ id: item.id });

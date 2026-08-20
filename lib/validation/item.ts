@@ -18,6 +18,8 @@ export const itemSchema = z.object({
     .regex(/^\d{6,14}$/, key("item.duplicateBarcode"))
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  /** Feature 18.2 — explicit opt-in to publish this product to Open Food Facts. */
+  shareToOff: z.boolean().optional(),
   notes: z
     .string()
     .trim()

@@ -294,9 +294,30 @@ export function ItemForm({
             ) : lookup.kind === "product" ? (
               "Назву підставлено з Open Food Facts — перевірте й виправте за потреби."
             ) : (
-              "Цього штрихкоду немає у відкритій базі. Введіть назву вручну."
+              "Цього штрихкоду немає у відкритих базах. Введіть назву вручну."
             )}
           </p>
+        ) : null}
+
+        {/*
+          Feature 18.2 — opt-in, unchecked by default. Publishing a product to
+          Open Food Facts sends data to a third party, which must be a decision
+          rather than a side effect of saving an item. Only offered when the
+          lookup missed AND credentials exist, so it never silently does
+          nothing.
+        */}
+        {lookup?.kind === "unknown" && lookup.canShare ? (
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4"
+              {...register("shareToOff")}
+            />
+            <span className="text-muted-foreground">
+              Поділитися назвою й штрихкодом з Open Food Facts — щоб наступного
+              разу цей товар знайшовся сам, і не лише у вас.
+            </span>
+          </label>
         ) : null}
         {looking ? (
           <p className="text-sm text-muted-foreground">Шукаємо товар…</p>
