@@ -71,7 +71,10 @@ async function main() {
   const endpoint = `${url.replace(/\/$/, "")}/api/telegram`;
   await bot.api.setWebhook(endpoint, {
     secret_token: secret,
-    allowed_updates: ["message"],
+    // `callback_query` is what an inline button tap produces (Feature 17.3).
+    // Omitting it makes every button silently do nothing — Telegram filters
+    // the update out before it ever reaches the webhook.
+    allowed_updates: ["message", "callback_query"],
     drop_pending_updates: true,
   });
   await registerCommands(bot);
