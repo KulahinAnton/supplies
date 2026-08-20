@@ -23,5 +23,12 @@ export async function createTelegramLinkAction(): Promise<
   }
 
   const token = createLinkToken(session.userId, secret);
-  return actionOk({ url: `https://t.me/${botName}?start=${token}` });
+  if (!token) return actionError(ruleMessage("error.unexpected"));
+
+  // The token is built to fit Telegram's 64-character start-param limit; see
+  // lib/telegram-link.ts. Encoding it is belt and braces - it is already
+  // restricted to base64url characters.
+  return actionOk({
+    url: `https://t.me/${botName}?start=${encodeURIComponent(token)}`,
+  });
 }
