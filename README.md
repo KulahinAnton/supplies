@@ -84,6 +84,10 @@ Ukrainian is the **interface language**, and only that:
 
 **Everything else is English:** this README, `CLAUDE.md` and the per-area docs, `PROJECT_PROMPT.md`, code, comments, identifiers, and commit messages. Where English prose quotes a literal UI label — «Загальна група», for instance — the Ukrainian stays, because the doc is naming something the user actually sees on screen.
 
+## Deployment
+
+[deployment-instructions.md](deployment-instructions.md) — Vercel + Neon, free tier. Migrations run as part of the build, so an ordinary `git push` is the whole deploy.
+
 ## Documentation
 
 - [PROJECT_PROMPT.md](PROJECT_PROMPT.md) — the full specification: domain rules, data model, every feature, and implementation notes recording what changed and why.
