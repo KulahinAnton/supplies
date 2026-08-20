@@ -266,4 +266,13 @@ A review of the finished code against this spec found four things written but no
 - **The Telegram bot's command handlers have never run.** `pnpm bot:start` starts correctly and refuses cleanly without a token; the digest builds a real message and survives a 401 from a deliberately fake token without aborting the run. But `/low`, `/add`, `/took` and the linking handshake need a real BotFather token, and `TELEGRAM_BOT_USERNAME` must be set before the Settings "Прив'язати Telegram" button can build its deep link.
 - **Nothing schedules the digest.** `pnpm digest:run` is safe to run hourly and no-ops outside the household's `digestHour`, but no cron or Task Scheduler entry calls it.
 - **No deployment target.** Docker Compose covers local Postgres only; there is no host, no production `DATABASE_URL`, and `RESEND_API_KEY` is unset so password-reset and invite emails silently no-op (by design — the UI never reveals it — which also means that path is untested).
-- Feature 10's item-create prefill from Open Food Facts is wired at the parser level (`parseOffProduct`, tested against a fixture) and the scanner writes the barcode into the form, but the "unknown barcode → prefilled create form" jump is not built.
+### Feature 10 completed — barcode prefill
+A scanned (or typed) barcode now fills the item form, via `lookupBarcodeAction`:
+
+1. **The household already has that barcode** → say so and link to the item, before any network call. This is the likelier case — the family is restocking, not cataloguing — and it heads off a duplicate the unique index would reject with a far worse message.
+2. **Otherwise** look it up in Open Food Facts and pre-fill the name, but **only when the name field is still empty** — silently overwriting typed text would be worse than not helping.
+3. **A miss is not an error.** Verified against the live API: `5449000000996` → "Coca-cola 330 мл", while a real Ukrainian water barcode is simply absent from their database and leaves the form untouched.
+
+Pack size is parsed by the pure, tested `parsePackSize` and appended to the *name* ("Coca-cola 330 мл"), the way the seed data reads — **never** to `minQty`. The distinction is the whole model: the app counts bottles, not the litres inside them, so 1,5 л is part of what the thing is called. `6 x 1.5 l` yields the unit size, not the multipack total; `cl` normalises to ml; and the first letter is capitalised because Open Food Facts is crowd-sourced and its names are often all-lowercase.
+
+Typing a barcode triggers the same lookup on blur — the camera is a convenience, not the only way in.

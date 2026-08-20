@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { createItemAction, updateItemAction } from "@/lib/actions/items";
+import {
+  lookupBarcodeAction,
+  type BarcodeLookup,
+} from "@/lib/actions/barcode";
 import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
 import { itemSchema } from "@/lib/validation/item";
 import { UNIT_PLURAL } from "@/lib/format";
@@ -50,11 +55,16 @@ export function ItemForm({
 }) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
+  const [lookup, setLookup] = useState<BarcodeLookup | null>(null);
+  const [looking, setLooking] = useState(false);
+  /** Last code already looked up, so a blur without an edit does not refetch. */
+  const [lookedUp, setLookedUp] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(itemSchema),
@@ -68,6 +78,32 @@ export function ItemForm({
       notes: item?.notes ?? undefined,
     },
   });
+
+  /**
+   * A scan writes the code, then asks the server what it is. The name is only
+   * pre-filled when the field is still EMPTY — silently overwriting something
+   * the user typed would be worse than not helping at all.
+   */
+  async function onBarcodeScanned(code: string) {
+    setValue("barcode", code, { shouldValidate: true });
+    setLookedUp(code);
+    setLookup(null);
+    setLooking(true);
+
+    const result = await lookupBarcodeAction(code);
+    setLooking(false);
+
+    if (!result.ok) {
+      setLookup(null);
+      return;
+    }
+
+    setLookup(result.data);
+
+    if (result.data.kind === "product" && !getValues("name").trim()) {
+      setValue("name", result.data.suggestedName, { shouldValidate: true });
+    }
+  }
 
   async function onSubmit(values: Values) {
     setFormError(null);
@@ -168,12 +204,54 @@ export function ItemForm({
             id="barcode"
             inputMode="numeric"
             placeholder="Необов&apos;язково"
-            {...register("barcode")}
+            {...register("barcode", {
+              // Typing or pasting a code should do exactly what scanning does —
+              // the camera is a convenience, not the only way in.
+              onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
+                const code = event.target.value.trim();
+                if (code && code !== lookedUp) void onBarcodeScanned(code);
+              },
+            })}
           />
-          <BarcodeScanButton
-            onScan={(code) => setValue("barcode", code, { shouldValidate: true })}
-          />
+          <BarcodeScanButton onScan={onBarcodeScanned} />
         </div>
+
+        {/*
+          Feature 10 — a scan is only worth the camera if it saves typing, so
+          it fills the name from Open Food Facts. The lookup NEVER blocks: a
+          miss (their Ukrainian coverage is patchy) just leaves the field as
+          you found it.
+        */}
+        {lookup ? (
+          <p
+            className={
+              lookup.kind === "existing"
+                ? "text-sm text-warning-foreground dark:text-warning"
+                : "text-sm text-muted-foreground"
+            }
+          >
+            {lookup.kind === "existing" ? (
+              <>
+                Такий штрихкод уже має{" "}
+                <Link
+                  href={`/items/${lookup.itemId}`}
+                  className="text-primary underline underline-offset-4"
+                >
+                  {lookup.name}
+                </Link>
+                . Можливо, варто просто поповнити його запас.
+              </>
+            ) : lookup.kind === "product" ? (
+              "Назву підставлено з Open Food Facts — перевірте й виправте за потреби."
+            ) : (
+              "Цього штрихкоду немає у відкритій базі. Введіть назву вручну."
+            )}
+          </p>
+        ) : null}
+        {looking ? (
+          <p className="text-sm text-muted-foreground">Шукаємо товар…</p>
+        ) : null}
+
         {errors.barcode ? (
           <p className="text-sm text-destructive">
             {messageFor(errors.barcode.message)}
