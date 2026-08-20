@@ -29,6 +29,8 @@ Pooled matters: Vercel runs the app as many short-lived serverless instances, an
    pnpm prisma migrate deploy && pnpm build
    ```
    This applies pending migrations to the production database on every deploy. Safe to repeat — it only applies what has not run yet, and never authors new migrations the way `migrate dev` does.
+
+   `pnpm build` itself runs `prisma generate` first. That is **not** redundant with the `postinstall` hook: once Vercel restores a build cache it skips installing ("Already up to date"), so `postinstall` never fires — and because `lib/generated/` is gitignored, the client is in neither the cache nor the repo. The build then fails with `Module not found: Can't resolve '@/lib/generated/prisma/client'`. Generating in the build script makes it independent of whether install ran.
 3. **Settings → Environment Variables**, for **Production**:
 
    | Name | Value |
