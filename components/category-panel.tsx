@@ -2,34 +2,33 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  SettingsListPanel,
+  type SettingsRow,
+} from "@/components/settings-list-panel";
 import {
   deleteCategoryAction,
+  reorderCategoriesAction,
   saveCategoryAction,
+  setDefaultCategoryAction,
 } from "@/lib/actions/settings";
 import { renderMessage } from "@/lib/messages";
 
-export type CategoryRow = {
-  id: string;
-  name: string;
-  itemCount: number;
+export type CategoryRow = SettingsRow & {
   /** Feature 13 — null means inherit the household window. */
   expiryWarnDays: number | null;
 };
 
 /**
- * Feature 13 — categories carry their own expiry warning window.
+ * Feature 13 + 15 — categories: drag to reorder, star a default, and the one
+ * thing locations do not have, a per-category expiry window.
  *
- * Separate from the generic named-list panel that storage locations still use,
- * because only categories have this field, and a shared component that ignores
- * half its props for one caller is worse than two honest ones.
- *
- * An EMPTY days field means inherit. That is distinct from 0, which means "warn
- * me only on the day itself" — so clearing the box must send null, not zero.
+ * The window arrives through the shared panel's `renderExtra` slot rather than
+ * a prop the locations panel would have to ignore.
  */
 export function CategoryPanel({
   rows,
@@ -39,156 +38,85 @@ export function CategoryPanel({
   householdWarnDays: number;
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(false);
   const [edited, setEdited] = useState<Record<string, string>>({});
+  const [pending, setPending] = useState(false);
 
-  async function run(
-    work: () => Promise<{ ok: boolean; error?: Parameters<typeof renderMessage>[0] }>,
-    onOk: () => void,
-  ) {
+  const storedValue = (row: CategoryRow) =>
+    row.expiryWarnDays === null ? "" : String(row.expiryWarnDays);
+
+  async function saveDays(row: CategoryRow) {
     setPending(true);
-    const result = await work();
+    const result = await saveCategoryAction({
+      id: row.id,
+      name: row.name,
+      expiryWarnDays: edited[row.id],
+    });
     setPending(false);
-    if (!result.ok && result.error) {
+
+    if (!result.ok) {
       toast.error(renderMessage(result.error));
-      return false;
+      return;
     }
-    onOk();
+    const next = { ...edited };
+    delete next[row.id];
+    setEdited(next);
+    toast.success("Збережено");
     router.refresh();
-    return true;
   }
-
-  function daysValue(row: CategoryRow) {
-    return edited[row.id] ?? (row.expiryWarnDays === null ? "" : String(row.expiryWarnDays));
-  }
-
-  const isDirty = (row: CategoryRow) =>
-    edited[row.id] !== undefined && edited[row.id] !== daysValueOf(row);
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Категорії</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        <p className="text-xs text-muted-foreground">
-          Порожнє поле — попереджати як усюди ({householdWarnDays} дн.). Вкажіть
-          своє число, щоб, наприклад, про ліки нагадувало за два тижні.
-        </p>
+    <SettingsListPanel
+      title="Категорії"
+      dndId="settings-categories"
+      rows={rows}
+      addPlaceholder="Нова категорія"
+      defaultHint="Перетягніть, щоб змінити порядок. Зірочка — категорія за замовчуванням для нових товарів."
+      onReorder={reorderCategoriesAction}
+      onSetDefault={setDefaultCategoryAction}
+      onDelete={deleteCategoryAction}
+      onAdd={(name) => saveCategoryAction({ name })}
+      renderExtra={(base) => {
+        const row = rows.find((r) => r.id === base.id);
+        if (!row) return null;
+        const value = edited[row.id] ?? storedValue(row);
+        const dirty =
+          edited[row.id] !== undefined && edited[row.id] !== storedValue(row);
 
-        <ul className="divide-y">
-          {rows.map((row) => (
-            <li key={row.id} className="flex items-center gap-2 py-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{row.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {row.itemCount > 0 ? `товарів: ${row.itemCount}` : "порожньо"}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <Input
-                  type="number"
-                  min={0}
-                  max={365}
-                  inputMode="numeric"
-                  aria-label={`Попереджати за скільки днів: ${row.name}`}
-                  placeholder={String(householdWarnDays)}
-                  className="w-20"
-                  value={daysValue(row)}
-                  onChange={(event) =>
-                    setEdited({ ...edited, [row.id]: event.target.value })
-                  }
-                />
-                <span className="text-xs text-muted-foreground">дн.</span>
-              </div>
-
-              {isDirty(row) ? (
-                <Button
-                  size="icon"
-                  aria-label={`Зберегти ${row.name}`}
-                  disabled={pending}
-                  onClick={() =>
-                    run(
-                      () =>
-                        saveCategoryAction({
-                          id: row.id,
-                          name: row.name,
-                          expiryWarnDays: edited[row.id],
-                        }),
-                      () => {
-                        const next = { ...edited };
-                        delete next[row.id];
-                        setEdited(next);
-                        toast.success("Збережено");
-                      },
-                    )
-                  }
-                >
-                  <Check className="size-4" />
-                </Button>
-              ) : (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`Видалити ${row.name}`}
-                  disabled={pending}
-                  onClick={() =>
-                    run(
-                      () => deleteCategoryAction(row.id),
-                      () => toast.success("Видалено"),
-                    )
-                  }
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <div className="flex gap-2">
-          <Input
-            value={draft}
-            placeholder="Нова категорія"
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (draft.trim()) {
-                  void run(
-                    () => saveCategoryAction({ name: draft }),
-                    () => {
-                      setDraft("");
-                      toast.success("Додано");
-                    },
-                  );
-                }
+        return (
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              min={0}
+              max={365}
+              inputMode="numeric"
+              aria-label={`Попереджати за скільки днів: ${row.name}`}
+              placeholder={String(householdWarnDays)}
+              className="h-8 w-16"
+              value={value}
+              onChange={(event) =>
+                setEdited({ ...edited, [row.id]: event.target.value })
               }
-            }}
-          />
-          <Button
-            disabled={pending || !draft.trim()}
-            onClick={() =>
-              run(
-                () => saveCategoryAction({ name: draft }),
-                () => {
-                  setDraft("");
-                  toast.success("Додано");
-                },
-              )
-            }
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+            />
+            <span className="text-xs text-muted-foreground">дн.</span>
+            {dirty ? (
+              <Button
+                size="icon"
+                className="size-8"
+                aria-label={`Зберегти ${row.name}`}
+                disabled={pending}
+                onClick={() => saveDays(row)}
+              >
+                <Check className="size-4" />
+              </Button>
+            ) : null}
+          </div>
+        );
+      }}
+    >
+      <p className="text-xs text-muted-foreground">
+        Порожнє поле днів — попереджати як усюди ({householdWarnDays} дн.).
+        Вкажіть своє число, щоб, наприклад, про ліки нагадувало за два тижні.
+      </p>
+    </SettingsListPanel>
   );
-}
-
-/** The value the input would show if it had not been edited. */
-function daysValueOf(row: CategoryRow) {
-  return row.expiryWarnDays === null ? "" : String(row.expiryWarnDays);
 }

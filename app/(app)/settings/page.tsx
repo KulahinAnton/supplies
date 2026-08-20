@@ -6,10 +6,10 @@ import {
   hasTelegramLink,
 } from "@/lib/queries";
 import { CategoryPanel } from "@/components/category-panel";
+import { LocationPanel } from "@/components/location-panel";
 import {
   HouseholdPanel,
   InvitePanel,
-  NamedListPanel,
   PasswordPanel,
   TelegramPanel,
 } from "@/components/settings-panels";
@@ -46,16 +46,16 @@ export default async function SettingsPage() {
             id: category.id,
             name: category.name,
             itemCount: category._count.items,
+            isDefault: category.isDefault,
             expiryWarnDays: category.expiryWarnDays,
           }))}
         />
-        <NamedListPanel
-          title="Місця зберігання"
-          kind="location"
+        <LocationPanel
           rows={locations.map((location) => ({
             id: location.id,
             name: location.name,
             itemCount: location._count.items,
+            isDefault: location.isDefault,
           }))}
         />
       </div>

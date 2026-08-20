@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,16 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { changePasswordAction, createInviteAction } from "@/lib/actions/auth";
 import { createTelegramLinkAction } from "@/lib/actions/telegram";
-import {
-  deleteCategoryAction,
-  deleteLocationAction,
-  saveCategoryAction,
-  saveLocationAction,
-  updateHouseholdAction,
-} from "@/lib/actions/settings";
+import { updateHouseholdAction } from "@/lib/actions/settings";
 import { renderMessage, type RuleMessage } from "@/lib/messages";
-
-type Named = { id: string; name: string; itemCount: number };
 
 async function handle(
   work: () => Promise<{ ok: boolean; error?: RuleMessage }>,
@@ -114,90 +106,6 @@ export function HouseholdPanel({
         >
           Зберегти
         </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Categories and storage locations share a shape, so they share a panel. */
-export function NamedListPanel({
-  title,
-  rows,
-  kind,
-}: {
-  title: string;
-  rows: Named[];
-  kind: "category" | "location";
-}) {
-  const router = useRouter();
-  const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState(false);
-
-  const save = kind === "category" ? saveCategoryAction : saveLocationAction;
-  const remove = kind === "category" ? deleteCategoryAction : deleteLocationAction;
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        <ul className="divide-y">
-          {rows.map((row) => (
-            <li key={row.id} className="flex items-center justify-between gap-3 py-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm">{row.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {row.itemCount > 0 ? `товарів: ${row.itemCount}` : "порожньо"}
-                </div>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="Видалити"
-                disabled={pending}
-                onClick={async () => {
-                  setPending(true);
-                  await handle(
-                    () => remove(row.id),
-                    () => {
-                      toast.success("Видалено");
-                      router.refresh();
-                    },
-                  );
-                  setPending(false);
-                }}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-
-        <div className="flex gap-2">
-          <Input
-            value={draft}
-            placeholder="Нова назва"
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <Button
-            disabled={pending || !draft.trim()}
-            onClick={async () => {
-              setPending(true);
-              const ok = await handle(
-                () => save({ name: draft }),
-                () => {
-                  toast.success("Додано");
-                  router.refresh();
-                },
-              );
-              if (ok) setDraft("");
-              setPending(false);
-            }}
-          >
-            <Plus className="size-4" />
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );

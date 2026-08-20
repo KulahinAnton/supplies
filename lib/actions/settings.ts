@@ -150,3 +150,123 @@ export async function deleteLocationAction(id: string): Promise<ActionResult> {
   refresh();
   return actionOk();
 }
+
+/**
+ * Feature 15.1 — reorder a settings list.
+ *
+ * A WHOLE-LIST rewrite: the client sends every id in its new order and this
+ * writes `sortOrder = index` for each. Sending one moved id and patching
+ * around it invites gaps and ties; rewriting cannot drift.
+ *
+ * Every id is proved to belong to the caller's household first, so a forged
+ * list cannot reorder another family's categories.
+ */
+export async function reorderCategoriesAction(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const owned = await prisma.category.findMany({
+    where: { id: { in: orderedIds }, householdId: session.householdId },
+    select: { id: true },
+  });
+  if (owned.length !== orderedIds.length) {
+    return actionError(ruleMessage("auth.forbidden"));
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.category.update({ where: { id }, data: { sortOrder: index } }),
+    ),
+  );
+
+  refresh();
+  return actionOk();
+}
+
+export async function reorderLocationsAction(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const owned = await prisma.storageLocation.findMany({
+    where: { id: { in: orderedIds }, householdId: session.householdId },
+    select: { id: true },
+  });
+  if (owned.length !== orderedIds.length) {
+    return actionError(ruleMessage("auth.forbidden"));
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.storageLocation.update({ where: { id }, data: { sortOrder: index } }),
+    ),
+  );
+
+  refresh();
+  return actionOk();
+}
+
+/**
+ * Feature 15.2 — star a row as the default for new items.
+ *
+ * A TOGGLE: starring the already-starred row clears it, leaving the household
+ * with no default, which is a legitimate state. "At most one" is enforced by
+ * clearing every row before setting the chosen one, inside one transaction —
+ * the invariant lives here, not in hope.
+ */
+export async function setDefaultCategoryAction(
+  categoryId: string,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const category = await prisma.category.findFirst({
+    where: { id: categoryId, householdId: session.householdId },
+    select: { id: true, isDefault: true },
+  });
+  if (!category) return actionError(ruleMessage("auth.forbidden"));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.category.updateMany({
+      where: { householdId: session.householdId },
+      data: { isDefault: false },
+    });
+    if (!category.isDefault) {
+      await tx.category.update({
+        where: { id: categoryId },
+        data: { isDefault: true },
+      });
+    }
+  });
+
+  refresh();
+  return actionOk();
+}
+
+export async function setDefaultLocationAction(
+  locationId: string,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const location = await prisma.storageLocation.findFirst({
+    where: { id: locationId, householdId: session.householdId },
+    select: { id: true, isDefault: true },
+  });
+  if (!location) return actionError(ruleMessage("auth.forbidden"));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.storageLocation.updateMany({
+      where: { householdId: session.householdId },
+      data: { isDefault: false },
+    });
+    if (!location.isDefault) {
+      await tx.storageLocation.update({
+        where: { id: locationId },
+        data: { isDefault: true },
+      });
+    }
+  });
+
+  refresh();
+  return actionOk();
+}

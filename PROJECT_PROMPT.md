@@ -236,6 +236,22 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 15 — Ordering categories and locations, and a default for each
+
+Both lists in Settings gain the same two behaviours, so they share one component rather than growing two near-identical implementations.
+
+**15.1 Drag to reorder.** `sortOrder` already existed on both `Category` and `StorageLocation` and was only ever set by creation order. Dragging now rewrites it, and that order drives the selects on the item form — so the things you add most often can sit at the top instead of wherever they happened to be created.
+
+Reordering is a **whole-list rewrite**: the client sends the ids in their new order and the action writes `sortOrder = index` for each, in one transaction. Sending a single moved id and patching around it invites gaps and ties; rewriting the list cannot drift.
+
+**15.2 A starred default.** `isDefault` on both models. The starred row is pre-selected when adding a new item — the category select opens on it, and the location select does too instead of «Не вказано».
+
+- **At most one per list**, enforced in a transaction that clears the others before setting the new one. The invariant lives in the action, not in hope.
+- **Starring is a toggle**: starring the already-starred row clears it, leaving no default. That is a legitimate state — the first category by `sortOrder` is used for the category select, and the location select falls back to «Не вказано».
+- Deleting a starred row simply leaves the list with no default; nothing needs repairing.
+
+Both lists keep their existing rules: a category or location still cannot be deleted while items reference it, and categories keep their per-category expiry window from Feature 13.
+
 ### Feature 14 — Adding into a group, and archiving bought rows
 
 Two revisions to Feature 11, from using it in a real shop.

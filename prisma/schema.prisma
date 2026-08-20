@@ -98,6 +98,9 @@ model Category {
   /// copy of it: an inheriting category must follow the household value when
   /// that value changes, which a copied number would silently stop doing.
   expiryWarnDays Int?
+  /// Feature 15.2 — pre-selected when adding a new item. At most one per
+  /// household; the invariant is enforced in the action, in a transaction.
+  isDefault      Boolean @default(false)
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   items       Item[]
@@ -110,6 +113,9 @@ model StorageLocation {
   householdId String
   name        String
   sortOrder   Int    @default(0)
+  /// Feature 15.2 — pre-selected when adding a new item. At most one per
+  /// household; the invariant is enforced in the action, in a transaction.
+  isDefault   Boolean @default(false)
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   items       Item[]

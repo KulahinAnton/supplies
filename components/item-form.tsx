@@ -19,6 +19,7 @@ import {
 } from "@/lib/actions/barcode";
 import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
 import { itemSchema } from "@/lib/validation/item";
+import { defaultRowId } from "@/lib/ordering";
 import { UNIT_PLURAL } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
@@ -39,8 +40,8 @@ export function ItemForm({
   item,
   hasBatches,
 }: {
-  categories: { id: string; name: string }[];
-  locations: { id: string; name: string }[];
+  categories: { id: string; name: string; isDefault: boolean }[];
+  locations: { id: string; name: string; isDefault: boolean }[];
   item?: {
     id: string;
     name: string;
@@ -70,8 +71,11 @@ export function ItemForm({
     resolver: zodResolver(itemSchema),
     defaultValues: {
       name: item?.name ?? "",
-      categoryId: item?.categoryId ?? categories[0]?.id ?? "",
-      locationId: item?.locationId ?? "",
+      // Feature 15.2 — a new item opens on the starred category and location.
+      // An existing item keeps its own, obviously.
+      categoryId:
+        item?.categoryId ?? defaultRowId(categories, true) ?? "",
+      locationId: item?.locationId ?? defaultRowId(locations, false) ?? "",
       unit: item?.unit ?? "PIECE",
       minQty: item?.minQty ?? "0",
       barcode: item?.barcode ?? undefined,
