@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy } from "lucide-react";
+import { Copy, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -206,23 +206,36 @@ export function TelegramPanel({ linked }: { linked: boolean }) {
           {linked ? "Прив'язати інший чат" : "Прив'язати Telegram"}
         </Button>
 
+        {/*
+          Feature 17.1 — a link you can tap. It used to render in a read-only
+          text box, which made the obvious action impossible: on a phone you
+          want to open Telegram, not select a URL.
+        */}
         {link ? (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Посилання дійсне 15 хвилин:
-            </p>
-            <div className="flex gap-2">
-              <Input readOnly value={link} onFocus={(e) => e.target.select()} />
+            <Button
+              className="w-full"
+              nativeButton={false}
+              render={<a href={link} target="_blank" rel="noreferrer" />}
+            >
+              <ExternalLink className="size-4" />
+              Відкрити бота в Telegram
+            </Button>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Дійсне 15 хвилин.
+              </p>
+              {/* Secondary: for linking a chat on a different device. */}
               <Button
-                size="icon"
-                variant="outline"
-                aria-label="Скопіювати"
+                size="sm"
+                variant="ghost"
                 onClick={async () => {
                   await navigator.clipboard.writeText(link);
                   toast.success("Скопійовано");
                 }}
               >
-                <Copy className="size-4" />
+                <Copy className="size-3.5" />
+                Скопіювати
               </Button>
             </div>
           </div>

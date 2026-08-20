@@ -243,6 +243,11 @@ model TelegramLink {
   userId   String   @unique
   chatId   BigInt   @unique
   linkedAt DateTime @default(now())
+  /// Feature 17.4 — the chat's half-finished flow, e.g. "add:<groupId>".
+  /// In the database rather than memory because each webhook call may hit a
+  /// fresh serverless instance, which loses a module-level Map between one
+  /// message and the next.
+  pending  String?
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

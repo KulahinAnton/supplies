@@ -236,6 +236,23 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 17 — The bot as a real interface, not just commands
+
+**17.1 The link is a link.** Settings rendered the `t.me/…` deep link in a read-only text box with a copy button, which made the obvious action — tapping it — impossible. It is now a button that opens Telegram directly. Copying stays, secondary, for linking a chat on a different device from the one showing the page.
+
+**17.2 A persistent keyboard.** Typing `/expiring` on a phone is a poor interface. The bot now shows a reply keyboard that stays at the bottom of the chat: **Список покупок**, **Що закінчується**, **Що псується**. The slash commands keep working — the keyboard is an addition, not a replacement.
+
+**17.3 The shopping list, in the chat.** «Список покупок» opens the same list the web app shows, with the same capabilities: see what is on it, tick things off, add things, and move between groups.
+
+- **Groups first.** Tapping the button lists every group with its outstanding count, plus **➕ Нова група**. Picking one opens it.
+- **Inside a group**: each row is a button that toggles bought — one tap, the message edits in place, no new message each time. Bought rows show struck through and stay in the group, exactly as the web UI behaves (Feature 14.2).
+- **➕ Додати** adds to *that* group, matching Feature 14.1 — the bot cannot be a back door that dumps everything into «Загальна група».
+- **⬅️ Групи** goes back.
+
+**17.4 Conversation state moves into the database.** The bot's multi-step flows kept their state in a module-level `Map`. That was defensible while the bot ran as one long-polling process; on Vercel it is wrong — each webhook call may hit a fresh serverless instance, so a half-finished `/add` is lost between one message and the next. `TelegramLink.pending` now holds it, which is durable, scoped to the chat, and disappears with the link.
+
+Where state can be avoided entirely it is: every inline button carries what it needs in its callback data, so navigating groups and ticking rows needs no memory at all.
+
 ### Feature 16 — Catching duplicate items
 
 Two people adding "Сіль" without noticing the other did is the normal failure of a shared inventory. Barcode uniqueness already prevents it when someone scans; typed items had nothing.

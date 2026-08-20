@@ -1,31 +1,70 @@
-import type { Unit } from "@/lib/generated/prisma/enums";
+import { prisma } from "@/lib/prisma";
 
 /**
- * In-memory conversation state, keyed by chat id.
+ * Feature 17.4 — the chat's half-finished flow.
  *
- * Deliberately not persisted: a half-finished "/add milk" is worth nothing
- * after a restart, and losing it costs the user one retyped word. Anything
- * that MATTERS is already a row in the database.
+ * This used to be a module-level `Map`, which was defensible while the bot ran
+ * as one long-polling process. On Vercel it is wrong: each webhook call may
+ * hit a fresh serverless instance, so the Map is empty by the time the user's
+ * next message arrives and a multi-step `/add` silently forgets itself.
+ *
+ * `TelegramLink.pending` is durable, scoped to the chat, and disappears with
+ * the link. It holds one short string; anything richer belongs in real tables.
+ *
+ * Where state can be avoided it is: inline buttons carry what they need in
+ * their callback data, so browsing groups and ticking rows needs no memory.
  */
-export type ConversationState = {
-  kind: "add" | "take";
-  step: "item" | "quantity" | "expiry";
-  itemId?: string;
-  itemName?: string;
-  unit?: Unit;
-  quantity?: string;
-};
 
-const states = new Map<number, ConversationState>();
+export type Pending =
+  /** Waiting for the name of a row to add to this group (null = default). */
+  | { kind: "addRow"; groupId: string | null }
+  /** Waiting for the name of a new shopping group. */
+  | { kind: "newGroup" }
+  /** Waiting for an item name, then a quantity (the /add and /took flows). */
+  | { kind: "stockItem"; take: boolean }
+  | { kind: "stockQuantity"; take: boolean; itemId: string; itemName: string }
+  | { kind: "stockExpiry"; itemId: string; itemName: string; quantity: string };
 
-export function getState(chatId: number): ConversationState | undefined {
-  return states.get(chatId);
+/** Serialised compactly — this is one column, not a document store. */
+function encode(pending: Pending): string {
+  return JSON.stringify(pending);
 }
 
-export function setState(chatId: number, state: ConversationState): void {
-  states.set(chatId, state);
+function decode(raw: string | null): Pending | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && "kind" in parsed) {
+      return parsed as Pending;
+    }
+    return null;
+  } catch {
+    // A malformed value is not worth an error; treat the chat as idle.
+    return null;
+  }
 }
 
-export function clearState(chatId: number): void {
-  states.delete(chatId);
+export async function getPending(chatId: number): Promise<Pending | null> {
+  const link = await prisma.telegramLink.findUnique({
+    where: { chatId: BigInt(chatId) },
+    select: { pending: true },
+  });
+  return decode(link?.pending ?? null);
+}
+
+export async function setPending(
+  chatId: number,
+  pending: Pending,
+): Promise<void> {
+  await prisma.telegramLink.update({
+    where: { chatId: BigInt(chatId) },
+    data: { pending: encode(pending) },
+  });
+}
+
+export async function clearPending(chatId: number): Promise<void> {
+  await prisma.telegramLink.updateMany({
+    where: { chatId: BigInt(chatId), pending: { not: null } },
+    data: { pending: null },
+  });
 }
