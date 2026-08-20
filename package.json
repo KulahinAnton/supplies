@@ -18,6 +18,8 @@
     "db:studio": "prisma studio",
     "bot:start": "tsx bot/index.ts",
     "bot:dev": "tsx watch bot/index.ts",
+    "bot:webhook:set": "tsx scripts/set-telegram-webhook.ts",
+    "bot:webhook:delete": "tsx scripts/set-telegram-webhook.ts --delete",
     "digest:run": "tsx scripts/run-daily-digest.ts"
   },
   "dependencies": {

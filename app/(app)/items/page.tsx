@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getItemViews } from "@/lib/queries";
+import { getArchivedItems, getItemViews } from "@/lib/queries";
 import { formatQuantityWithUnit } from "@/lib/format";
 import { todayUTC } from "@/lib/period";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { ItemsList, type ItemRow } from "@/components/items-list";
 export default async function ItemsPage() {
   const session = await requireSession();
   const items = await getItemViews(session.householdId);
+  const archivedCount = (await getArchivedItems(session.householdId)).length;
   const today = todayUTC();
 
   // Decimal cannot cross the server/client boundary — format here.
@@ -57,11 +58,23 @@ export default async function ItemsPage() {
           </Button>
         </div>
       ) : (
-        <ItemsList
-          items={rows}
-          categories={categories}
-          todayIso={today.toISOString()}
-        />
+        <>
+          <ItemsList
+            items={rows}
+            categories={categories}
+            todayIso={today.toISOString()}
+          />
+          {archivedCount > 0 ? (
+            <div className="pt-1 text-center">
+              <Link
+                href="/items/archive"
+                className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+              >
+                Архів ({archivedCount})
+              </Link>
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

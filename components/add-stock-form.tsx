@@ -12,6 +12,8 @@ import { addStockAction } from "@/lib/actions/stock";
 import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
+import { formatDateKey, todayUTC } from "@/lib/period";
+import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 type Row = { quantity: string; expiresAt: string; openedAt: string };
 type Values = { rows: Row[] };
@@ -28,14 +30,23 @@ const emptyRow: Row = { quantity: "", expiresAt: "", openedAt: "" };
 export function AddStockForm({
   itemId,
   unit,
+  barcode,
   onDone,
 }: {
   itemId: string;
   unit: Unit;
+  /** The item's stored barcode, when it has one — enables the scan check. */
+  barcode?: string | null;
   onDone?: () => void;
 }) {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
+  /** Row indexes whose optional "opened" date has been revealed. */
+  const [openedRows, setOpenedRows] = useState<ReadonlySet<number>>(new Set());
+  /** Barcode read from the camera, compared against the item's own. */
+  const [scanned, setScanned] = useState<string | null>(null);
+  // The server rejects a future "opened" date; stop the picker offering one.
+  const todayKey = formatDateKey(todayUTC());
 
   const { register, control, handleSubmit, formState } = useForm<Values>({
     defaultValues: { rows: [{ ...emptyRow }] },
@@ -117,6 +128,35 @@ export function AddStockForm({
             >
               <Trash2 className="size-4" />
             </Button>
+
+            {/*
+              "Opened" is a second-order detail — most stock-ins are of sealed
+              packs — so it hides behind a toggle rather than adding a third
+              always-visible column to a form used one-handed in a kitchen.
+            */}
+            {openedRows.has(index) ? (
+              <div className="col-span-3 space-y-1.5">
+                <Label htmlFor={`rows.${index}.openedAt`} className="text-xs">
+                  Відкрито
+                </Label>
+                <Input
+                  id={`rows.${index}.openedAt`}
+                  type="date"
+                  max={todayKey}
+                  {...register(`rows.${index}.openedAt` as const)}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="col-span-3 -mt-1 text-left text-xs text-muted-foreground hover:text-foreground hover:underline"
+                onClick={() =>
+                  setOpenedRows((current) => new Set(current).add(index))
+                }
+              >
+                + вказати дату відкриття
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -135,6 +175,33 @@ export function AddStockForm({
         Різні дати придатності — різні рядки. Наприклад, 10 пляшок води: 2 до
         листопада, 1 до лютого, 7 до серпня.
       </p>
+
+      {/*
+        Feature 10 — scanning while restocking is the commoner case than
+        scanning while creating. Here the code is a CHECK, not an input: it
+        confirms the pack in your hand is the item you are topping up, and
+        warns rather than blocks when it does not match.
+      */}
+      {barcode ? (
+        <div className="flex items-center gap-2">
+          <BarcodeScanButton onScan={setScanned} />
+          <p
+            className={
+              scanned === null
+                ? "text-xs text-muted-foreground"
+                : scanned === barcode
+                  ? "text-xs text-success-foreground dark:text-success"
+                  : "text-xs text-destructive"
+            }
+          >
+            {scanned === null
+              ? "Скануйте, щоб перевірити, що це той самий товар."
+              : scanned === barcode
+                ? "Штрихкод збігається."
+                : `Інший штрихкод (${scanned}) — можливо, це інший товар.`}
+          </p>
+        </div>
+      ) : null}
 
       {formError ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

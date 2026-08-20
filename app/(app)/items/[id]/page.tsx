@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExpiryBadge, StockBadge } from "@/components/state-badges";
 import { BatchActions, ItemActions } from "@/components/item-actions";
+import { ItemArchiveButton } from "@/components/item-archive-button";
 
 const REASON_LABEL = {
   PURCHASE: "Поповнення",
@@ -55,6 +56,15 @@ export default async function ItemDetailPage({
         Запаси
       </Link>
 
+      {item.isArchived ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-3">
+          <p className="text-sm text-muted-foreground">
+            Товар в архіві — прихований зі списків і нагадувань.
+          </p>
+          <ItemArchiveButton itemId={item.id} isArchived hasStock={false} />
+        </div>
+      ) : null}
+
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <h1 className="text-2xl font-semibold tracking-tight">{item.name}</h1>
@@ -96,7 +106,9 @@ export default async function ItemDetailPage({
         </CardContent>
       </Card>
 
-      <ItemActions itemId={item.id} unit={item.unit} />
+      {item.isArchived ? null : (
+        <ItemActions itemId={item.id} unit={item.unit} barcode={item.barcode} />
+      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -183,6 +195,16 @@ export default async function ItemDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {item.isArchived ? null : (
+        <div className="flex justify-center pt-2">
+          <ItemArchiveButton
+            itemId={item.id}
+            isArchived={false}
+            hasStock={quantity.greaterThan(0)}
+          />
+        </div>
+      )}
     </div>
   );
 }

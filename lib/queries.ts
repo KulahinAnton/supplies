@@ -247,3 +247,27 @@ export async function hasTelegramLink(userId: string): Promise<boolean> {
   });
   return link !== null;
 }
+
+/**
+ * Feature 3 — archived items, for /items/archive. Deliberately a separate
+ * query: `getItemViews` filters archived rows out, because an archived item
+ * must never reach the dashboard, the item list or the shopping suggestions.
+ */
+export async function getArchivedItems(householdId: string) {
+  const items = await prisma.item.findMany({
+    where: { householdId, isArchived: true },
+    include: {
+      batches: true,
+      category: { select: { name: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    unit: item.unit,
+    categoryName: item.category.name,
+    quantity: itemQuantity(item.batches),
+  }));
+}

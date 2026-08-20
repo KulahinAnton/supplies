@@ -24,7 +24,15 @@ import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
-export function ItemActions({ itemId, unit }: { itemId: string; unit: Unit }) {
+export function ItemActions({
+  itemId,
+  unit,
+  barcode,
+}: {
+  itemId: string;
+  unit: Unit;
+  barcode?: string | null;
+}) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
   const [takeOpen, setTakeOpen] = useState(false);
@@ -72,6 +80,7 @@ export function ItemActions({ itemId, unit }: { itemId: string; unit: Unit }) {
           <AddStockForm
             itemId={itemId}
             unit={unit}
+            barcode={barcode}
             onDone={() => setAddOpen(false)}
           />
         </DialogContent>

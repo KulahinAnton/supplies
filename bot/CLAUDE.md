@@ -33,6 +33,8 @@ Stateless on purpose: no table, no cleanup job, and it cannot be replayed once e
 | `/took` | guided: item → quantity (FEFO consume) |
 | `/cancel` | drop the current conversation |
 
+Register the production webhook with `pnpm bot:webhook:set` (`scripts/set-telegram-webhook.ts`). It refuses to run against a non-HTTPS `APP_URL` — Telegram cannot reach localhost — and refuses to register without `TELEGRAM_WEBHOOK_SECRET`, since an unauthenticated webhook URL lets anyone who guesses it post fake updates. `pnpm bot:webhook:delete` returns the bot to long polling.
+
 ## Conversation state
 
 `bot/state.ts` is an in-memory `Map` keyed by chat id. **Not persisted, on purpose**: a half-finished `/add` is worth nothing after a restart and costs the user one retyped word. Anything that matters is already a database row.

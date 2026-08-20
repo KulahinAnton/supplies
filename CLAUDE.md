@@ -27,7 +27,8 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
 - `pnpm db:up` — start Postgres (docker compose, port 5434)
 - `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:studio` → [prisma/CLAUDE.md](prisma/CLAUDE.md)
-- `pnpm bot:dev` / `pnpm bot:start` — Telegram bot → [bot/CLAUDE.md](bot/CLAUDE.md)
+- `pnpm bot:dev` / `pnpm bot:start` — Telegram bot (long polling) → [bot/CLAUDE.md](bot/CLAUDE.md)
+- `pnpm bot:webhook:set` / `pnpm bot:webhook:delete` — register/remove the production webhook (needs public HTTPS `APP_URL` + `TELEGRAM_WEBHOOK_SECRET`)
 - `pnpm digest:run [--force]` — daily expiry + out-of-stock digest
 
 ## Before first run
@@ -48,7 +49,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 ## Layout
 
 - `app/login|register|join/[token]|forgot-password|reset-password` — public auth pages; each bounces a signed-in visitor via `validSessionOrNull()` (NOT the raw JWT)
-- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expiring · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`), `shopping/`, `settings/`
+- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expiring · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `settings/`
 - `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified)
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
 - `auth.ts` (root) — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation
@@ -60,6 +61,8 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
 - `lib/messages.ts` — Ukrainian strings for everything produced outside React
 - `bot/` → [bot/CLAUDE.md](bot/CLAUDE.md) · `prisma/` → [prisma/CLAUDE.md](prisma/CLAUDE.md) · `components/` → [components/CLAUDE.md](components/CLAUDE.md)
+- `scripts/set-telegram-webhook.ts` — register/remove the production webhook; refuses a non-HTTPS `APP_URL` or a missing `TELEGRAM_WEBHOOK_SECRET`
+- `scripts/smoke.ts` — `pnpm test:db`, the live-database integration test
 - `scripts/run-daily-digest.ts` — hourly cron entry; picks households whose `digestHour` has arrived, skips any already sent today (`lastDigestOn`)
 
 ## Auth model
