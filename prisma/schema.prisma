@@ -216,6 +216,11 @@ model ShoppingListItem {
   addedAt     DateTime  @default(now())
   checkedById String?
   checkedAt   DateTime?
+  /// Feature 14.2 — null means visible. Archiving hides a row from its group
+  /// without losing it; it can be unarchived or deleted from the group's
+  /// "show archived" view. Not the same as `isChecked`: a row is ticked while
+  /// you shop and archived when you tidy up afterwards.
+  archivedAt  DateTime?
 
   household   Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
   group       ShoppingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)

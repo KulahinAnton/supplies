@@ -8,11 +8,14 @@ import {
   type GroupRow,
 } from "@/lib/shopping-groups";
 
-const row = (id: string, groupId: string | null, isChecked = false) => ({
-  id,
-  groupId,
-  isChecked,
-});
+const row = (
+  id: string,
+  groupId: string | null,
+  isChecked = false,
+  archivedAt: Date | null = null,
+) => ({ id, groupId, isChecked, archivedAt });
+
+const ARCHIVED = new Date("2026-08-20T10:00:00Z");
 
 const GROUPS: GroupRow[] = [
   { id: "pharmacy", name: "Аптека", sortOrder: 1 },
@@ -31,12 +34,12 @@ describe("groupShoppingRows", () => {
 
   it("routes a null groupId to the default group", () => {
     const result = groupShoppingRows([row("a", null)], GROUPS);
-    expect(result[0].open.map((r) => r.id)).toEqual(["a"]);
+    expect(result[0].visible.map((r) => r.id)).toEqual(["a"]);
   });
 
   it("routes a named groupId to its group", () => {
     const result = groupShoppingRows([row("a", "pharmacy")], GROUPS);
-    expect(result.find((g) => g.id === "pharmacy")!.open.map((r) => r.id)).toEqual([
+    expect(result.find((g) => g.id === "pharmacy")!.visible.map((r) => r.id)).toEqual([
       "a",
     ]);
   });
@@ -44,29 +47,81 @@ describe("groupShoppingRows", () => {
   it("keeps the default group even when it is empty — it is a drop target", () => {
     const result = groupShoppingRows([row("a", "pharmacy")], GROUPS);
     expect(result[0].isDefault).toBe(true);
-    expect(result[0].open).toEqual([]);
+    expect(result[0].visible).toEqual([]);
   });
 
   it("lists empty named groups too, for the same reason", () => {
     const result = groupShoppingRows([], GROUPS);
     expect(result).toHaveLength(3);
-    expect(result.every((g) => g.open.length === 0)).toBe(true);
+    expect(result.every((g) => g.visible.length === 0)).toBe(true);
   });
 
-  it("splits checked rows out of each group", () => {
+  it("keeps ticked rows IN their group, after the unticked ones (§14.2)", () => {
+    // The old behaviour moved them to a separate section at the bottom of the
+    // page, which reordered the list under you while shopping.
     const result = groupShoppingRows(
-      [row("open", "market"), row("done", "market", true)],
+      [row("done", "market", true), row("open", "market")],
       GROUPS,
     );
     const market = result.find((g) => g.id === "market")!;
-    expect(market.open.map((r) => r.id)).toEqual(["open"]);
-    expect(market.checked.map((r) => r.id)).toEqual(["done"]);
+    expect(market.visible.map((r) => r.id)).toEqual(["open", "done"]);
+    expect(market.openCount).toBe(1);
+  });
+
+  it("preserves incoming order within the unticked and ticked halves", () => {
+    const result = groupShoppingRows(
+      [
+        row("open1", "market"),
+        row("done1", "market", true),
+        row("open2", "market"),
+        row("done2", "market", true),
+      ],
+      GROUPS,
+    );
+    expect(
+      result.find((g) => g.id === "market")!.visible.map((r) => r.id),
+    ).toEqual(["open1", "open2", "done1", "done2"]);
+  });
+
+  it("hides archived rows from the group and lists them separately", () => {
+    const result = groupShoppingRows(
+      [
+        row("live", "market"),
+        row("gone", "market", true, ARCHIVED),
+      ],
+      GROUPS,
+    );
+    const market = result.find((g) => g.id === "market")!;
+    expect(market.visible.map((r) => r.id)).toEqual(["live"]);
+    expect(market.archived.map((r) => r.id)).toEqual(["gone"]);
+  });
+
+  it("archives an unticked row too — archiving is not 'bought'", () => {
+    const result = groupShoppingRows(
+      [row("gone", "market", false, ARCHIVED)],
+      GROUPS,
+    );
+    const market = result.find((g) => g.id === "market")!;
+    expect(market.visible).toEqual([]);
+    expect(market.archived.map((r) => r.id)).toEqual(["gone"]);
+  });
+
+  it("excludes archived rows from openCount", () => {
+    const result = groupShoppingRows(
+      [
+        row("a", "market"),
+        row("b", "market", false, ARCHIVED),
+        row("c", "market", true),
+      ],
+      GROUPS,
+    );
+    expect(result.find((g) => g.id === "market")!.openCount).toBe(1);
   });
 
   it("falls back to the default group for a groupId that no longer exists", () => {
     // SetNull should prevent this, but a row worth buying is not worth losing.
     const result = groupShoppingRows([row("orphan", "deleted-group")], GROUPS);
-    expect(result[0].open.map((r) => r.id)).toEqual(["orphan"]);
+    expect(result[0].visible.map((r) => r.id)).toEqual(["orphan"]);
   });
 
   it("marks only the default group as default", () => {
@@ -89,7 +144,7 @@ describe("groupShoppingRows", () => {
   it("copes with no named groups at all", () => {
     const result = groupShoppingRows([row("a", null)], []);
     expect(result).toHaveLength(1);
-    expect(result[0].open.map((r) => r.id)).toEqual(["a"]);
+    expect(result[0].visible.map((r) => r.id)).toEqual(["a"]);
   });
 });
 

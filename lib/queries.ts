@@ -221,8 +221,12 @@ export async function getShoppingView(householdId: string) {
     include: { batches: true },
   });
 
+  // Feature 14.2 — an archived row is not "on the list", so its item becomes
+  // suggestible again rather than being suppressed by a row nobody can see.
   const onList = new Set(
-    rows.filter((row) => !row.isChecked && row.itemId).map((row) => row.itemId!),
+    rows
+      .filter((row) => !row.isChecked && !row.archivedAt && row.itemId)
+      .map((row) => row.itemId!),
   );
 
   const batchesByItem = new Map<string, StockBatchInput[]>(

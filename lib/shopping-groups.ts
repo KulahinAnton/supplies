@@ -18,6 +18,8 @@ export type GroupableRow = {
   id: string;
   groupId: string | null;
   isChecked: boolean;
+  /** Feature 14.2 — null means visible in the group. */
+  archivedAt: Date | null;
 };
 
 export type GroupedList<T extends GroupableRow> = {
@@ -25,8 +27,16 @@ export type GroupedList<T extends GroupableRow> = {
   name: string;
   /** True for «Загальна група», which cannot be renamed or deleted. */
   isDefault: boolean;
-  open: T[];
-  checked: T[];
+  /**
+   * Feature 14.2 — the rows shown in the group: unticked first, then ticked
+   * (struck through). Ticked rows sink within their own group but never leave
+   * it, so the list you are reading in a shop does not reorder under you.
+   */
+  visible: T[];
+  /** Hidden behind the group's "show archived" toggle. */
+  archived: T[];
+  /** How many of `visible` are still to buy — what the group count shows. */
+  openCount: number;
 };
 
 /**
@@ -63,12 +73,23 @@ export function groupShoppingRows<T extends GroupableRow>(
 
   const build = (id: string, name: string, isDefault: boolean): GroupedList<T> => {
     const bucket = buckets.get(id) ?? [];
+    const live = bucket.filter((row) => row.archivedAt === null);
+
+    // Unticked first, then ticked — preserving the incoming order (addedAt)
+    // within each half. `filter` twice rather than `sort`, because a comparator
+    // on a boolean is not stable across engines and this is.
+    const visible = [
+      ...live.filter((row) => !row.isChecked),
+      ...live.filter((row) => row.isChecked),
+    ];
+
     return {
       id,
       name,
       isDefault,
-      open: bucket.filter((row) => !row.isChecked),
-      checked: bucket.filter((row) => row.isChecked),
+      visible,
+      archived: bucket.filter((row) => row.archivedAt !== null),
+      openCount: live.filter((row) => !row.isChecked).length,
     };
   };
 

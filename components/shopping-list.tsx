@@ -17,6 +17,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  Archive,
+  ArchiveRestore,
   Check,
   CornerUpRight,
   GripVertical,
@@ -48,7 +50,8 @@ import { ShoppingRowEditDialog } from "@/components/shopping-row-edit";
 import {
   addListRowAction,
   checkListRowAction,
-  clearCheckedRowsAction,
+  archiveCheckedRowsAction,
+  setListRowArchivedAction,
   deleteListRowAction,
   uncheckListRowAction,
 } from "@/lib/actions/shopping";
@@ -60,11 +63,13 @@ import {
   DEFAULT_GROUP_ID,
   groupShoppingRows,
   moveTargets,
+  type GroupedList,
   type GroupRow,
 } from "@/lib/shopping-groups";
 import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
 import { useCollapsedGroups } from "@/hooks/use-collapsed-groups";
+import { useShownArchived } from "@/hooks/use-shown-archived";
 import { cn } from "@/lib/utils";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
@@ -74,6 +79,8 @@ export type ListRow = {
   itemId: string | null;
   groupId: string | null;
   note: string | null;
+  /** Feature 14.2 — null means visible in its group. */
+  archivedAt: Date | null;
   unit: Unit | null;
   isChecked: boolean;
   addedBy: string;
@@ -118,6 +125,7 @@ export function ShoppingList({
 
   // Per-person, per-device — see hooks/use-collapsed-groups.ts.
   const [collapsed, toggleCollapse] = useCollapsedGroups();
+  const [shownArchived, toggleArchived] = useShownArchived();
 
   // Touch needs a hold-to-drag delay, or every scroll of the list would start
   // a drag. The mouse gets a small distance threshold instead, so a click on
@@ -222,8 +230,9 @@ export function ShoppingList({
     router.refresh();
   }
 
-  const totalOpen = rows.filter((row) => !row.isChecked).length;
-  const totalChecked = rows.filter((row) => row.isChecked).length;
+  const live = rows.filter((row) => row.archivedAt === null);
+  const totalOpen = live.filter((row) => !row.isChecked).length;
+  const totalChecked = live.filter((row) => row.isChecked).length;
 
   return (
     <div className="space-y-5">
@@ -286,12 +295,25 @@ export function ShoppingList({
         <h2 className="text-sm font-medium text-muted-foreground">
           Купити ({totalOpen})
         </h2>
-        {addingGroup ? null : (
-          <Button size="sm" variant="ghost" onClick={() => setAddingGroup(true)}>
-            <Plus className="size-3.5" />
-            Група
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {totalChecked > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => run(() => archiveCheckedRowsAction())}
+            >
+              <Archive className="size-3.5" />
+              Прибрати куплені
+            </Button>
+          ) : null}
+          {addingGroup ? null : (
+            <Button size="sm" variant="ghost" onClick={() => setAddingGroup(true)}>
+              <Plus className="size-3.5" />
+              Група
+            </Button>
+          )}
+        </div>
       </div>
 
       {addingGroup ? (
@@ -344,16 +366,22 @@ export function ShoppingList({
           {grouped.map((group) => (
             <GroupSection
               key={group.id}
-              id={group.id}
-              name={group.name}
-              isDefault={group.isDefault}
-              rows={group.open}
+              group={group}
               collapsed={collapsed.has(group.id)}
+              showArchived={shownArchived.has(group.id)}
               isOver={overGroup === group.id}
               onToggle={() => toggleCollapse(group.id)}
+              onToggleArchived={() => toggleArchived(group.id)}
               groups={groups}
               pending={pending}
+              onAdd={(text) =>
+                run(() => addListRowAction({ freeText: text, groupId: group.id }))
+              }
               onCheck={startCheck}
+              onUncheck={(rowId) => run(() => uncheckListRowAction(rowId))}
+              onArchive={(rowId, archived) =>
+                run(() => setListRowArchivedAction(rowId, archived))
+              }
               onDelete={(rowId) => run(() => deleteListRowAction(rowId))}
               onMove={(rowId, target) =>
                 run(() => moveListRowToGroupAction(rowId, target))
@@ -371,51 +399,6 @@ export function ShoppingList({
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {totalChecked > 0 ? (
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Куплено ({totalChecked})
-            </h2>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={pending}
-              onClick={() => run(() => clearCheckedRowsAction())}
-            >
-              Прибрати куплені
-            </Button>
-          </div>
-          <ul className="divide-y rounded-lg border">
-            {rows
-              .filter((row) => row.isChecked)
-              .map((row) => (
-                <li key={row.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm text-muted-foreground line-through">
-                      {row.label}
-                    </div>
-                    {row.checkedBy ? (
-                      <div className="text-xs text-muted-foreground">
-                        купив {row.checkedBy}
-                      </div>
-                    ) : null}
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Повернути до списку"
-                    disabled={pending}
-                    onClick={() => run(() => uncheckListRowAction(row.id))}
-                  >
-                    <Undo2 className="size-4" />
-                  </Button>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ) : null}
 
       <Dialog open={buying !== null} onOpenChange={(next) => !next && setBuying(null)}>
         <DialogContent className="sm:max-w-sm">
@@ -478,35 +461,47 @@ export function ShoppingList({
   );
 }
 
-/** One group: a droppable region wrapping its rows. */
+/** One group: a droppable region wrapping its rows, its own add field, and
+ *  — when it has any — a toggle revealing its archived rows. */
 function GroupSection({
-  id,
-  name,
-  isDefault,
-  rows,
+  group,
   collapsed,
+  showArchived,
   isOver,
   onToggle,
+  onToggleArchived,
   groups,
   pending,
+  onAdd,
   onCheck,
+  onUncheck,
+  onArchive,
   onDelete,
   onMove,
 }: {
-  id: string;
-  name: string;
-  isDefault: boolean;
-  rows: ListRow[];
+  group: GroupedList<ListRow>;
   collapsed: boolean;
+  showArchived: boolean;
   isOver: boolean;
   onToggle: () => void;
+  onToggleArchived: () => void;
   groups: GroupRow[];
   pending: boolean;
+  onAdd: (text: string) => Promise<boolean> | void;
   onCheck: (row: ListRow) => void;
+  onUncheck: (rowId: string) => void;
+  onArchive: (rowId: string, archived: boolean) => void;
   onDelete: (rowId: string) => void;
   onMove: (rowId: string, target: string) => void;
 }) {
-  const { setNodeRef } = useDroppable({ id });
+  const { setNodeRef } = useDroppable({ id: group.id });
+  const [draft, setDraft] = useState("");
+
+  async function submit() {
+    if (!draft.trim()) return;
+    const ok = await onAdd(draft);
+    if (ok !== false) setDraft("");
+  }
 
   return (
     <div
@@ -517,33 +512,123 @@ function GroupSection({
       )}
     >
       <ShoppingGroupHeader
-        groupId={id}
-        name={name}
-        isDefault={isDefault}
-        count={rows.length}
+        groupId={group.id}
+        name={group.name}
+        isDefault={group.isDefault}
+        count={group.openCount}
         collapsed={collapsed}
         onToggle={onToggle}
         isDropTarget={isOver}
       />
 
-      {collapsed ? null : rows.length === 0 ? (
-        <p className="px-3 pb-3 text-xs text-muted-foreground">
-          Порожньо — перетягніть сюди товар.
-        </p>
-      ) : (
-        <ul className="divide-y border-t">
-          {rows.map((row) => (
-            <ListRowItem
-              key={row.id}
-              row={row}
-              groups={groups}
-              pending={pending}
-              onCheck={onCheck}
-              onDelete={onDelete}
-              onMove={onMove}
+      {collapsed ? null : (
+        <>
+          {group.visible.length === 0 ? (
+            <p className="px-3 pb-2 text-xs text-muted-foreground">
+              Порожньо — додайте нижче або перетягніть сюди товар.
+            </p>
+          ) : (
+            <ul className="divide-y border-t">
+              {group.visible.map((row) => (
+                <ListRowItem
+                  key={row.id}
+                  row={row}
+                  groups={groups}
+                  pending={pending}
+                  onCheck={onCheck}
+                  onUncheck={onUncheck}
+                  onArchive={onArchive}
+                  onDelete={onDelete}
+                  onMove={onMove}
+                />
+              ))}
+            </ul>
+          )}
+
+          {/* Feature 14.1 — add straight into this group, so a thing can be
+              written down where it belongs instead of landing in the common
+              group and needing a second action to move it. */}
+          <div className="flex gap-2 border-t px-3 py-2">
+            <Input
+              value={draft}
+              placeholder={`Додати до «${group.name}»…`}
+              className="h-8"
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void submit();
+                }
+              }}
             />
-          ))}
-        </ul>
+            <Button
+              size="icon"
+              variant="outline"
+              className="size-8"
+              aria-label={`Додати до ${group.name}`}
+              disabled={pending || !draft.trim()}
+              onClick={submit}
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
+
+          {/* The toggle appears only when there is something to reveal — a
+              control that shows nothing is noise. */}
+          {group.archived.length > 0 ? (
+            <div className="border-t px-3 py-1.5">
+              <button
+                type="button"
+                onClick={onToggleArchived}
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+              >
+                {showArchived
+                  ? `Сховати архів (${group.archived.length})`
+                  : `Показати архів (${group.archived.length})`}
+              </button>
+            </div>
+          ) : null}
+
+          {showArchived && group.archived.length > 0 ? (
+            <ul className="divide-y border-t bg-muted/40">
+              {group.archived.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center gap-2 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm text-muted-foreground line-through">
+                      {row.label}
+                    </div>
+                    {row.note ? (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {row.note}
+                      </div>
+                    ) : null}
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={`Повернути ${row.label}`}
+                    disabled={pending}
+                    onClick={() => onArchive(row.id, false)}
+                  >
+                    <ArchiveRestore className="size-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label={`Видалити ${row.label}`}
+                    disabled={pending}
+                    onClick={() => onDelete(row.id)}
+                  >
+                    <Trash2 className="size-4 text-destructive" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
       )}
     </div>
   );
@@ -554,6 +639,8 @@ function ListRowItem({
   groups,
   pending,
   onCheck,
+  onUncheck,
+  onArchive,
   onDelete,
   onMove,
 }: {
@@ -561,6 +648,8 @@ function ListRowItem({
   groups: GroupRow[];
   pending: boolean;
   onCheck: (row: ListRow) => void;
+  onUncheck: (rowId: string) => void;
+  onArchive: (rowId: string, archived: boolean) => void;
   onDelete: (rowId: string) => void;
   onMove: (rowId: string, target: string) => void;
 }) {
@@ -593,23 +682,60 @@ function ListRowItem({
         <GripVertical className="size-4" />
       </button>
 
+      {/* Ticking and un-ticking are the same button — a mis-tap in a shop
+          should be one tap to undo, not a hunt through a menu. */}
       <Button
         size="icon"
-        variant="outline"
-        aria-label="Купили"
+        variant={row.isChecked ? "secondary" : "outline"}
+        aria-label={row.isChecked ? "Повернути до списку" : "Купили"}
         disabled={pending}
-        onClick={() => onCheck(row)}
+        onClick={() => (row.isChecked ? onUncheck(row.id) : onCheck(row))}
       >
-        <Check className="size-4" />
+        {row.isChecked ? (
+          <Undo2 className="size-4" />
+        ) : (
+          <Check className="size-4" />
+        )}
       </Button>
 
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{row.label}</div>
+        {/* §14.2 — a bought row stays where it is, struck through, rather
+            than jumping to another part of the page under your thumb. */}
+        <div
+          className={cn(
+            "truncate text-sm font-medium",
+            row.isChecked && "text-muted-foreground line-through",
+          )}
+        >
+          {row.label}
+        </div>
         {row.note ? (
-          <div className="truncate text-xs text-foreground/70">{row.note}</div>
+          <div
+            className={cn(
+              "truncate text-xs text-foreground/70",
+              row.isChecked && "text-muted-foreground line-through",
+            )}
+          >
+            {row.note}
+          </div>
         ) : null}
-        <div className="text-xs text-muted-foreground">додав {row.addedBy}</div>
+        <div className="text-xs text-muted-foreground">
+          {row.isChecked && row.checkedBy
+            ? `купив ${row.checkedBy}`
+            : `додав ${row.addedBy}`}
+        </div>
       </div>
+
+      {/* Archiving hides the row from the group without losing it. */}
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label={`До архіву: ${row.label}`}
+        disabled={pending}
+        onClick={() => onArchive(row.id, true)}
+      >
+        <Archive className="size-4" />
+      </Button>
 
       <Button
         size="icon"

@@ -236,6 +236,25 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 14 — Adding into a group, and archiving bought rows
+
+Two revisions to Feature 11, from using it in a real shop.
+
+**14.1 Add straight into a group.** Every group gets its own add field, so something can be written down where it belongs instead of landing in «Загальна група» and needing a second action to move it. The **top-level add field stays and still adds to «Загальна група»** — it is the fastest path when you do not yet know which shop a thing comes from, and losing it would make the common case slower.
+
+**14.2 Bought rows stay put.** Ticking a row previously teleported it to a separate «Куплено» section at the bottom of the page. That is wrong in a shop: you tick things as you walk, and the list you are reading reorders itself under you, so you lose your place and cannot see at a glance what remains in *this* aisle.
+
+Instead a ticked row **stays in its group, struck through**. It is still visible, still counted, still where you left it.
+
+Clearing the list is then a separate, deliberate act:
+
+- **Archiving** a row hides it from the group. `ShoppingListItem.archivedAt` — null means visible. Archiving is not deletion: nothing is lost, and the row can come back.
+- Each group has a **toggle to show its archived rows**. Hidden by default; the toggle is per-person and per-device, like the collapse state, and appears only when a group actually has archived rows — an control that reveals nothing is noise.
+- An archived row can be **unarchived** (back into its group, still ticked) or **deleted** outright.
+- The bulk action archives every ticked row at once, rather than deleting them. What it does is now recoverable, which is why it no longer needs the warning tone its "Прибрати" name carried.
+
+Ordering within a group puts **unticked rows first, then ticked**, each by `addedAt`. Ticked rows sinking within their own group is the useful half of the old behaviour; jumping to a different part of the page was the harmful half.
+
 ### Feature 13 — Per-category expiry warning
 
 One warning window for the whole household is wrong in practice. Yoghurt needs a few days' notice; medicine, cleaning products and tinned food are worth flagging weeks ahead, because replacing them is a planned errand rather than a trip to the corner shop.
