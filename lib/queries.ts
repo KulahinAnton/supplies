@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import {
   itemExpiryState,
   needsAttention,
+  resolveWarnDays,
   type ExpiryState,
 } from "@/lib/expiry";
 import { todayUTC } from "@/lib/period";
@@ -45,6 +46,8 @@ export type ItemView = {
   batchCount: number;
   /** Feature 12.2 — lets the list offer "newest first". */
   createdAt: Date;
+  /** Feature 13 — the window actually used for this item, after inheritance. */
+  warnDays: number;
 };
 
 const liveBatch = (batch: { quantity: Prisma.Decimal }) =>
@@ -63,7 +66,7 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
     where: { householdId, isArchived: false },
     include: {
       batches: true,
-      category: { select: { name: true } },
+      category: { select: { name: true, expiryWarnDays: true } },
       location: { select: { name: true } },
     },
     orderBy: { name: "asc" },
@@ -75,6 +78,14 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
       .filter((batch) => batch.expiresAt)
       .sort((a, b) => a.expiresAt!.getTime() - b.expiresAt!.getTime());
 
+    // Feature 13 — resolved per item, via its category. This is the only place
+    // the fallback happens, so the item list, dashboard, bot and digest cannot
+    // disagree about how far ahead to warn.
+    const warnDays = resolveWarnDays(
+      item.category.expiryWarnDays,
+      household.expiryWarnDays,
+    );
+
     return {
       id: item.id,
       name: item.name,
@@ -82,7 +93,8 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
       minQty: item.minQty,
       quantity: itemQuantity(item.batches),
       stock: stockState(item, item.batches),
-      expiry: itemExpiryState(item.batches, today, household.expiryWarnDays),
+      expiry: itemExpiryState(item.batches, today, warnDays),
+      warnDays,
       categoryName: item.category.name,
       locationName: item.location?.name ?? null,
       nextExpiry: dated[0]?.expiresAt ?? null,
@@ -94,6 +106,8 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
 
 export type DashboardData = {
   expiryWarnDays: number;
+  /** Feature 13 — true when some category uses a different window. */
+  hasCategoryOverrides: boolean;
   expiring: ItemView[];
   restock: ItemView[];
   recent: Awaited<ReturnType<typeof getRecentMovements>>;
@@ -130,6 +144,12 @@ export async function getDashboard(householdId: string): Promise<DashboardData> 
 
   return {
     expiryWarnDays: household.expiryWarnDays,
+    // Feature 13 — the header shows the household default, so it must say when
+    // that number does not apply to everything. Claiming one figure covers the
+    // whole list would be a lie once a category overrides it.
+    hasCategoryOverrides: items.some(
+      (item) => item.warnDays !== household.expiryWarnDays,
+    ),
     expiring,
     restock,
     recent: await getRecentMovements(householdId, 8),
@@ -166,12 +186,21 @@ export async function getItemDetail(householdId: string, itemId: string) {
   });
   if (!item) return null;
 
+  // Feature 13 — this item's window, after category inheritance. The page uses
+  // it for the batch chips too, so a category override applies everywhere the
+  // item is shown, not just in the list.
+  const warnDays = resolveWarnDays(
+    item.category.expiryWarnDays,
+    household.expiryWarnDays,
+  );
+
   return {
     item,
     household,
+    warnDays,
     quantity: itemQuantity(item.batches),
     stock: stockState(item, item.batches),
-    expiry: itemExpiryState(item.batches, todayUTC(), household.expiryWarnDays),
+    expiry: itemExpiryState(item.batches, todayUTC(), warnDays),
   };
 }
 

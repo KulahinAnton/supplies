@@ -16,9 +16,8 @@ const REASON_LABEL = {
 
 export default async function DashboardPage() {
   const session = await requireSession();
-  const { expiring, restock, recent, expiryWarnDays } = await getDashboard(
-    session.householdId,
-  );
+  const { expiring, restock, recent, expiryWarnDays, hasCategoryOverrides } =
+    await getDashboard(session.householdId);
   const today = todayUTC();
 
   return (
@@ -37,8 +36,14 @@ export default async function DashboardPage() {
               <CalendarClock className="size-4 text-warning" />
               Псується
             </CardTitle>
+            {/*
+              Feature 13 — the number here is the household default. Once a
+              category overrides it, saying it plainly would be a lie, so the
+              label admits that some categories differ.
+            */}
             <span className="text-xs text-muted-foreground">
               попередження за {expiryWarnDays} дн.
+              {hasCategoryOverrides ? " (деякі категорії — інакше)" : ""}
             </span>
           </CardHeader>
           <CardContent className="pt-0">

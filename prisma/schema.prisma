@@ -94,6 +94,10 @@ model Category {
   name        String
   icon        String @default("package")
   sortOrder   Int    @default(0)
+  /// Feature 13 — null means INHERIT the household default. Deliberately not a
+  /// copy of it: an inheriting category must follow the household value when
+  /// that value changes, which a copied number would silently stop doing.
+  expiryWarnDays Int?
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   items       Item[]

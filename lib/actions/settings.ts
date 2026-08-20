@@ -41,7 +41,7 @@ export async function saveCategoryAction(input: unknown): Promise<ActionResult> 
   const parsed = categorySchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const { id, name, icon } = parsed.data;
+  const { id, name, icon, expiryWarnDays } = parsed.data;
 
   const clash = await prisma.category.findFirst({
     where: {
@@ -59,13 +59,22 @@ export async function saveCategoryAction(input: unknown): Promise<ActionResult> 
       select: { id: true },
     });
     if (!owned) return actionError(ruleMessage("auth.forbidden"));
-    await prisma.category.update({ where: { id }, data: { name, icon } });
+    await prisma.category.update({
+      where: { id },
+      data: { name, icon, expiryWarnDays },
+    });
   } else {
     const count = await prisma.category.count({
       where: { householdId: session.householdId },
     });
     await prisma.category.create({
-      data: { householdId: session.householdId, name, icon, sortOrder: count },
+      data: {
+        householdId: session.householdId,
+        name,
+        icon,
+        expiryWarnDays,
+        sortOrder: count,
+      },
     });
   }
 

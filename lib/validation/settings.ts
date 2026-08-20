@@ -19,6 +19,17 @@ export const categorySchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1, key("auth.nameRequired")),
   icon: z.string().trim().default("package"),
+  /**
+   * Feature 13 — null means inherit the household window. An empty string from
+   * a cleared input becomes null, NOT 0: clearing the field must return the
+   * category to inheriting, while a deliberate 0 means "warn on the day only".
+   */
+  expiryWarnDays: z
+    .union([z.literal(""), z.coerce.number().int().min(0).max(365)])
+    .optional()
+    .transform((value) =>
+      value === "" || value === undefined ? null : (value as number),
+    ),
 });
 
 export const locationSchema = z.object({

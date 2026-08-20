@@ -6,6 +6,7 @@ import {
   daysUntil,
   itemExpiryState,
   needsAttention,
+  resolveWarnDays,
   type ExpiryBatch,
 } from "@/lib/expiry";
 import { dateOnlyUTC } from "@/lib/period";
@@ -52,6 +53,42 @@ describe("batchExpiryState (§3.5)", () => {
   it("ignores a time component on the stored date", () => {
     const withTime = new Date(Date.UTC(2026, 2, 17, 23, 59, 59));
     expect(batchExpiryState(withTime, today, WARN)).toBe("SOON");
+  });
+});
+
+describe("resolveWarnDays (Feature 13)", () => {
+  it("uses the category's own window when it has one", () => {
+    expect(resolveWarnDays(14, 7)).toBe(14);
+  });
+
+  it("inherits the household default when the category is null", () => {
+    expect(resolveWarnDays(null, 7)).toBe(7);
+  });
+
+  it("treats undefined as inherit too — a category loaded without the field", () => {
+    expect(resolveWarnDays(undefined, 7)).toBe(7);
+  });
+
+  it("honours a category window of 0 rather than treating it as unset", () => {
+    // The bug this guards: `categoryWarnDays || household` would return 7 here,
+    // silently ignoring "warn me only on the day itself".
+    expect(resolveWarnDays(0, 7)).toBe(0);
+  });
+
+  it("follows the household default as it changes, for an inheriting category", () => {
+    expect(resolveWarnDays(null, 3)).toBe(3);
+    expect(resolveWarnDays(null, 30)).toBe(30);
+  });
+
+  it("feeds straight into batchExpiryState", () => {
+    const soonUnder14 = dateOnlyUTC(2026, 3, 20);
+    // FRESH under the household's 7 days, SOON under a category's 14.
+    expect(batchExpiryState(soonUnder14, today, resolveWarnDays(null, 7))).toBe(
+      "FRESH",
+    );
+    expect(batchExpiryState(soonUnder14, today, resolveWarnDays(14, 7))).toBe(
+      "SOON",
+    );
   });
 });
 

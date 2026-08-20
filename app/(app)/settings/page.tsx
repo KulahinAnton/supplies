@@ -5,6 +5,7 @@ import {
   getMembers,
   hasTelegramLink,
 } from "@/lib/queries";
+import { CategoryPanel } from "@/components/category-panel";
 import {
   HouseholdPanel,
   InvitePanel,
@@ -39,13 +40,13 @@ export default async function SettingsPage() {
       />
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <NamedListPanel
-          title="Категорії"
-          kind="category"
+        <CategoryPanel
+          householdWarnDays={household.expiryWarnDays}
           rows={categories.map((category) => ({
             id: category.id,
             name: category.name,
             itemCount: category._count.items,
+            expiryWarnDays: category.expiryWarnDays,
           }))}
         />
         <NamedListPanel

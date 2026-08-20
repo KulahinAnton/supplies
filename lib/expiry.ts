@@ -9,6 +9,23 @@ import { addDays, compareDateOnly, daysBetween, toDateOnly } from "@/lib/period"
 
 export type ExpiryState = "EXPIRED" | "SOON" | "FRESH" | "NONE";
 
+/**
+ * Feature 13 — how many days ahead counts as "expiring soon" for one item.
+ *
+ * A category's `expiryWarnDays` is **nullable, and null means inherit**. It is
+ * not a copy of the household value: a category left inheriting must follow
+ * the household default when that default changes.
+ *
+ * 0 is a real answer ("warn me only on the day itself"), so this must test for
+ * null explicitly — `??`, never `||`, which would treat 0 as unset.
+ */
+export function resolveWarnDays(
+  categoryWarnDays: number | null | undefined,
+  householdWarnDays: number,
+): number {
+  return categoryWarnDays ?? householdWarnDays;
+}
+
 /** Batch shape this module needs. Real `StockBatch` rows satisfy it. */
 export type ExpiryBatch = {
   quantity: { isZero(): boolean; isNegative(): boolean };

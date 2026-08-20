@@ -30,7 +30,7 @@ export default async function ItemDetailPage({
   const detail = await getItemDetail(session.householdId, id);
   if (!detail) notFound();
 
-  const { item, household, quantity, stock, expiry } = detail;
+  const { item, warnDays, quantity, stock, expiry } = detail;
   const today = todayUTC();
 
   const live = item.batches.filter((batch) => batch.quantity.greaterThan(0));
@@ -125,7 +125,7 @@ export default async function ItemDetailPage({
                 const state = batchExpiryState(
                   batch.expiresAt,
                   today,
-                  household.expiryWarnDays,
+                  warnDays,
                 );
                 return (
                   <li

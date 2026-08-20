@@ -236,6 +236,16 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 13 — Per-category expiry warning
+
+One warning window for the whole household is wrong in practice. Yoghurt needs a few days' notice; medicine, cleaning products and tinned food are worth flagging weeks ahead, because replacing them is a planned errand rather than a trip to the corner shop.
+
+- **`Category.expiryWarnDays` is nullable, and null means "inherit"** — the household's `expiryWarnDays` is used. It is deliberately not a copy of the household value: a category set to "inherit" must *follow* the household default when that default changes, and a copied number would silently stop tracking it.
+- **Resolution is a pure function** (`resolveWarnDays(category, household)`), so the fallback is stated once. Every place that computes an expiry state resolves it **per item, via that item's category** — the item list, the dashboard, the item detail page, the Telegram bot and the daily digest all go through `lib/queries.ts`, so they cannot disagree.
+- **Range 0–365**, same as the household setting. 0 is meaningful: it means "only warn me on the day itself".
+- The dashboard header shows the **household default**, with a note when any category overrides it — claiming a single number applies to everything would be a lie once overrides exist.
+- Settings lists each category with its own days field, blank meaning inherit. Clearing the field returns the category to inheriting, rather than setting 0.
+
 ## 7. Conventions
 
 - Quantities are Prisma `Decimal(12,3)` — never float math; pass values to Prisma as strings; round to 3 dp.
