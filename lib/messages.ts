@@ -42,6 +42,9 @@ export const MESSAGES = {
   "shopping.rowInvalid": "Вкажіть або товар зі списку, або довільний текст.",
   "shopping.alreadyOnList": "Цей товар уже є в списку покупок.",
   "shopping.notFound": "Рядок списку не знайдено.",
+  "shopping.textRequired": "Назва не може бути порожньою.",
+  "shopping.nameFromItem":
+    "Назва береться з товару — перейменуйте його на сторінці запасів.",
 
   // --- shopping list groups (Feature 11) ---
   "shoppingGroup.nameRequired": "Вкажіть назву групи.",

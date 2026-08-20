@@ -43,6 +43,8 @@ export type ItemView = {
   /** Soonest expiry among live batches — what the chip shows. */
   nextExpiry: Date | null;
   batchCount: number;
+  /** Feature 12.2 — lets the list offer "newest first". */
+  createdAt: Date;
 };
 
 const liveBatch = (batch: { quantity: Prisma.Decimal }) =>
@@ -85,6 +87,7 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
       locationName: item.location?.name ?? null,
       nextExpiry: dated[0]?.expiresAt ?? null,
       batchCount: live.length,
+      createdAt: item.createdAt,
     };
   });
 }

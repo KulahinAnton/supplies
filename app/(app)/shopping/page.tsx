@@ -16,6 +16,7 @@ export default async function ShoppingPage() {
     label: row.item?.name ?? row.freeText ?? "—",
     itemId: row.itemId,
     groupId: row.groupId,
+    note: row.note,
     unit: row.item?.unit ?? null,
     isChecked: row.isChecked,
     addedBy: row.addedBy.name,

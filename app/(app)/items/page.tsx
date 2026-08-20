@@ -26,6 +26,7 @@ export default async function ItemsPage() {
     nextExpiryIso: item.nextExpiry ? item.nextExpiry.toISOString() : null,
     categoryName: item.categoryName,
     locationName: item.locationName,
+    createdAtMs: item.createdAt.getTime(),
   }));
 
   const categories = [...new Set(items.map((item) => item.categoryName))].sort(

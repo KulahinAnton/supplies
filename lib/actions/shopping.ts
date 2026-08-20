@@ -95,6 +95,58 @@ export async function checkListRowAction(input: {
   return actionOk();
 }
 
+/**
+ * Feature 12.1 — edit a row.
+ *
+ * What is editable depends on what the row is. A free-text one-off owns its
+ * text. A row that names a real item does NOT: its label is the item's name,
+ * and renaming it here would silently rename the item in the stock list, the
+ * dashboard and every past movement. So `freeText` is ignored for those, and
+ * the caller is told to rename the item itself.
+ *
+ * Both kinds carry a `note`.
+ */
+export async function updateListRowAction(input: {
+  rowId: string;
+  freeText?: string | null;
+  note?: string | null;
+}): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const row = await prisma.shoppingListItem.findFirst({
+    where: { id: input.rowId, householdId: session.householdId },
+    select: { id: true, itemId: true },
+  });
+  if (!row) return actionError(ruleMessage("shopping.notFound"));
+
+  const note = input.note?.trim() ? input.note.trim().slice(0, 200) : null;
+
+  if (row.itemId) {
+    // Item-linked: note only. Silently ignoring a freeText here would be a
+    // lie, so refuse it outright.
+    if (input.freeText !== undefined && input.freeText !== null) {
+      return actionError(ruleMessage("shopping.nameFromItem"));
+    }
+    await prisma.shoppingListItem.update({
+      where: { id: row.id },
+      data: { note },
+    });
+    refresh();
+    return actionOk();
+  }
+
+  const freeText = input.freeText?.trim();
+  if (!freeText) return actionError(ruleMessage("shopping.textRequired"));
+
+  await prisma.shoppingListItem.update({
+    where: { id: row.id },
+    data: { freeText: freeText.slice(0, 120), note },
+  });
+
+  refresh();
+  return actionOk();
+}
+
 export async function uncheckListRowAction(rowId: string): Promise<ActionResult> {
   const session = await requireSession();
   const row = await prisma.shoppingListItem.findFirst({

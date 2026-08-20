@@ -20,6 +20,7 @@ import {
   Check,
   CornerUpRight,
   GripVertical,
+  Pencil,
   Plus,
   Trash2,
   Undo2,
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ShoppingGroupHeader } from "@/components/shopping-group-header";
+import { ShoppingRowEditDialog } from "@/components/shopping-row-edit";
 import {
   addListRowAction,
   checkListRowAction,
@@ -71,6 +73,7 @@ export type ListRow = {
   label: string;
   itemId: string | null;
   groupId: string | null;
+  note: string | null;
   unit: Unit | null;
   isChecked: boolean;
   addedBy: string;
@@ -317,6 +320,11 @@ export function ShoppingList({
       ) : null}
 
       <DndContext
+        // Explicit id, or dnd-kit derives its `aria-describedby` values from a
+        // counter that starts fresh in each environment — the server renders
+        // "DndDescribedBy-1" and the client "DndDescribedBy-0", which React
+        // reports as a hydration mismatch.
+        id="shopping-list"
         sensors={sensors}
         // closestCenter, not the default rectIntersection: a row starts inside
         // one group container and rect overlap would keep choosing that same
@@ -559,6 +567,7 @@ function ListRowItem({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: row.id,
   });
+  const [editing, setEditing] = useState(false);
 
   const targets = moveTargets(row.groupId, groups);
 
@@ -596,8 +605,27 @@ function ListRowItem({
 
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{row.label}</div>
+        {row.note ? (
+          <div className="truncate text-xs text-foreground/70">{row.note}</div>
+        ) : null}
         <div className="text-xs text-muted-foreground">додав {row.addedBy}</div>
       </div>
+
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label={`Редагувати ${row.label}`}
+        disabled={pending}
+        onClick={() => setEditing(true)}
+      >
+        <Pencil className="size-4" />
+      </Button>
+
+      <ShoppingRowEditDialog
+        row={row}
+        open={editing}
+        onOpenChange={setEditing}
+      />
 
       {/*
         The non-drag route. Drag is fiddly on a small screen and unusable with

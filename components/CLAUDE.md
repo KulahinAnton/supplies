@@ -27,3 +27,9 @@ Installed: alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu, 
 - Attention counts (expiring / restock) ride in the nav badges, so the state is visible from every page.
 - Two state axes, two chips: `StockBadge` (OUT/LOW/OK) and `ExpiryBadge` (EXPIRED/SOON). They are **never** merged — an item can be well stocked and half-expired, and collapsing that hides one of them.
 - Colours come from tokens in `app/globals.css` (`--warning`, `--success`, `--destructive`); badges never hardcode a hex value. Dark mode is class-based (`.dark`) via next-themes.
+
+## dnd-kit needs an explicit `id` under SSR
+
+`<DndContext>` derives its `aria-describedby` values from a counter that starts fresh in each environment, so the server renders `DndDescribedBy-1` and the client `DndDescribedBy-0` — a hydration mismatch on every draggable. Pass a stable `id` (`<DndContext id="shopping-list">`) and the ids become deterministic.
+
+Not to be confused with the *other* hydration warning you will see in dev: Grammarly adds `data-gr-ext-installed` to `<body>` after the server render. That one is a browser extension, harmless, and disappears in a private window.

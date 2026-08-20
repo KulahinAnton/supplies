@@ -42,3 +42,13 @@ The data is deliberately uneven so every screen has something to show:
 Every seeded batch also writes its `PURCHASE` movement, so the seed obeys the same rule the app does and the history is not empty.
 
 **Demo login:** `anton@example.com` / `supplies123` (also `olena@example.com`, same password).
+
+## After changing the schema: clear `.next`, not just restart
+
+`pnpm prisma generate` rewrites `lib/generated/prisma/`, but **Turbopack has already compiled the old client into `.next/dev/server/chunks/`** and keeps serving that chunk across a restart. The symptom is a `PrismaClientValidationError` naming your new column — *"Unknown argument `note`. Did you mean `item`?"* — while the generated client on disk plainly has it. Reads often keep working (the missing field just comes back `undefined`), so only writes fail, which makes it look like an action bug.
+
+The fix, in this order:
+
+1. stop the dev server
+2. `rmdir /s /q .next` (it is locked while the server runs)
+3. `pnpm dev`

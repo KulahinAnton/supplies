@@ -217,6 +217,25 @@ The list is one flat column today. Once it holds more than a handful of rows tha
 - **Deleting a group never deletes its rows** — they fall back to «Загальна група». Renaming is free. A group holding rows can be deleted without a confirmation scare, because nothing is lost.
 - Ordering within a group stays by `addedAt`; **reordering rows inside a group is out of scope** for v1. Drag is for moving *between* groups.
 
+### Feature 12 — Editing a shopping row, and sorting the stock list
+
+**12.1 Editing a shopping list row.** A row could be created but never corrected — a typo in "Свічки для торта" meant deleting it and typing it again. What is editable depends on what the row *is*, because the two kinds of row own their text differently:
+
+- A **free-text one-off** owns its own text, so `freeText` is editable outright.
+- A row that **names a real item** does not: its label is the item's name, and letting the list rename it would silently rename it in the stock, the dashboard and every past movement. That name stays read-only here; rename it on the item itself.
+
+Both kinds gain a **`note`** — a short free-text line for the things a shopping list actually needs to carry: "2 пляшки", "тільки Roshen", "якщо буде акція". It is shown under the row and travels with it between groups. Notes are cleared along with the row when "Прибрати куплені" runs; they are not history.
+
+**12.2 Sorting the stock list.** `/items` was hardcoded to alphabetical order, which answers "where is X" but never "what did we just buy". A sort control offers:
+
+- **За назвою** — Ukrainian collation (`uk-UA`), the default.
+- **Спочатку нові** — newest `createdAt` first, for reviewing what was added recently.
+- **Спочатку старі** — the reverse, which surfaces long-forgotten items.
+
+Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-sort.ts`), not an extra query: the list is small, the filters are already client-side, and re-sorting must not cost a round trip. Every mode breaks ties by name so the order is total and stable — two items added in the same second must not shuffle between renders.
+
+The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
+
 ## 7. Conventions
 
 - Quantities are Prisma `Decimal(12,3)` — never float math; pass values to Prisma as strings; round to 3 dp.

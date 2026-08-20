@@ -2,9 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { ArrowDownUp, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ExpiryBadge, StockBadge } from "@/components/state-badges";
+import { useItemSort } from "@/hooks/use-item-sort";
+import { ITEM_SORTS, ITEM_SORT_LABELS, sortItems } from "@/lib/item-sort";
 import type { ExpiryState } from "@/lib/expiry";
 import type { StockState } from "@/lib/stock";
 import { cn } from "@/lib/utils";
@@ -23,6 +32,8 @@ export type ItemRow = {
   nextExpiryIso: string | null;
   categoryName: string;
   locationName: string | null;
+  /** Epoch ms — Date does not survive the server/client boundary intact. */
+  createdAtMs: number;
 };
 
 type Filter = "all" | "attention" | StockState;
@@ -46,11 +57,13 @@ export function ItemsList({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [category, setCategory] = useState<string>("all");
+  // Feature 12.2 — per-person, per-device, like the group collapse state.
+  const [sort, setSort] = useItemSort();
   const today = useMemo(() => new Date(todayIso), [todayIso]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return items.filter((item) => {
+    const matched = items.filter((item) => {
       if (needle && !item.name.toLowerCase().includes(needle)) return false;
       if (category !== "all" && item.categoryName !== category) return false;
       if (filter === "OUT" || filter === "LOW") return item.stock === filter;
@@ -63,19 +76,46 @@ export function ItemsList({
       }
       return true;
     });
-  }, [items, query, filter, category]);
+    return sortItems(matched, sort);
+  }, [items, query, filter, category, sort]);
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Пошук за назвою…"
-          className="pl-9"
-          type="search"
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Пошук за назвою…"
+            className="pl-9"
+            type="search"
+          />
+        </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" aria-label="Сортування">
+                <ArrowDownUp className="size-4" />
+                <span className="hidden sm:inline">
+                  {ITEM_SORT_LABELS[sort]}
+                </span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            {ITEM_SORTS.map((option) => (
+              <DropdownMenuItem
+                key={option}
+                onClick={() => setSort(option)}
+                className={option === sort ? "font-semibold" : undefined}
+              >
+                {ITEM_SORT_LABELS[option]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">

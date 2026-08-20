@@ -203,6 +203,9 @@ model ShoppingListItem {
   /// Exactly one of itemId / freeText is set.
   itemId      String?
   freeText    String?
+  /// Feature 12.1 — short free text the list needs to carry: "2 пляшки",
+  /// "тільки Roshen". Editable on every row, whatever kind it is.
+  note        String?
   quantity    Decimal?  @db.Decimal(12, 3)
   isChecked   Boolean   @default(false)
   addedById   String
