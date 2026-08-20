@@ -2,9 +2,9 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–11 implemented against a live Postgres. Three migrations applied, seed idempotent, `pnpm test` (141), `pnpm test:db` (26 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–12 implemented against a live Postgres. Four migrations applied, seed idempotent, `pnpm test` (150), `pnpm test:db` (26 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
-> Not yet exercised: the bot.s command handlers and message delivery (need a real Telegram token), and the **drag gesture** of Feature 11 — its wiring, collision strategy and the server action behind it are verified, but a real finger/mouse drag has not been performed.
+> Not yet exercised: the bot's command handlers and message delivery (need a real Telegram token), and the **drag gesture** of Feature 11 — its wiring, collision strategy and the server action behind it are verified, but a real finger/mouse drag has not been performed.
 
 ## Stack
 
@@ -85,6 +85,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - Every batch mutation writes its `StockMovement` in the **same transaction** — no exceptions. The movement log is the audit trail ("who used the last of it").
 - Household settings (`expiryWarnDays`, `digestHour`) are **data**, not constants — pure functions take them as input.
 - **Documentation-first**: any new feature/rule lands in PROJECT_PROMPT.md (+ this file) before code.
+- **Ukrainian is the UI language, and ONLY that.** Docs (README, every CLAUDE.md, PROJECT_PROMPT.md), code, comments, identifiers and commit messages are **English**. Where English prose quotes a literal UI label — «Загальна група» — the Ukrainian stays, because the doc is naming what the user sees on screen; translating it would make the doc disagree with the app.
 - **Ukrainian only** (PROJECT_PROMPT.md §8): UI copy is written in Ukrainian **directly in the components** — no `t()`, no keys, no catalogs. Do not add an i18n library. Strings generated outside React (pure-engine rule errors, server-action/zod errors, bot replies, digest text) live in `lib/messages.ts` as a typed key → Ukrainian map with `{param}` interpolation; **pure functions return the key + params, never a formatted sentence**, so tests assert on keys, not prose. All dates and numbers format through `lib/format.ts` (`uk-UA`, `DD.MM.YYYY`, decimal comma, `Intl.PluralRules` for `one/few/many` — "1 пляшка / 2 пляшки / 5 пляшок"); never call `toLocaleString()` ad hoc. `<html lang="uk">`, manifest `"lang": "uk"`, Ukrainian seed data.
 - The **bot is a second front end, never a second implementation** — it calls `lib/stock-service.ts` and `lib/queries.ts`, same as the web UI.
 - `lib/format.ts` is deliberately **Prisma-free** — client components import it, and the generated client pulls `node:module` into the browser bundle and breaks the build.
