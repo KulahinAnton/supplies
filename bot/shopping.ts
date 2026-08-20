@@ -7,6 +7,7 @@ import {
   groupShoppingRows,
 } from "@/lib/shopping-groups";
 import type { BotUser } from "@/bot/auth";
+import { CB, type View } from "@/bot/menu";
 
 /**
  * Feature 17.3 — the shopping list inside the chat.
@@ -25,27 +26,13 @@ import type { BotUser } from "@/bot/auth";
  *   sng            new group
  */
 
-export const CB = {
-  groups: "sgroups",
-  showGroup: "sg:",
-  toggleRow: "st:",
-  addRow: "sa:",
-  newGroup: "sng",
-} as const;
-
 /** Rows the list view treats as visible, in the order the web UI shows them. */
 async function loadGroups(householdId: string) {
   const { rows, groups } = await getShoppingView(householdId);
   return groupShoppingRows(rows, groups);
 }
 
-export function groupListText(): string {
-  return "🛒 Список покупок — оберіть групу:";
-}
-
-export async function groupListKeyboard(
-  householdId: string,
-): Promise<InlineKeyboard> {
+export async function groupListView(householdId: string): Promise<View> {
   const grouped = await loadGroups(householdId);
   const keyboard = new InlineKeyboard();
 
@@ -54,8 +41,10 @@ export async function groupListKeyboard(
     keyboard.text(`${group.name}${count}`, `${CB.showGroup}${group.id}`).row();
   }
 
-  keyboard.text("➕ Нова група", CB.newGroup);
-  return keyboard;
+  keyboard.text("➕ Нова група", CB.newGroup).row();
+  keyboard.text("🏠 Головна", CB.home);
+
+  return { text: "🛒 Список покупок — оберіть групу:", keyboard };
 }
 
 /**
@@ -66,7 +55,7 @@ export async function groupListKeyboard(
 export async function groupView(
   householdId: string,
   groupId: string,
-): Promise<{ text: string; keyboard: InlineKeyboard } | null> {
+): Promise<View | null> {
   const grouped = await loadGroups(householdId);
   const group = grouped.find((candidate) => candidate.id === groupId);
   if (!group) return null;
@@ -79,8 +68,8 @@ export async function groupView(
       .row();
   }
 
-  keyboard.text("➕ Додати", `${CB.addRow}${group.id}`);
-  keyboard.text("⬅️ Групи", CB.groups);
+  keyboard.text("➕ Додати", `${CB.addRow}${group.id}`).row();
+  keyboard.text("⬅️ Групи", CB.groups).text("🏠 Головна", CB.home);
 
   const heading = `🛒 ${group.name}`;
   const body =

@@ -253,6 +253,12 @@ The chosen mode is a **per-person, per-device preference** (localStorage), like 
 
 Where state can be avoided entirely it is: every inline button carries what it needs in its callback data, so navigating groups and ticking rows needs no memory at all.
 
+**17.5 A home screen.** Every action is a button on one screen — «Список покупок», «Що закінчується», «Що псується», «Додати запас», «Записати, що взяли» — and every other screen carries a way back to it. Leaf screens (the two lists) end with «Головна»; a group carries both «Групи» and «Головна», because going up one level and going home are different intentions.
+
+The reply keyboard is reduced to the single «Головна» button. A permanent row of shortcuts duplicating the home menu would be two places to keep in step, and the second would drift.
+
+Screens are **edited in place** rather than appended, so the chat does not fill with stale copies of the same menu.
+
 ### Feature 16 — Catching duplicate items
 
 Two people adding "Сіль" without noticing the other did is the normal failure of a shared inventory. Barcode uniqueness already prevents it when someone scans; typed items had nothing.
