@@ -42,7 +42,7 @@ export default async function ItemsPage() {
             {items.length > 0 ? `${items.length} позицій` : "Поки порожньо"}
           </p>
         </div>
-        <Button render={<Link href="/items/new" />}>
+        <Button nativeButton={false} render={<Link href="/items/new" />}>
           <Plus className="size-4" />
           Додати
         </Button>
@@ -53,7 +53,11 @@ export default async function ItemsPage() {
           <p className="text-sm text-muted-foreground">
             Ще нічого немає. Додайте перший товар — наприклад, воду.
           </p>
-          <Button className="mt-4" render={<Link href="/items/new" />}>
+          <Button
+            className="mt-4"
+            nativeButton={false}
+            render={<Link href="/items/new" />}
+          >
             <Plus className="size-4" />
             Додати товар
           </Button>

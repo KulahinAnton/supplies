@@ -85,6 +85,7 @@ export default async function ItemDetailPage({
           variant="outline"
           size="icon"
           aria-label="Редагувати"
+          nativeButton={false}
           render={<Link href={`/items/${item.id}/edit`} />}
         >
           <Pencil className="size-4" />

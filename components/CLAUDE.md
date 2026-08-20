@@ -33,3 +33,17 @@ Installed: alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu, 
 `<DndContext>` derives its `aria-describedby` values from a counter that starts fresh in each environment, so the server renders `DndDescribedBy-1` and the client `DndDescribedBy-0` — a hydration mismatch on every draggable. Pass a stable `id` (`<DndContext id="shopping-list">`) and the ids become deterministic.
 
 Not to be confused with the *other* hydration warning you will see in dev: Grammarly adds `data-gr-ext-installed` to `<body>` after the server render. That one is a browser extension, harmless, and disappears in a private window.
+
+## `render` with a non-button element needs `nativeButton={false}`
+
+Base UI's `Button` assumes it renders a real `<button>`. Rendering something else — most often a `next/link` — strips native button semantics (form submission, Enter/Space handling, the implicit ARIA role), so it warns:
+
+> A component that acts as a button expected a native `<button>` because the `nativeButton` prop is true.
+
+Whenever a Button is rendered as a link, say so:
+
+```tsx
+<Button nativeButton={false} render={<Link href="/items/new" />}>
+```
+
+The reverse case — `<DropdownMenuTrigger render={<Button …/>} />` — needs nothing, because that *does* produce a native button.
