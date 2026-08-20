@@ -1,0 +1,188 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ArrowLeft, Pencil } from "lucide-react";
+import { requireSession } from "@/lib/auth-guard";
+import { getItemDetail } from "@/lib/queries";
+import { batchExpiryState } from "@/lib/expiry";
+import { todayUTC } from "@/lib/period";
+import { formatDate, formatDateTime, formatQuantityWithUnit } from "@/lib/format";
+import { fefoOrder } from "@/lib/stock";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExpiryBadge, StockBadge } from "@/components/state-badges";
+import { BatchActions, ItemActions } from "@/components/item-actions";
+
+const REASON_LABEL = {
+  PURCHASE: "Поповнення",
+  CONSUME: "Взяли",
+  WASTE: "Списано",
+  CORRECTION: "Виправлення",
+} as const;
+
+export default async function ItemDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await requireSession();
+  const { id } = await params;
+  const detail = await getItemDetail(session.householdId, id);
+  if (!detail) notFound();
+
+  const { item, household, quantity, stock, expiry } = detail;
+  const today = todayUTC();
+
+  const live = item.batches.filter((batch) => batch.quantity.greaterThan(0));
+  // Show the batches in the order FEFO will actually draw them, then append the
+  // expired ones — which FEFO skips and which must be discarded by hand.
+  // fefoOrder returns the engine's own row shape, so map ids back to the full
+  // rows to keep `addedBy`.
+  const byId = new Map(live.map((batch) => [batch.id, batch]));
+  const drawOrder = fefoOrder(live, today)
+    .map((batch) => byId.get(batch.id))
+    .filter((batch) => batch !== undefined);
+  const drawn = new Set(drawOrder.map((batch) => batch.id));
+  const expired = live.filter((batch) => !drawn.has(batch.id));
+  const ordered = [...drawOrder, ...expired];
+
+  return (
+    <div className="space-y-5">
+      <Link
+        href="/items"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Запаси
+      </Link>
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight">{item.name}</h1>
+          <p className="text-sm text-muted-foreground">
+            {item.category.name}
+            {item.location ? ` · ${item.location.name}` : ""}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <StockBadge state={stock} />
+            <ExpiryBadge
+              state={expiry}
+              date={drawOrder.concat(expired)[0]?.expiresAt ?? null}
+              today={today}
+            />
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Редагувати"
+          render={<Link href={`/items/${item.id}/edit`} />}
+        >
+          <Pencil className="size-4" />
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="flex items-center justify-between gap-4 py-5">
+          <div>
+            <div className="text-3xl font-semibold tabular-nums">
+              {formatQuantityWithUnit(quantity, item.unit)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {item.minQty.greaterThan(0)
+                ? `мінімум ${formatQuantityWithUnit(item.minQty, item.unit)}`
+                : "мінімум не задано"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <ItemActions itemId={item.id} unit={item.unit} />
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Партії</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {ordered.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Запасу немає. Натисніть «Поповнити».
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {ordered.map((batch) => {
+                const state = batchExpiryState(
+                  batch.expiresAt,
+                  today,
+                  household.expiryWarnDays,
+                );
+                return (
+                  <li
+                    key={batch.id}
+                    className="flex items-center justify-between gap-3 py-2.5"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="text-sm font-medium tabular-nums">
+                        {formatQuantityWithUnit(batch.quantity, item.unit)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {batch.expiresAt
+                          ? `до ${formatDate(batch.expiresAt)}`
+                          : "без терміну"}
+                        {" · "}
+                        {batch.addedBy.name}
+                      </div>
+                      <ExpiryBadge
+                        state={state}
+                        date={batch.expiresAt}
+                        today={today}
+                      />
+                    </div>
+                    <BatchActions
+                      batchId={batch.id}
+                      unit={item.unit}
+                      currentQuantity={batch.quantity.toString()}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Історія</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {item.movements.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Порожньо.
+            </p>
+          ) : (
+            <ul className="divide-y text-sm">
+              {item.movements.map((movement) => (
+                <li
+                  key={movement.id}
+                  className="flex items-center justify-between gap-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium">
+                      {REASON_LABEL[movement.reason]}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {movement.user.name} · {formatDateTime(movement.occurredAt)}
+                    </div>
+                  </div>
+                  <div className="shrink-0 tabular-nums">
+                    {formatQuantityWithUnit(movement.delta, item.unit)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

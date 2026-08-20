@@ -1,0 +1,379 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Copy, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { changePasswordAction, createInviteAction } from "@/lib/actions/auth";
+import { createTelegramLinkAction } from "@/lib/actions/telegram";
+import {
+  deleteCategoryAction,
+  deleteLocationAction,
+  saveCategoryAction,
+  saveLocationAction,
+  updateHouseholdAction,
+} from "@/lib/actions/settings";
+import { renderMessage, type RuleMessage } from "@/lib/messages";
+
+type Named = { id: string; name: string; itemCount: number };
+
+async function handle(
+  work: () => Promise<{ ok: boolean; error?: RuleMessage }>,
+  onOk: () => void,
+) {
+  const result = await work();
+  if (!result.ok && result.error) {
+    toast.error(renderMessage(result.error));
+    return false;
+  }
+  onOk();
+  return true;
+}
+
+export function HouseholdPanel({
+  name,
+  expiryWarnDays,
+  digestHour,
+}: {
+  name: string;
+  expiryWarnDays: number;
+  digestHour: number;
+}) {
+  const router = useRouter();
+  const [values, setValues] = useState({ name, expiryWarnDays, digestHour });
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Родина</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 pt-0">
+        <div className="space-y-2">
+          <Label htmlFor="household-name">Назва</Label>
+          <Input
+            id="household-name"
+            value={values.name}
+            onChange={(event) => setValues({ ...values, name: event.target.value })}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="warn-days">Попереджати за (днів)</Label>
+            <Input
+              id="warn-days"
+              type="number"
+              min={0}
+              max={365}
+              value={values.expiryWarnDays}
+              onChange={(event) =>
+                setValues({ ...values, expiryWarnDays: Number(event.target.value) })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Скільки днів до кінця терміну вважати «псується».
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="digest-hour">Година нагадування</Label>
+            <Input
+              id="digest-hour"
+              type="number"
+              min={0}
+              max={23}
+              value={values.digestHour}
+              onChange={(event) =>
+                setValues({ ...values, digestHour: Number(event.target.value) })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              Коли надсилати щоденне зведення в Telegram.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          disabled={pending}
+          onClick={async () => {
+            setPending(true);
+            await handle(
+              () => updateHouseholdAction(values),
+              () => {
+                toast.success("Збережено");
+                router.refresh();
+              },
+            );
+            setPending(false);
+          }}
+        >
+          Зберегти
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Categories and storage locations share a shape, so they share a panel. */
+export function NamedListPanel({
+  title,
+  rows,
+  kind,
+}: {
+  title: string;
+  rows: Named[];
+  kind: "category" | "location";
+}) {
+  const router = useRouter();
+  const [draft, setDraft] = useState("");
+  const [pending, setPending] = useState(false);
+
+  const save = kind === "category" ? saveCategoryAction : saveLocationAction;
+  const remove = kind === "category" ? deleteCategoryAction : deleteLocationAction;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <ul className="divide-y">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-sm">{row.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {row.itemCount > 0 ? `товарів: ${row.itemCount}` : "порожньо"}
+                </div>
+              </div>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="Видалити"
+                disabled={pending}
+                onClick={async () => {
+                  setPending(true);
+                  await handle(
+                    () => remove(row.id),
+                    () => {
+                      toast.success("Видалено");
+                      router.refresh();
+                    },
+                  );
+                  setPending(false);
+                }}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex gap-2">
+          <Input
+            value={draft}
+            placeholder="Нова назва"
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <Button
+            disabled={pending || !draft.trim()}
+            onClick={async () => {
+              setPending(true);
+              const ok = await handle(
+                () => save({ name: draft }),
+                () => {
+                  toast.success("Додано");
+                  router.refresh();
+                },
+              );
+              if (ok) setDraft("");
+              setPending(false);
+            }}
+          >
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function InvitePanel({ members }: { members: { id: string; name: string; email: string }[] }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Учасники</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <ul className="divide-y">
+          {members.map((member) => (
+            <li key={member.id} className="py-2">
+              <div className="text-sm font-medium">{member.name}</div>
+              <div className="text-xs text-muted-foreground">{member.email}</div>
+            </li>
+          ))}
+        </ul>
+
+        <Button
+          variant="outline"
+          disabled={pending}
+          onClick={async () => {
+            setPending(true);
+            const result = await createInviteAction();
+            setPending(false);
+            if (!result.ok) {
+              toast.error(renderMessage(result.error));
+              return;
+            }
+            setLink(result.data.url);
+          }}
+        >
+          Створити запрошення
+        </Button>
+
+        {link ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Одноразове посилання, дійсне 7 днів:
+            </p>
+            <div className="flex gap-2">
+              <Input readOnly value={link} onFocus={(e) => e.target.select()} />
+              <Button
+                size="icon"
+                variant="outline"
+                aria-label="Скопіювати"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(link);
+                  toast.success("Скопійовано");
+                }}
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function TelegramPanel({ linked }: { linked: boolean }) {
+  const [link, setLink] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Telegram</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <p className="text-sm text-muted-foreground">
+          {linked
+            ? "Чат прив'язано. Команди: /low, /expiring, /list, /add, /took."
+            : "Прив'яжіть чат, щоб додавати запаси й дивитися список просто з Telegram."}
+        </p>
+
+        <Button
+          variant="outline"
+          disabled={pending}
+          onClick={async () => {
+            setPending(true);
+            const result = await createTelegramLinkAction();
+            setPending(false);
+            if (!result.ok) {
+              toast.error(renderMessage(result.error));
+              return;
+            }
+            setLink(result.data.url);
+          }}
+        >
+          {linked ? "Прив'язати інший чат" : "Прив'язати Telegram"}
+        </Button>
+
+        {link ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Посилання дійсне 15 хвилин:
+            </p>
+            <div className="flex gap-2">
+              <Input readOnly value={link} onFocus={(e) => e.target.select()} />
+              <Button
+                size="icon"
+                variant="outline"
+                aria-label="Скопіювати"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(link);
+                  toast.success("Скопійовано");
+                }}
+              >
+                <Copy className="size-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function PasswordPanel() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [pending, setPending] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Пароль</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-0">
+        <div className="space-y-2">
+          <Label htmlFor="current-password">Поточний</Label>
+          <Input
+            id="current-password"
+            type="password"
+            autoComplete="current-password"
+            value={current}
+            onChange={(event) => setCurrent(event.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-password">Новий</Label>
+          <Input
+            id="new-password"
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(event) => setNext(event.target.value)}
+          />
+        </div>
+        <Button
+          disabled={pending || !current || !next}
+          onClick={async () => {
+            setPending(true);
+            await handle(
+              () =>
+                changePasswordAction({ currentPassword: current, newPassword: next }),
+              () => {
+                toast.success("Пароль змінено");
+                setCurrent("");
+                setNext("");
+              },
+            );
+            setPending(false);
+          }}
+        >
+          Змінити пароль
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}

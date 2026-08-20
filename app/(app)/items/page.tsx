@@ -1,0 +1,68 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { requireSession } from "@/lib/auth-guard";
+import { getItemViews } from "@/lib/queries";
+import { formatQuantityWithUnit } from "@/lib/format";
+import { todayUTC } from "@/lib/period";
+import { Button } from "@/components/ui/button";
+import { ItemsList, type ItemRow } from "@/components/items-list";
+
+export default async function ItemsPage() {
+  const session = await requireSession();
+  const items = await getItemViews(session.householdId);
+  const today = todayUTC();
+
+  // Decimal cannot cross the server/client boundary — format here.
+  const rows: ItemRow[] = items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    quantityLabel: formatQuantityWithUnit(item.quantity, item.unit),
+    minQtyLabel: item.minQty.greaterThan(0)
+      ? formatQuantityWithUnit(item.minQty, item.unit)
+      : null,
+    stock: item.stock,
+    expiry: item.expiry,
+    nextExpiryIso: item.nextExpiry ? item.nextExpiry.toISOString() : null,
+    categoryName: item.categoryName,
+    locationName: item.locationName,
+  }));
+
+  const categories = [...new Set(items.map((item) => item.categoryName))].sort(
+    (a, b) => a.localeCompare(b, "uk-UA"),
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Запаси</h1>
+          <p className="text-sm text-muted-foreground">
+            {items.length > 0 ? `${items.length} позицій` : "Поки порожньо"}
+          </p>
+        </div>
+        <Button render={<Link href="/items/new" />}>
+          <Plus className="size-4" />
+          Додати
+        </Button>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed py-16 text-center">
+          <p className="text-sm text-muted-foreground">
+            Ще нічого немає. Додайте перший товар — наприклад, воду.
+          </p>
+          <Button className="mt-4" render={<Link href="/items/new" />}>
+            <Plus className="size-4" />
+            Додати товар
+          </Button>
+        </div>
+      ) : (
+        <ItemsList
+          items={rows}
+          categories={categories}
+          todayIso={today.toISOString()}
+        />
+      )}
+    </div>
+  );
+}

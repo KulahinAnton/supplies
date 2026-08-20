@@ -1,0 +1,221 @@
+// Supplies — household stock & expiry tracker.
+// Conventions live in prisma/CLAUDE.md; the rules these tables serve are in
+// PROJECT_PROMPT.md §3. Quantities are Decimal(12,3) and dates that mean "a
+// calendar day" (expiry, opened) are @db.Date — never DateTime.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Unit {
+  PIECE
+  PACK
+  GRAM
+  KILOGRAM
+  MILLILITRE
+  LITRE
+}
+
+enum MovementReason {
+  PURCHASE
+  CONSUME
+  WASTE
+  CORRECTION
+}
+
+model Household {
+  id        String   @id @default(uuid())
+  name      String
+  /// PROJECT_PROMPT.md §3.5 — how many days ahead counts as "expiring soon".
+  expiryWarnDays Int @default(7)
+  /// Local hour (0-23) the Telegram digest is sent at (Feature 9).
+  digestHour     Int @default(8)
+  /// Calendar day the digest last went out — makes `pnpm digest:run` safe to
+  /// re-run: a second run on the same day is a no-op (Feature 9).
+  lastDigestOn   DateTime? @db.Date
+  createdAt DateTime @default(now())
+
+  users     User[]
+  invites   HouseholdInvite[]
+  categories Category[]
+  locations StorageLocation[]
+  items     Item[]
+  shopping  ShoppingListItem[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  isActive     Boolean  @default(true)
+  householdId  String
+  createdAt    DateTime @default(now())
+
+  household    Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  batchesAdded StockBatch[]
+  movements    StockMovement[]
+  invitesCreated HouseholdInvite[] @relation("InviteCreatedBy")
+  shoppingAdded  ShoppingListItem[] @relation("ShoppingAddedBy")
+  shoppingChecked ShoppingListItem[] @relation("ShoppingCheckedBy")
+  telegramLink TelegramLink?
+  resetTokens  PasswordResetToken[]
+
+  @@index([householdId])
+}
+
+model HouseholdInvite {
+  id          String    @id @default(uuid())
+  householdId String
+  /// SHA-256 of the token handed out in the link — the raw token is never stored.
+  tokenHash   String    @unique
+  email       String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([householdId])
+}
+
+model Category {
+  id          String @id @default(uuid())
+  householdId String
+  name        String
+  icon        String @default("package")
+  sortOrder   Int    @default(0)
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items       Item[]
+
+  @@unique([householdId, name])
+}
+
+model StorageLocation {
+  id          String @id @default(uuid())
+  householdId String
+  name        String
+  sortOrder   Int    @default(0)
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items       Item[]
+
+  @@unique([householdId, name])
+}
+
+model Item {
+  id          String   @id @default(uuid())
+  householdId String
+  name        String
+  categoryId  String
+  locationId  String?
+  unit        Unit
+  /// §3.4 — low-stock threshold. 0 opts the item out of low-stock warnings.
+  minQty      Decimal  @default(0) @db.Decimal(12, 3)
+  barcode     String?
+  notes       String?
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category    Category         @relation(fields: [categoryId], references: [id])
+  location    StorageLocation? @relation(fields: [locationId], references: [id])
+  batches     StockBatch[]
+  movements   StockMovement[]
+  shoppingRows ShoppingListItem[]
+
+  // Postgres treats NULLs as distinct, so many items may have no barcode.
+  @@unique([householdId, barcode])
+  @@index([householdId, isArchived])
+}
+
+/// §3.1 — a concrete lot with its own quantity AND its own expiry date.
+/// Item stock is the SUM of these; it is never stored on Item.
+model StockBatch {
+  id        String    @id @default(uuid())
+  itemId    String
+  quantity  Decimal   @db.Decimal(12, 3)
+  expiresAt DateTime? @db.Date
+  openedAt  DateTime? @db.Date
+  addedById String
+  createdAt DateTime  @default(now())
+
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  addedBy   User      @relation(fields: [addedById], references: [id], onDelete: Cascade)
+  movements StockMovement[]
+
+  @@index([itemId, expiresAt])
+}
+
+/// Append-only audit. Every batch change writes one of these in the SAME
+/// transaction — see PROJECT_PROMPT.md §7.
+model StockMovement {
+  id         String         @id @default(uuid())
+  itemId     String
+  batchId    String?
+  /// Signed: positive for PURCHASE/positive CORRECTION, negative for CONSUME/WASTE.
+  delta      Decimal        @db.Decimal(12, 3)
+  reason     MovementReason
+  userId     String
+  occurredAt DateTime       @default(now())
+  note       String?
+
+  item       Item        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  batch      StockBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, occurredAt])
+}
+
+model ShoppingListItem {
+  id          String    @id @default(uuid())
+  householdId String
+  /// Exactly one of itemId / freeText is set.
+  itemId      String?
+  freeText    String?
+  quantity    Decimal?  @db.Decimal(12, 3)
+  isChecked   Boolean   @default(false)
+  addedById   String
+  addedAt     DateTime  @default(now())
+  checkedById String?
+  checkedAt   DateTime?
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  item        Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  addedBy     User      @relation("ShoppingAddedBy", fields: [addedById], references: [id], onDelete: Cascade)
+  checkedBy   User?     @relation("ShoppingCheckedBy", fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@index([householdId, isChecked])
+}
+
+model TelegramLink {
+  id       String   @id @default(uuid())
+  userId   String   @unique
+  chatId   BigInt   @unique
+  linkedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

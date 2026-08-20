@@ -1,0 +1,166 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ExpiryBadge, StockBadge } from "@/components/state-badges";
+import type { ExpiryState } from "@/lib/expiry";
+import type { StockState } from "@/lib/stock";
+import { cn } from "@/lib/utils";
+
+/**
+ * Serialised `ItemView` — Decimal does not survive the server/client boundary,
+ * so the page hands over pre-formatted strings.
+ */
+export type ItemRow = {
+  id: string;
+  name: string;
+  quantityLabel: string;
+  minQtyLabel: string | null;
+  stock: StockState;
+  expiry: ExpiryState;
+  nextExpiryIso: string | null;
+  categoryName: string;
+  locationName: string | null;
+};
+
+type Filter = "all" | "attention" | StockState;
+
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "Усі" },
+  { value: "attention", label: "Потребують уваги" },
+  { value: "OUT", label: "Закінчились" },
+  { value: "LOW", label: "Закінчуються" },
+];
+
+export function ItemsList({
+  items,
+  categories,
+  todayIso,
+}: {
+  items: ItemRow[];
+  categories: string[];
+  todayIso: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [category, setCategory] = useState<string>("all");
+  const today = useMemo(() => new Date(todayIso), [todayIso]);
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return items.filter((item) => {
+      if (needle && !item.name.toLowerCase().includes(needle)) return false;
+      if (category !== "all" && item.categoryName !== category) return false;
+      if (filter === "OUT" || filter === "LOW") return item.stock === filter;
+      if (filter === "attention") {
+        return (
+          item.stock !== "OK" ||
+          item.expiry === "EXPIRED" ||
+          item.expiry === "SOON"
+        );
+      }
+      return true;
+    });
+  }, [items, query, filter, category]);
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Пошук за назвою…"
+          className="pl-9"
+          type="search"
+        />
+      </div>
+
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {FILTERS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setFilter(option.value)}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+              filter === option.value
+                ? "border-primary bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+        <span className="w-px shrink-0 bg-border" />
+        <button
+          type="button"
+          onClick={() => setCategory("all")}
+          className={cn(
+            "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+            category === "all"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-accent",
+          )}
+        >
+          Усі категорії
+        </button>
+        {categories.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => setCategory(name)}
+            className={cn(
+              "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
+              category === name
+                ? "border-primary bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent",
+            )}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+          Нічого не знайшли.
+        </p>
+      ) : (
+        <ul className="divide-y rounded-lg border">
+          {visible.map((item) => (
+            <li key={item.id}>
+              <Link
+                href={`/items/${item.id}`}
+                className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-accent"
+              >
+                <div className="min-w-0 space-y-1">
+                  <div className="truncate font-medium">{item.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {item.categoryName}
+                    {item.locationName ? ` · ${item.locationName}` : ""}
+                    {item.minQtyLabel ? ` · мінімум ${item.minQtyLabel}` : ""}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <StockBadge state={item.stock} />
+                    <ExpiryBadge
+                      state={item.expiry}
+                      date={item.nextExpiryIso ? new Date(item.nextExpiryIso) : null}
+                      today={today}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-right text-sm font-semibold tabular-nums">
+                  {item.quantityLabel}
+                </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+

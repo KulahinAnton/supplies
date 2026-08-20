@@ -1,0 +1,249 @@
+// NOTE: deliberately NOT `import "server-only"`. That package throws on import
+// outside a React Server Component build, and this module has two legitimate
+// plain-Node consumers — the Telegram bot (`pnpm bot:start`) and the daily
+// digest (`pnpm digest:run`). Client-safety is enforced by the Prisma import
+// below instead: pulling this into a browser bundle fails the build loudly.
+
+import { Prisma } from "@/lib/generated/prisma/client";
+import type { Unit } from "@/lib/generated/prisma/enums";
+import { prisma } from "@/lib/prisma";
+import {
+  itemExpiryState,
+  needsAttention,
+  type ExpiryState,
+} from "@/lib/expiry";
+import { todayUTC } from "@/lib/period";
+import {
+  itemQuantity,
+  needsRestock,
+  stockState,
+  type StockBatchInput,
+  type StockState,
+} from "@/lib/stock";
+import { shoppingCandidates, type ShoppingCandidate } from "@/lib/shopping";
+
+/**
+ * Read helpers shared by the pages, the Telegram bot and the daily digest.
+ *
+ * This is the ONLY place that joins the database to the pure engine: pages do
+ * not compute stock states themselves, so the web UI and the bot can never
+ * disagree about what "low" means.
+ */
+
+export type ItemView = {
+  id: string;
+  name: string;
+  unit: Unit;
+  minQty: Prisma.Decimal;
+  quantity: Prisma.Decimal;
+  stock: StockState;
+  expiry: ExpiryState;
+  categoryName: string;
+  locationName: string | null;
+  /** Soonest expiry among live batches — what the chip shows. */
+  nextExpiry: Date | null;
+  batchCount: number;
+};
+
+const liveBatch = (batch: { quantity: Prisma.Decimal }) =>
+  batch.quantity.greaterThan(0);
+
+export async function getHousehold(householdId: string) {
+  return prisma.household.findUniqueOrThrow({ where: { id: householdId } });
+}
+
+/** Every non-archived item with its computed states. */
+export async function getItemViews(householdId: string): Promise<ItemView[]> {
+  const household = await getHousehold(householdId);
+  const today = todayUTC();
+
+  const items = await prisma.item.findMany({
+    where: { householdId, isArchived: false },
+    include: {
+      batches: true,
+      category: { select: { name: true } },
+      location: { select: { name: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return items.map((item) => {
+    const live = item.batches.filter(liveBatch);
+    const dated = live
+      .filter((batch) => batch.expiresAt)
+      .sort((a, b) => a.expiresAt!.getTime() - b.expiresAt!.getTime());
+
+    return {
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      minQty: item.minQty,
+      quantity: itemQuantity(item.batches),
+      stock: stockState(item, item.batches),
+      expiry: itemExpiryState(item.batches, today, household.expiryWarnDays),
+      categoryName: item.category.name,
+      locationName: item.location?.name ?? null,
+      nextExpiry: dated[0]?.expiresAt ?? null,
+      batchCount: live.length,
+    };
+  });
+}
+
+export type DashboardData = {
+  expiryWarnDays: number;
+  expiring: ItemView[];
+  restock: ItemView[];
+  recent: Awaited<ReturnType<typeof getRecentMovements>>;
+};
+
+/** Feature 5 — the morning glance. */
+export async function getDashboard(householdId: string): Promise<DashboardData> {
+  const household = await getHousehold(householdId);
+  const items = await getItemViews(householdId);
+
+  const severity: Record<ExpiryState, number> = {
+    EXPIRED: 0,
+    SOON: 1,
+    FRESH: 2,
+    NONE: 3,
+  };
+
+  const expiring = items
+    .filter((item) => needsAttention(item.expiry))
+    .sort((a, b) => {
+      const bySeverity = severity[a.expiry] - severity[b.expiry];
+      if (bySeverity !== 0) return bySeverity;
+      const aDate = a.nextExpiry?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bDate = b.nextExpiry?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return aDate - bDate;
+    });
+
+  const restock = items
+    .filter((item) => needsRestock(item.stock))
+    .sort((a, b) => {
+      if (a.stock !== b.stock) return a.stock === "OUT" ? -1 : 1;
+      return a.name.localeCompare(b.name, "uk-UA");
+    });
+
+  return {
+    expiryWarnDays: household.expiryWarnDays,
+    expiring,
+    restock,
+    recent: await getRecentMovements(householdId, 8),
+  };
+}
+
+export async function getRecentMovements(householdId: string, take = 20) {
+  return prisma.stockMovement.findMany({
+    where: { item: { householdId } },
+    include: {
+      item: { select: { id: true, name: true, unit: true } },
+      user: { select: { name: true } },
+    },
+    orderBy: { occurredAt: "desc" },
+    take,
+  });
+}
+
+/** Item detail: batches ordered the way FEFO will actually draw them. */
+export async function getItemDetail(householdId: string, itemId: string) {
+  const household = await getHousehold(householdId);
+  const item = await prisma.item.findFirst({
+    where: { id: itemId, householdId },
+    include: {
+      batches: { include: { addedBy: { select: { name: true } } } },
+      category: true,
+      location: true,
+      movements: {
+        include: { user: { select: { name: true } } },
+        orderBy: { occurredAt: "desc" },
+        take: 50,
+      },
+    },
+  });
+  if (!item) return null;
+
+  return {
+    item,
+    household,
+    quantity: itemQuantity(item.batches),
+    stock: stockState(item, item.batches),
+    expiry: itemExpiryState(item.batches, todayUTC(), household.expiryWarnDays),
+  };
+}
+
+/** Feature 6 — suggestions, never auto-inserted. */
+export async function getShoppingView(householdId: string) {
+  const rows = await prisma.shoppingListItem.findMany({
+    where: { householdId },
+    include: {
+      item: { select: { id: true, name: true, unit: true } },
+      addedBy: { select: { name: true } },
+      checkedBy: { select: { name: true } },
+    },
+    orderBy: [{ isChecked: "asc" }, { addedAt: "asc" }],
+  });
+
+  const items = await prisma.item.findMany({
+    where: { householdId, isArchived: false },
+    include: { batches: true },
+  });
+
+  const onList = new Set(
+    rows.filter((row) => !row.isChecked && row.itemId).map((row) => row.itemId!),
+  );
+
+  const batchesByItem = new Map<string, StockBatchInput[]>(
+    items.map((item) => [item.id, item.batches]),
+  );
+
+  const candidates: ShoppingCandidate[] = shoppingCandidates(
+    items,
+    batchesByItem,
+    onList,
+  );
+
+  return { rows, candidates };
+}
+
+export async function getCategoriesAndLocations(householdId: string) {
+  const [categories, locations] = await Promise.all([
+    prisma.category.findMany({
+      where: { householdId },
+      orderBy: { sortOrder: "asc" },
+      include: { _count: { select: { items: true } } },
+    }),
+    prisma.storageLocation.findMany({
+      where: { householdId },
+      orderBy: { sortOrder: "asc" },
+      include: { _count: { select: { items: true } } },
+    }),
+  ]);
+  return { categories, locations };
+}
+
+export async function getMembers(householdId: string) {
+  return prisma.user.findMany({
+    where: { householdId },
+    select: { id: true, name: true, email: true, isActive: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** Header chips: how many things want attention right now. */
+export async function getAttentionCounts(householdId: string) {
+  const items = await getItemViews(householdId);
+  return {
+    expiring: items.filter((item) => needsAttention(item.expiry)).length,
+    restock: items.filter((item) => needsRestock(item.stock)).length,
+  };
+}
+
+/** Feature 9 — whether this user already has a Telegram chat bound. */
+export async function hasTelegramLink(userId: string): Promise<boolean> {
+  const link = await prisma.telegramLink.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  return link !== null;
+}

@@ -1,0 +1,36 @@
+import { prisma } from "@/lib/prisma";
+
+/** A Telegram chat resolved to an app user (Feature 9). */
+export type BotUser = {
+  userId: string;
+  householdId: string;
+  name: string;
+  chatId: number;
+};
+
+/**
+ * Unlinked chats can do nothing but /start — this is the bot's equivalent of
+ * `requireSession()`, and it re-reads the user so a deactivated account loses
+ * bot access immediately.
+ */
+export async function resolveChat(chatId?: number): Promise<BotUser | null> {
+  if (chatId === undefined) return null;
+
+  const link = await prisma.telegramLink.findUnique({
+    where: { chatId: BigInt(chatId) },
+    include: {
+      user: {
+        select: { id: true, name: true, isActive: true, householdId: true },
+      },
+    },
+  });
+
+  if (!link || !link.user.isActive) return null;
+
+  return {
+    userId: link.user.id,
+    householdId: link.user.householdId,
+    name: link.user.name,
+    chatId,
+  };
+}
