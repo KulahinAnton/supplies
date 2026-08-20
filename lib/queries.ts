@@ -315,3 +315,18 @@ export async function getArchivedItems(householdId: string) {
     quantity: itemQuantity(item.batches),
   }));
 }
+
+/**
+ * Feature 16 — every item name in the household, including archived ones.
+ *
+ * Archived items are included on purpose: a duplicate you archived last month
+ * is exactly the one you are about to recreate, and staying quiet about it
+ * would defeat the point.
+ */
+export async function getItemNames(householdId: string) {
+  return prisma.item.findMany({
+    where: { householdId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}

@@ -236,6 +236,32 @@ Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
+### Feature 16 — Catching duplicate items
+
+Two people adding "Сіль" without noticing the other did is the normal failure of a shared inventory. Barcode uniqueness already prevents it when someone scans; typed items had nothing.
+
+Three parts, all driven by one pure matcher (`lib/duplicates.ts`) so they cannot disagree about what "similar" means.
+
+**16.0 What counts as similar.** Names are normalised — `toLocaleLowerCase("uk-UA")`, trimmed, punctuation dropped, whitespace collapsed — and then compared three ways, strongest first:
+
+| Reason | Example |
+|---|---|
+| `exact` | "сіль" vs "Сіль" |
+| `contains` | "Сіль" vs "Сіль кухонна" |
+| `tokens` | "Сіль кухонна" vs "Кухонна сіль" — same word set, different order |
+
+**Edit distance is deliberately excluded.** It is the obvious next step and it misfires badly on short Ukrainian words: "Сік" and "Сіль" are two edits apart and are not the same thing. Catching a typo is not worth telling someone their salt is juice.
+
+Matching **never blocks**. Every part of this feature warns, suggests, or lists — the family decides. Two items that look alike may be genuinely different ("Сіль морська" / "Сіль кухонна"), and a hard constraint would fire at the worst moment: someone standing in the kitchen trying to record what they just bought.
+
+**16.1 Warn while typing.** The new-item form checks the name against the household's existing items **as you type** and shows a note under the field naming what it might duplicate, with a link to that item. Matching runs on the client against the item names already sent with the page — the list is small, and a warning that needs a round trip arrives too late to be read.
+
+When editing, the item being edited is excluded from its own matches.
+
+**16.2 Search before create.** The duplicate usually exists because the person could not find it. Typing in the `/items` search now offers **«Створити „X"»** alongside the results, so searching is the first act and creating is the fallback rather than the obvious path. That button carries the query into the form (`/items/new?name=…`), so nothing is retyped.
+
+**16.3 List what already exists.** Settings gains a **«Схожі товари»** section clustering existing items that match each other, each linking to both. It only appears when there is something to show. It reports; merging is out of scope here — archiving the emptier of a pair (Feature 3) is the tool available today, and a real merge that moves batches and movements is a separate, larger piece of work.
+
 ### Feature 15 — Ordering categories and locations, and a default for each
 
 Both lists in Settings gain the same two behaviours, so they share one component rather than growing two near-identical implementations.

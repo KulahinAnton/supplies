@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth-guard";
-import { getCategoriesAndLocations, getItemDetail } from "@/lib/queries";
+import {
+  getCategoriesAndLocations,
+  getItemDetail,
+  getItemNames,
+} from "@/lib/queries";
 import { ItemForm } from "@/components/item-form";
 
 export default async function EditItemPage({
@@ -14,9 +18,10 @@ export default async function EditItemPage({
   const detail = await getItemDetail(session.householdId, id);
   if (!detail) notFound();
 
-  const { categories, locations } = await getCategoriesAndLocations(
-    session.householdId,
-  );
+  const [{ categories, locations }, existingItems] = await Promise.all([
+    getCategoriesAndLocations(session.householdId),
+    getItemNames(session.householdId),
+  ]);
   const { item } = detail;
 
   return (
@@ -25,6 +30,7 @@ export default async function EditItemPage({
       <ItemForm
         categories={categories}
         locations={locations}
+        existingItems={existingItems}
         hasBatches={item.batches.length > 0}
         item={{
           id: item.id,

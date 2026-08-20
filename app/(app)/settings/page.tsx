@@ -1,11 +1,14 @@
 import { requireSession } from "@/lib/auth-guard";
+import { findDuplicateGroups } from "@/lib/duplicates";
 import {
   getCategoriesAndLocations,
   getHousehold,
   getMembers,
   hasTelegramLink,
+  getItemNames,
 } from "@/lib/queries";
 import { CategoryPanel } from "@/components/category-panel";
+import { DuplicatesPanel } from "@/components/duplicates-panel";
 import { LocationPanel } from "@/components/location-panel";
 import {
   HouseholdPanel,
@@ -23,6 +26,11 @@ export default async function SettingsPage() {
       getMembers(session.householdId),
       hasTelegramLink(session.userId),
     ]);
+
+  // Feature 16.3 — computed here so the panel stays a plain server component.
+  const duplicateGroups = findDuplicateGroups(
+    await getItemNames(session.householdId),
+  );
 
   return (
     <div className="space-y-5">
@@ -59,6 +67,8 @@ export default async function SettingsPage() {
           }))}
         />
       </div>
+
+      <DuplicatesPanel groups={duplicateGroups} />
 
       <InvitePanel
         members={members.map((member) => ({

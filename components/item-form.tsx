@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -20,6 +20,7 @@ import {
 import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
 import { itemSchema } from "@/lib/validation/item";
 import { defaultRowId } from "@/lib/ordering";
+import { findSimilar } from "@/lib/duplicates";
 import { UNIT_PLURAL } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
@@ -39,8 +40,14 @@ export function ItemForm({
   locations,
   item,
   hasBatches,
+  existingItems = [],
+  initialName,
 }: {
   categories: { id: string; name: string; isDefault: boolean }[];
+  /** Feature 16.1 — every item name in the household, for the duplicate check. */
+  existingItems?: { id: string; name: string }[];
+  /** Feature 16.2 — carried from the /items search, so nothing is retyped. */
+  initialName?: string;
   locations: { id: string; name: string; isDefault: boolean }[];
   item?: {
     id: string;
@@ -63,6 +70,7 @@ export function ItemForm({
 
   const {
     register,
+    control,
     handleSubmit,
     setValue,
     getValues,
@@ -70,7 +78,7 @@ export function ItemForm({
   } = useForm<Values>({
     resolver: zodResolver(itemSchema),
     defaultValues: {
-      name: item?.name ?? "",
+      name: item?.name ?? initialName ?? "",
       // Feature 15.2 — a new item opens on the starred category and location.
       // An existing item keeps its own, obviously.
       categoryId:
@@ -82,6 +90,13 @@ export function ItemForm({
       notes: item?.notes ?? undefined,
     },
   });
+
+  // Feature 16.1 — recomputed as the name changes; excludes the item being
+  // edited so it never flags itself. `useWatch` rather than `watch()`: it
+  // subscribes to one field instead of re-rendering the whole form on every
+  // keystroke, and it does not trip the React Compiler lint rule.
+  const typedName = useWatch({ control, name: "name" });
+  const similar = findSimilar(typedName ?? "", existingItems, item?.id);
 
   /**
    * A scan writes the code, then asks the server what it is. The name is only
@@ -131,6 +146,37 @@ export function ItemForm({
       <div className="space-y-2">
         <Label htmlFor="name">Назва</Label>
         <Input id="name" placeholder="Вода негазована 1,5 л" {...register("name")} />
+
+        {/*
+          Feature 16.1 — warn while typing, never block. Matching runs on the
+          client against names already sent with the page: the list is small,
+          and a warning that needs a round trip arrives too late to be read.
+        */}
+        {similar.length > 0 ? (
+          <div className="rounded-md bg-warning/12 px-3 py-2 text-sm">
+            <p className="text-warning-foreground dark:text-warning">
+              {similar.length === 1
+                ? "Схоже, такий товар уже є:"
+                : "Схоже, такі товари вже є:"}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {similar.slice(0, 3).map((match) => (
+                <li key={match.id}>
+                  <Link
+                    href={`/items/${match.id}`}
+                    className="text-primary underline underline-offset-4"
+                  >
+                    {match.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Якщо це той самий товар — краще поповнити його запас.
+            </p>
+          </div>
+        ) : null}
+
         {errors.name ? (
           <p className="text-sm text-destructive">{messageFor(errors.name.message)}</p>
         ) : null}

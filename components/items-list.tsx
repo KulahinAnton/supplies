@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownUp, Search } from "lucide-react";
+import { ArrowDownUp, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -164,10 +164,42 @@ export function ItemsList({
         ))}
       </div>
 
+      {/*
+        Feature 16.2 — searching is the first act, creating the fallback. Most
+        duplicates exist because the person could not find the item, so the
+        create affordance appears next to the search results rather than being
+        the obvious path at the top of the page. The query is carried into the
+        form so nothing is retyped.
+      */}
+      {query.trim().length > 0 ? (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+          <p className="min-w-0 text-xs text-muted-foreground">
+            {visible.length > 0
+              ? "Не те, що шукали?"
+              : `Нічого не знайшли за запитом «${query.trim()}».`}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link
+                href={`/items/new?name=${encodeURIComponent(query.trim())}`}
+              />
+            }
+          >
+            <Plus className="size-3.5" />
+            Створити «{query.trim()}»
+          </Button>
+        </div>
+      ) : null}
+
       {visible.length === 0 ? (
-        <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-          Нічого не знайшли.
-        </p>
+        query.trim().length > 0 ? null : (
+          <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
+            Нічого не знайшли.
+          </p>
+        )
       ) : (
         <ul className="divide-y rounded-lg border">
           {visible.map((item) => (
