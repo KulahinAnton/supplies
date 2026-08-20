@@ -22,6 +22,26 @@ import { resolveChat, type BotUser } from "@/bot/auth";
  * what "low" means, this file is doing something it should not.
  */
 
+/**
+ * The command list Telegram shows in the "/" menu.
+ *
+ * Published to Telegram rather than only handled by the bot — without this,
+ * the commands work but are invisible, and nobody types `/expiring` on a
+ * phone by guessing.
+ */
+export const BOT_COMMANDS = [
+  { command: "low", description: "Що закінчується" },
+  { command: "expiring", description: "Що псується" },
+  { command: "list", description: "Список покупок" },
+  { command: "add", description: "Додати запас" },
+  { command: "took", description: "Записати, що взяли" },
+  { command: "cancel", description: "Скасувати" },
+];
+
+export async function registerCommands(bot: Bot) {
+  await bot.api.setMyCommands(BOT_COMMANDS);
+}
+
 export function createBot(token: string) {
   const bot = new Bot(token);
 

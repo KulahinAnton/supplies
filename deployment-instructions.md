@@ -73,13 +73,15 @@ Get a token from [@BotFather](https://t.me/BotFather), then add three variables 
 | `TELEGRAM_BOT_USERNAME` | the bot's username **without** `@` |
 | `TELEGRAM_WEBHOOK_SECRET` | generate: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"` |
 
-Register the webhook **from your machine** (it talks to Telegram's API, not to Vercel). Point your local `.env` `APP_URL` at the Vercel domain, then:
+Register the webhook **from your machine** (it talks to Telegram's API, not to Vercel). Set `TELEGRAM_WEBHOOK_URL` in your local `.env` to the deployment URL — **not** `APP_URL`, which stays on localhost — then:
 
 ```bash
 pnpm bot:webhook:set
 ```
 
-The script refuses a non-HTTPS `APP_URL` and refuses to register without `TELEGRAM_WEBHOOK_SECRET` — an unauthenticated webhook URL lets anyone who guesses it post fake updates. Put your local `APP_URL` back to `http://localhost:3000` afterwards.
+The script refuses a non-HTTPS URL and refuses to register without `TELEGRAM_WEBHOOK_SECRET` — an unauthenticated webhook URL lets anyone who guesses it post fake updates. Nothing to undo afterwards: `APP_URL` was never touched.
+
+To take the bot back to your machine, `pnpm bot:local` (or `pnpm bot:webhook:delete` then `pnpm bot:dev`). Telegram delivers to one transport at a time, so `bot:dev` refuses to start while a webhook is still registered rather than sitting there receiving nothing.
 
 Link your chat in **Налаштування → Прив'язати Telegram**.
 

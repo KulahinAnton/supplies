@@ -20,6 +20,7 @@
     "bot:dev": "tsx watch bot/index.ts",
     "bot:webhook:set": "tsx scripts/set-telegram-webhook.ts",
     "bot:webhook:delete": "tsx scripts/set-telegram-webhook.ts --delete",
+    "bot:local": "tsx scripts/set-telegram-webhook.ts --delete && tsx watch bot/index.ts",
     "digest:run": "tsx scripts/run-daily-digest.ts"
   },
   "dependencies": {

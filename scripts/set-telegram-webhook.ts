@@ -1,20 +1,26 @@
 import "dotenv/config";
+import { Bot } from "grammy";
+import { registerCommands } from "@/bot/bot";
 
 /**
- * Feature 9 — register (or remove) the production webhook with Telegram.
+ * Feature 9 — switch the bot between the deployed app and your machine.
  *
- *   pnpm bot:webhook:set       point Telegram at APP_URL/api/telegram
- *   pnpm bot:webhook:delete    unregister (back to long polling)
+ * Telegram delivers to **one transport at a time**, so these two commands are
+ * the switch:
  *
- * Telegram echoes `TELEGRAM_WEBHOOK_SECRET` back on every call in the
- * `x-telegram-bot-api-secret-token` header, and app/api/telegram/route.ts
- * rejects anything without it — so the webhook URL alone is not a credential.
+ *   pnpm bot:webhook:set      → the DEPLOYED app handles messages
+ *   pnpm bot:webhook:delete   → nothing does, until you run `pnpm bot:dev`
+ *   pnpm bot:local            → both of the above in one step
  *
- * The URL must be public HTTPS: Telegram cannot reach localhost. Use long
- * polling (`pnpm bot:dev`) for local development instead.
+ * The target comes from `TELEGRAM_WEBHOOK_URL`, deliberately separate from
+ * `APP_URL`: `APP_URL` is what the running app uses to build reset and invite
+ * links and should stay pointed at localhost while you develop. Sharing one
+ * variable would mean editing it back and forth every time you switch, which
+ * is exactly the friction this avoids.
+ *
+ * Both paths also publish the command list, so Telegram's "/" menu matches
+ * whichever bot is answering.
  */
-
-const remove = process.argv.includes("--delete");
 
 async function main() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -23,25 +29,30 @@ async function main() {
     process.exit(1);
   }
 
-  const api = `https://api.telegram.org/bot${token}`;
+  const bot = new Bot(token);
 
-  if (remove) {
-    const response = await fetch(`${api}/deleteWebhook`, { method: "POST" });
-    const body = await response.json();
-    console.log(body.ok ? "Webhook removed." : `Failed: ${body.description}`);
-    process.exitCode = body.ok ? 0 : 1;
+  if (process.argv.includes("--delete")) {
+    await bot.api.deleteWebhook();
+    await registerCommands(bot);
+    console.log(
+      "Webhook removed. The deployed app no longer receives messages —\n" +
+        "run `pnpm bot:dev` to handle them on this machine instead.",
+    );
     return;
   }
 
-  const appUrl = process.env.APP_URL;
-  if (!appUrl) {
-    console.error("APP_URL is not set.");
+  const url = process.env.TELEGRAM_WEBHOOK_URL;
+  if (!url) {
+    console.error(
+      "TELEGRAM_WEBHOOK_URL is not set — the public HTTPS base URL of the\n" +
+        'deployment, e.g. TELEGRAM_WEBHOOK_URL="https://supplies-alpha.vercel.app"',
+    );
     process.exit(1);
   }
-  if (!appUrl.startsWith("https://")) {
+  if (!url.startsWith("https://")) {
     console.error(
-      `APP_URL must be public HTTPS — Telegram cannot reach ${appUrl}.\n` +
-        "For local development run the bot with `pnpm bot:dev` (long polling).",
+      `TELEGRAM_WEBHOOK_URL must be public HTTPS — Telegram cannot reach ${url}.\n` +
+        "For local development run `pnpm bot:local` instead.",
     );
     process.exit(1);
   }
@@ -50,46 +61,31 @@ async function main() {
   if (!secret) {
     // Without it, anyone who guesses the URL can post fake updates.
     console.error(
-      "TELEGRAM_WEBHOOK_SECRET is not set — refusing to register an " +
+      "TELEGRAM_WEBHOOK_SECRET is not set — refusing to register an\n" +
         "unauthenticated webhook. Generate one with:\n" +
         '  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64url\'))"',
     );
     process.exit(1);
   }
 
-  const url = `${appUrl.replace(/\/$/, "")}/api/telegram`;
-  const response = await fetch(`${api}/setWebhook`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      url,
-      secret_token: secret,
-      allowed_updates: ["message"],
-      drop_pending_updates: true,
-    }),
+  const endpoint = `${url.replace(/\/$/, "")}/api/telegram`;
+  await bot.api.setWebhook(endpoint, {
+    secret_token: secret,
+    allowed_updates: ["message"],
+    drop_pending_updates: true,
   });
+  await registerCommands(bot);
 
-  const body = await response.json();
-  if (!body.ok) {
-    console.error(`Failed: ${body.description}`);
-    process.exit(1);
-  }
+  console.log(`Webhook set — the DEPLOYED app now handles messages.\n  ${endpoint}`);
 
-  console.log(`Webhook set to ${url}`);
-
-  const info = await (await fetch(`${api}/getWebhookInfo`)).json();
-  if (info.ok) {
-    console.log(
-      `Telegram reports: url=${info.result.url}, ` +
-        `pending=${info.result.pending_update_count}` +
-        (info.result.last_error_message
-          ? `, last error: ${info.result.last_error_message}`
-          : ""),
-    );
-  }
+  const info = await bot.api.getWebhookInfo();
+  console.log(
+    `Telegram reports: pending=${info.pending_update_count}` +
+      (info.last_error_message ? `, last error: ${info.last_error_message}` : ""),
+  );
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error("[bot] webhook setup failed:", error instanceof Error ? error.message : error);
   process.exit(1);
 });

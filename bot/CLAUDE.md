@@ -33,7 +33,22 @@ Stateless on purpose: no table, no cleanup job, and it cannot be replayed once e
 | `/took` | guided: item → quantity (FEFO consume) |
 | `/cancel` | drop the current conversation |
 
-Register the production webhook with `pnpm bot:webhook:set` (`scripts/set-telegram-webhook.ts`). It refuses to run against a non-HTTPS `APP_URL` — Telegram cannot reach localhost — and refuses to register without `TELEGRAM_WEBHOOK_SECRET`, since an unauthenticated webhook URL lets anyone who guesses it post fake updates. `pnpm bot:webhook:delete` returns the bot to long polling.
+## Switching between the deployed bot and your machine
+
+Telegram delivers to **one transport at a time**, so these are the switch:
+
+| Command | Effect |
+|---|---|
+| `pnpm bot:webhook:set` | the **deployed** app handles messages |
+| `pnpm bot:webhook:delete` | nothing does, until you start a local bot |
+| `pnpm bot:local` | both of the above — delete the webhook, then poll here |
+| `pnpm bot:dev` | poll here (refuses if a webhook is still registered) |
+
+The target comes from **`TELEGRAM_WEBHOOK_URL`**, deliberately separate from `APP_URL`. `APP_URL` is what the running app uses to build reset and invite links and should stay on localhost while you develop; sharing one variable would mean editing it back and forth on every switch.
+
+`bot:dev` checks `getWebhookInfo` before polling and exits with instructions if a webhook is live. Without that it would sit there looking healthy while every message went to the deployment — the failure is silent, which is the worst kind.
+
+Both paths publish the command list (`registerCommands`), so Telegram's / menu matches whichever bot is answering.
 
 ## Conversation state
 
