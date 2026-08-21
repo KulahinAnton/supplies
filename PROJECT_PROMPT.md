@@ -421,3 +421,30 @@ A scanned (or typed) barcode now fills the item form, via `lookupBarcodeAction`:
 Pack size is parsed by the pure, tested `parsePackSize` and appended to the *name* ("Coca-cola 330 мл"), the way the seed data reads — **never** to `minQty`. The distinction is the whole model: the app counts bottles, not the litres inside them, so 1,5 л is part of what the thing is called. `6 x 1.5 l` yields the unit size, not the multipack total; `cl` normalises to ml; and the first letter is capitalised because Open Food Facts is crowd-sourced and its names are often all-lowercase.
 
 Typing a barcode triggers the same lookup on blur — the camera is a convenience, not the only way in.
+
+### Expiry phrasing carries its own verb
+
+`lib/format.ts` exposes `formatExpiryLabel(date, today)`, which returns a
+complete phrase — «придатне ще 7 днів», «спливає сьогодні», «прострочено 3 дні
+тому». It replaced `formatExpiryRelative`, which returned only *when the date
+fell* («через 7 днів») and left each caller to supply the verb.
+
+That split was a trap, and all three callers fell into it. `ExpiryBadge`
+prefixed «Придатне», rendering **«Придатне через 7 днів»** — "becomes edible in
+7 days" — for food that *goes off* in 7 days, the exact inversion of the
+warning. The digest and the bot listed already-expired items under «⏳
+Псується:» as a bare «3 дні тому».
+
+The unit tests passed the whole time, because they asserted the fragment the
+function returned and never the sentence the user read. Tests for user-facing
+copy must assert the **rendered string**, including any prefix.
+
+Consequently:
+
+- Never prefix a state word onto a date phrase. A function that formats copy
+  about a state returns that copy whole.
+- The badge derives its wording from the date alone, not from `state`, so the
+  two can no longer disagree.
+- Note that "expires today" is `SOON`, not `EXPIRED` (`batchExpiryState` is
+  inclusive of today), so «придатне» would have been *technically* true on the
+  last day and still read as reassurance. Hence «спливає сьогодні».

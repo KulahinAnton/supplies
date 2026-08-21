@@ -126,17 +126,26 @@ export function formatQuantityWithUnitLong(value: Numeric, unit: Unit): string {
 const DAY_FORMS: UkPlural = { one: "день", few: "дні", many: "днів" };
 
 /**
- * Human phrase for an expiry date relative to today:
- * "сьогодні", "завтра", "через 5 днів", "3 дні тому".
+ * The shelf-life situation of a batch, as a complete phrase.
+ *
+ * This deliberately carries its own verb rather than returning a bare
+ * "через 7 днів" for callers to prefix. The previous version did the latter
+ * and all three of its call sites read it wrong: the badge rendered
+ * «Придатне через 7 днів» — "becomes good in 7 days" — for something that
+ * *expires* in 7 days, and the digest listed already-expired items under
+ * «Псується» as a bare «3 дні тому». A phrase saying when a date falls
+ * cannot be safely glued to a word saying what that date means.
+ *
+ * Lowercase initial so it drops into a bullet list; the badge capitalises.
  */
-export function formatExpiryRelative(expiresAt: Date, today: Date): string {
+export function formatExpiryLabel(expiresAt: Date, today: Date): string {
   const days = daysBetween(today, expiresAt);
-  if (days === 0) return "сьогодні";
-  if (days === 1) return "завтра";
-  if (days === -1) return "вчора";
-  if (days > 0) return `через ${days} ${pluralUk(days, DAY_FORMS)}`;
+  if (days === 0) return "спливає сьогодні";
+  if (days === 1) return "спливає завтра";
+  if (days === -1) return "прострочено вчора";
+  if (days > 1) return `придатне ще ${days} ${pluralUk(days, DAY_FORMS)}`;
   const overdue = Math.abs(days);
-  return `${overdue} ${pluralUk(overdue, DAY_FORMS)} тому`;
+  return `прострочено ${overdue} ${pluralUk(overdue, DAY_FORMS)} тому`;
 }
 
 /** "5 днів" — the bare count, for chips that already say what it means. */

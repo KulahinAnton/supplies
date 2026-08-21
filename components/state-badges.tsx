@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { ExpiryState } from "@/lib/expiry";
 import type { StockState } from "@/lib/stock";
-import { formatExpiryRelative } from "@/lib/format";
+import { formatExpiryLabel } from "@/lib/format";
 
 /**
  * The two state axes are shown as two separate chips on purpose (§3.4/§3.5):
@@ -58,9 +58,10 @@ export function ExpiryBadge({
 }) {
   if (state === "NONE" || !date) return null;
 
-  const relative = formatExpiryRelative(date, today);
-  const label =
-    state === "EXPIRED" ? `Прострочено ${relative}` : `Придатне ${relative}`;
+  // The phrase names its own state, so there is no prefix here to disagree
+  // with `state` — that disagreement was the bug. Only the capital is ours.
+  const phrase = formatExpiryLabel(date, today);
+  const label = phrase.charAt(0).toUpperCase() + phrase.slice(1);
 
   return (
     <span className={cn(chipBase, EXPIRY_CLASS[state], className)}>{label}</span>

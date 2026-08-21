@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDate,
   formatDays,
-  formatExpiryRelative,
+  formatExpiryLabel,
   formatQuantity,
   formatQuantityWithUnit,
   formatQuantityWithUnitLong,
@@ -91,21 +91,47 @@ describe("formatQuantityWithUnit", () => {
   });
 });
 
-describe("formatExpiryRelative", () => {
+describe("formatExpiryLabel", () => {
   const today = dateOnlyUTC(2026, 3, 10);
+  const label = (y: number, m: number, d: number) =>
+    formatExpiryLabel(dateOnlyUTC(y, m, d), today);
 
-  it("names today, tomorrow and yesterday rather than counting", () => {
-    expect(formatExpiryRelative(today, today)).toBe("сьогодні");
-    expect(formatExpiryRelative(dateOnlyUTC(2026, 3, 11), today)).toBe("завтра");
-    expect(formatExpiryRelative(dateOnlyUTC(2026, 3, 9), today)).toBe("вчора");
+  /**
+   * The regression this function exists for. The old formatter returned a
+   * bare "через 7 днів" and the badge prefixed «Придатне», which told the
+   * user the food BECOMES edible in 7 days when it in fact goes off then.
+   * The old tests passed throughout, because they asserted the fragment and
+   * never the sentence. So assert the sentence.
+   */
+  it("says the food stays good for N more days, not that it starts then", () => {
+    expect(label(2026, 3, 17)).toBe("придатне ще 7 днів");
+    expect(label(2026, 3, 17)).not.toContain("через");
   });
 
-  it("counts forward with a declined day word", () => {
-    expect(formatExpiryRelative(dateOnlyUTC(2026, 3, 13), today)).toBe("через 3 дні");
-    expect(formatExpiryRelative(dateOnlyUTC(2026, 3, 15), today)).toBe("через 5 днів");
+  it("says a date arriving today or tomorrow is the deadline, not the promise", () => {
+    // Both are SOON, not EXPIRED (batchExpiryState is inclusive of today),
+    // so «придатне» would be technically true and still read as reassurance.
+    expect(label(2026, 3, 10)).toBe("спливає сьогодні");
+    expect(label(2026, 3, 11)).toBe("спливає завтра");
   });
 
-  it("counts backward for something already off", () => {
-    expect(formatExpiryRelative(dateOnlyUTC(2026, 3, 7), today)).toBe("3 дні тому");
+  it("names an expired item as expired, in the digest as well as the badge", () => {
+    expect(label(2026, 3, 9)).toBe("прострочено вчора");
+    expect(label(2026, 3, 7)).toBe("прострочено 3 дні тому");
+  });
+
+  it("declines the day word in both directions", () => {
+    expect(label(2026, 3, 12)).toBe("придатне ще 2 дні");
+    expect(label(2026, 3, 15)).toBe("придатне ще 5 днів");
+    expect(label(2026, 3, 31)).toBe("придатне ще 21 день");
+    expect(label(2026, 3, 5)).toBe("прострочено 5 днів тому");
+  });
+
+  it("never claims a future date is already expired, or the reverse", () => {
+    for (let offset = -10; offset <= 10; offset += 1) {
+      const text = formatExpiryLabel(dateOnlyUTC(2026, 3, 10 + offset), today);
+      if (offset < 0) expect(text.startsWith("прострочено")).toBe(true);
+      else expect(text.startsWith("прострочено")).toBe(false);
+    }
   });
 });

@@ -96,6 +96,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (199), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (207), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
 Not yet exercised: the drag gesture on the shopping list, whose wiring, collision strategy and server action are verified but which has never been driven by an actual finger or mouse; and the first automatic run of the daily digest.

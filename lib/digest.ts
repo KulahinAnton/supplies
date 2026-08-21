@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getItemViews } from "@/lib/queries";
 import { needsAttention } from "@/lib/expiry";
 import { needsRestock } from "@/lib/stock";
-import { formatExpiryRelative, formatQuantityWithUnit } from "@/lib/format";
+import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { formatDateKey, todayUTC } from "@/lib/period";
 
 /**
@@ -169,7 +169,7 @@ export async function digestText(
             (item) =>
               `• ${item.name} — ${
                 item.nextExpiry
-                  ? formatExpiryRelative(item.nextExpiry, today)
+                  ? formatExpiryLabel(item.nextExpiry, today)
                   : "—"
               }`,
           )

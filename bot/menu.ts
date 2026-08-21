@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import { todayUTC } from "@/lib/period";
-import { formatExpiryRelative, formatQuantityWithUnit } from "@/lib/format";
+import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { getItemViews } from "@/lib/queries";
 import { needsAttention } from "@/lib/expiry";
 import { needsRestock } from "@/lib/stock";
@@ -96,7 +96,7 @@ export async function expiringView(householdId: string): Promise<View> {
   const lines = items.map(
     (item) =>
       `• ${item.name} — ${
-        item.nextExpiry ? formatExpiryRelative(item.nextExpiry, today) : "—"
+        item.nextExpiry ? formatExpiryLabel(item.nextExpiry, today) : "—"
       }`,
   );
 
