@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { changePasswordAction, createInviteAction } from "@/lib/actions/auth";
-import { createTelegramLinkAction } from "@/lib/actions/telegram";
+import {
+  createTelegramLinkAction,
+  sendDigestNowAction,
+} from "@/lib/actions/telegram";
 import { updateHouseholdAction } from "@/lib/actions/settings";
 import { renderMessage, type RuleMessage } from "@/lib/messages";
 
@@ -189,22 +192,53 @@ export function TelegramPanel({ linked }: { linked: boolean }) {
             : "Прив'яжіть чат, щоб додавати запаси й дивитися список просто з Telegram."}
         </p>
 
-        <Button
-          variant="outline"
-          disabled={pending}
-          onClick={async () => {
-            setPending(true);
-            const result = await createTelegramLinkAction();
-            setPending(false);
-            if (!result.ok) {
-              toast.error(renderMessage(result.error));
-              return;
-            }
-            setLink(result.data.url);
-          }}
-        >
-          {linked ? "Прив'язати інший чат" : "Прив'язати Telegram"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={async () => {
+              setPending(true);
+              const result = await createTelegramLinkAction();
+              setPending(false);
+              if (!result.ok) {
+                toast.error(renderMessage(result.error));
+                return;
+              }
+              setLink(result.data.url);
+            }}
+          >
+            {linked ? "Прив'язати інший чат" : "Прив'язати Telegram"}
+          </Button>
+
+          {/*
+            Feature 19.1 — the same message the daily digest sends, on demand.
+            It deliberately does not mark the day as done, so the automatic one
+            still arrives: the two run in parallel rather than competing.
+          */}
+          {linked ? (
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={async () => {
+                setPending(true);
+                const result = await sendDigestNowAction();
+                setPending(false);
+                if (!result.ok) {
+                  toast.error(renderMessage(result.error));
+                  return;
+                }
+                toast.success(
+                  result.data.hadNews
+                    ? `Надіслано (чатів: ${result.data.messages})`
+                    : "Немає про що нагадувати — нічого не надіслано",
+                );
+              }}
+            >
+              <Send className="size-4" />
+              Надіслати зведення зараз
+            </Button>
+          ) : null}
+        </div>
 
         {/*
           Feature 17.1 — a link you can tap. It used to render in a read-only

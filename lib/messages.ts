@@ -83,6 +83,11 @@ export const MESSAGES = {
   "bot.cancelled": "Скасовано.",
   "bot.unknownCommand": "Не знаю такої команди.",
 
+  // --- digest (Feature 19.1) ---
+  "digest.botNotConfigured": "Telegram-бот не налаштований.",
+  "digest.noChats": "Немає жодного прив'язаного чату — спершу прив'яжіть Telegram.",
+  "digest.failed": "Не вдалося надіслати. Спробуйте ще раз.",
+
   // --- generic ---
   "error.unexpected": "Щось пішло не так. Спробуйте ще раз.",
 } as const;

@@ -52,9 +52,11 @@ Both paths publish the command list (`registerCommands`), so Telegram's / menu m
 
 ## Conversation state
 
-`bot/state.ts` is an in-memory `Map` keyed by chat id. **Not persisted, on purpose**: a half-finished `/add` is worth nothing after a restart and costs the user one retyped word. Anything that matters is already a database row.
+`bot/state.ts` stores the chat's half-finished flow in **`TelegramLink.pending`**, not in memory.
 
-This does mean state is per-process — if the webhook ever runs on more than one instance, a multi-step conversation can land on the wrong one. Move it to Redis or a table *only* when that actually happens.
+It used to be a module-level `Map`, which was fine while the bot ran as one long-polling process. On Vercel it was simply wrong: each webhook call may hit a fresh serverless instance, so a half-finished `/add` forgot itself between one message and the next — intermittently, which is the hardest kind to notice.
+
+Where state can be avoided it is. Inline buttons carry what they need in their callback data (capped at 64 bytes by Telegram), so browsing groups and ticking rows needs no memory at all.
 
 ## Strings
 

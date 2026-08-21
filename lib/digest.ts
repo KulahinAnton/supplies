@@ -57,24 +57,12 @@ export async function sendDigests(options: {
       }
     }
 
-    const text = await digestText(household.id, today);
+    const sent = await sendDigestToHousehold(household.id, today, bot);
+    result.messages += sent.messages;
+    result.failures += sent.failures;
 
-    // Nothing to say is a reason to stay quiet, not to send an empty message —
-    // but still mark the day, or every run would retry this household.
-    if (text) {
-      for (const user of household.users) {
-        if (!user.telegramLink) continue;
-        try {
-          await bot.api.sendMessage(Number(user.telegramLink.chatId), text);
-          result.messages += 1;
-        } catch (error) {
-          // One blocked chat must not stop the rest of the household.
-          result.failures += 1;
-          console.error(`[digest] failed for ${user.name}:`, error);
-        }
-      }
-    }
-
+    // Mark the day even when there was nothing to say, or every run would
+    // retry this household all day looking for news.
     await prisma.household.update({
       where: { id: household.id },
       data: { lastDigestOn: today },
@@ -83,6 +71,58 @@ export async function sendDigests(options: {
   }
 
   return result;
+}
+
+export type HouseholdDigest = {
+  /** False when there was nothing worth saying, so nothing was sent. */
+  hadNews: boolean;
+  /** Linked chats in the household — zero means nobody would have received it. */
+  chats: number;
+  messages: number;
+  failures: number;
+};
+
+/**
+ * Feature 19.1 — send one household's digest right now.
+ *
+ * Deliberately does **not** touch `lastDigestOn`. This is the manual path
+ * (a button in Settings), and marking the day here would silence the
+ * automatic one — the two are meant to run in parallel, not compete.
+ */
+export async function sendDigestToHousehold(
+  householdId: string,
+  today: Date,
+  existingBot?: Bot,
+): Promise<HouseholdDigest> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
+  const bot = existingBot ?? new Bot(token);
+
+  const users = await prisma.user.findMany({
+    where: { householdId },
+    include: { telegramLink: true },
+  });
+  const linked = users.filter((user) => user.telegramLink !== null);
+
+  const text = await digestText(householdId, today);
+  if (!text) {
+    return { hadNews: false, chats: linked.length, messages: 0, failures: 0 };
+  }
+
+  let messages = 0;
+  let failures = 0;
+  for (const user of linked) {
+    try {
+      await bot.api.sendMessage(Number(user.telegramLink!.chatId), text);
+      messages += 1;
+    } catch (error) {
+      // One blocked chat must not stop the rest of the household.
+      failures += 1;
+      console.error(`[digest] failed for ${user.name}:`, error);
+    }
+  }
+
+  return { hadNews: true, chats: linked.length, messages, failures };
 }
 
 /** The message body, or null when there is nothing worth saying. */

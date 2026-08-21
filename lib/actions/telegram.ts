@@ -4,6 +4,8 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { createLinkToken } from "@/lib/telegram-link";
+import { sendDigestToHousehold } from "@/lib/digest";
+import { todayUTC } from "@/lib/period";
 
 /**
  * Feature 9 — hand out a short-lived deep link that binds a Telegram chat to
@@ -31,4 +33,36 @@ export async function createTelegramLinkAction(): Promise<
   return actionOk({
     url: `https://t.me/${botName}?start=${encodeURIComponent(token)}`,
   });
+}
+
+/**
+ * Feature 19.1 — send the digest to the household's chats right now.
+ *
+ * Same content the daily cron sends, on demand. It does not mark the day as
+ * done, so the automatic digest still arrives on schedule — the two paths run
+ * in parallel rather than cancelling each other.
+ */
+export async function sendDigestNowAction(): Promise<
+  ActionResult<{ chats: number; messages: number; hadNews: boolean }>
+> {
+  const session = await requireSession();
+
+  if (!process.env.TELEGRAM_BOT_TOKEN) {
+    return actionError(ruleMessage("digest.botNotConfigured"));
+  }
+
+  try {
+    const result = await sendDigestToHousehold(session.householdId, todayUTC());
+    if (result.chats === 0) {
+      return actionError(ruleMessage("digest.noChats"));
+    }
+    return actionOk({
+      chats: result.chats,
+      messages: result.messages,
+      hadNews: result.hadNews,
+    });
+  } catch (error) {
+    console.error("[digest] manual send failed:", error);
+    return actionError(ruleMessage("digest.failed"));
+  }
 }

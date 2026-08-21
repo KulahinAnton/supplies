@@ -8,7 +8,7 @@ Household stock and expiry tracker for a family. Mobile-first web app (installab
 - **One product, many batches.** Ten bottles of water that expire on three different dates is one item with three batches, entered in a single submit.
 - **FEFO consumption.** Taking stock draws from whatever expires soonest, and never touches an expired batch — those have to be discarded explicitly, so "we drank it" can't be silently recorded against milk that had already gone off.
 - **Shared shopping list**, grouped by shop (or any other axis you like), with drag and drop. Ticking something off puts it straight into stock.
-- **Barcode scanning** that fills the item form from Open Food Facts.
+- **Barcode scanning** that fills the item form from Open Food Facts and its sibling databases, and can contribute back what they did not know.
 - **Telegram bot** and a daily digest of what's expiring or running out.
 
 ## Quick start
@@ -61,7 +61,7 @@ Postgres runs in Docker on host port **5434**. Docker Desktop must be running, a
 | `pnpm db:up` / `db:migrate` / `db:seed` / `db:studio` | Database |
 | `pnpm bot:dev` / `pnpm bot:start` | Telegram bot (long polling) |
 | `pnpm bot:webhook:set` / `:delete` | Register or remove the production webhook |
-| `pnpm digest:run` | Daily expiry and out-of-stock digest |
+| `pnpm digest:run` | Daily expiry and out-of-stock digest (also runs via Vercel Cron, and on demand from Settings) |
 
 ## How the domain works
 
@@ -96,6 +96,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–12 are implemented and run against a live Postgres. `pnpm test` (150), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (199), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
-Not yet exercised: the Telegram bot's command handlers and message delivery, which need a real BotFather token; and the drag gesture on the shopping list, whose wiring, collision strategy and server action are all verified but which has never been driven by an actual finger or mouse.
+Not yet exercised: the drag gesture on the shopping list, whose wiring, collision strategy and server action are verified but which has never been driven by an actual finger or mouse; and the first automatic run of the daily digest.
