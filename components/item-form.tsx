@@ -293,6 +293,18 @@ export function ItemForm({
               </>
             ) : lookup.kind === "product" ? (
               "Назву підставлено з Open Food Facts — перевірте й виправте за потреби."
+            ) : lookup.manufacturer ? (
+              /*
+                Feature 20 — GS1 Ukraine knows who licensed the number even
+                when no product database knows the product. Naming the maker
+                is a real head start on typing the name; claiming it IS the
+                name would be a lie, so it is worded as a separate fact.
+              */
+              <>
+                Цього штрихкоду немає у відкритих базах. За даними GS1 Україна,
+                виробник — <strong className="font-medium">{lookup.manufacturer}</strong>.
+                Введіть назву вручну.
+              </>
             ) : (
               "Цього штрихкоду немає у відкритих базах. Введіть назву вручну."
             )}

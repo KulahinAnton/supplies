@@ -1,0 +1,59 @@
+<div class="row">
+                <div id="content" class="col-md-9 col-md-push-3">
+                        
+    <div class="panel panel-default teal">
+        <div class="panel-heading">
+            Пошук інформації за штрихкодом на товарі
+        </div>
+        <div id="gepir-form-container" class="panel-body">
+            <form class="form-horizontal" id="search-by-number-form" method="post" role="form" action="/search/gtin">
+                <div class="form-group">
+                    <label class="col-sm-3 control-label required" for="search_by_gtin_interpretationResult">Введіть штрихкод:</label>
+                    <div class="col-sm-9">
+                        <input type="text" id="search_by_gtin_interpretationResult" name="search_by_gtin[interpretationResult]" required="required" class="form-control" value="4820000123457" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="col-sm-offset-3 col-sm-9">
+                        <div id="search_by_gtin_searchType"><div class="radio"><label for="search_by_gtin_searchType_0" class="required"><input type="radio" id="search_by_gtin_searchType_0" name="search_by_gtin[searchType]" required="required" value="1" checked="checked" /> Хто має право використовувати штрихкод</label></div><div class="radio"><label for="search_by_gtin_searchType_1" class="required"><input type="radio" id="search_by_gtin_searchType_1" name="search_by_gtin[searchType]" required="required" value="2" /> Інформація про товар</label></div></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="col-sm-offset-3 col-sm-9">
+                        <button type="submit" class="btn btn-primary orange">
+                            Шукати
+                        </button>
+                    </div>
+                </div>
+                <input type="hidden" id="search_by_gtin__token" name="search_by_gtin[_token]" value="JOw1vIyCKGATsYuN7ULBEKrHyIl1i90AHf9SL7Pnzbc" />
+            </form>
+
+                                                
+    <div id="interpretation" class="alert alert-success small">
+        Введені дані відповідають структурі номера GTIN-13
+    </div>
+    <div class="alert alert-danger small">
+                            Номер, за яким зроблено запит, не був присвоєний у встановленому порядку.<br>
+        
+                
+                                                                Записів не знайдено.
+            </div>
+                                    </div>
+    </div>
+
+                    <div class="alert alert-info small">
+    Інформація від організації
+                    <a href="http://www.gs1ua.org" target="_blank">
+                Асоціація &quot;ДжіЕс1 Україна&quot;
+            </a>
+            <br/>
+            Мова відповіді: українська.<br/>
+        
+    Код відповіді: <span id="response-code">2</span>
+
+                (Record not found).
+
+            Кількість результатів: 0.
+    </div>

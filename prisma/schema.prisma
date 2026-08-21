@@ -264,3 +264,19 @@ model PasswordResetToken {
 
   @@index([userId])
 }
+
+/// Feature 20 — cached GS1 Ukraine (GEPIR) answers.
+///
+/// Deliberately NOT scoped to a household: a barcode maps to the same
+/// manufacturer for everyone, and scoping it would re-scrape a third-party
+/// site once per family for no gain.
+///
+/// Misses are cached too (`company` null). A barcode GS1 Ukraine does not know
+/// is the common case, and re-asking on every scan is exactly the traffic
+/// worth not sending.
+model GepirLookup {
+  barcode   String   @id
+  /// Null means "asked, and they have no record" — not "never asked".
+  company   String?
+  fetchedAt DateTime @default(now())
+}

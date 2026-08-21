@@ -175,7 +175,35 @@ async function main() {
   check("coffee IS a candidate", candidates.some((c) => c.name === "Кава мелена"));
   console.log(`      candidates: ${candidates.map((c) => c.name).join(", ")}`);
 
-  console.log("\n8. Cleanup");
+  // Feature 20 — the GEPIR cache. No network here: this pins the storage
+  // contract the lookup depends on, above all that a MISS is cachable and
+  // distinguishable from "never asked". Confuse those two and the app either
+  // re-scrapes a third-party site on every scan or hides a real answer.
+  console.log("\n8. GEPIR lookup cache");
+  const probe = "4820000000000";
+  await prisma.gepirLookup.deleteMany({ where: { barcode: probe } });
+  check(
+    "cold cache is a miss",
+    (await prisma.gepirLookup.findUnique({ where: { barcode: probe } })) === null,
+  );
+
+  await prisma.gepirLookup.create({ data: { barcode: probe, company: null } });
+  const cachedMiss = await prisma.gepirLookup.findUnique({ where: { barcode: probe } });
+  check(
+    "a negative answer is cached, and differs from never asked",
+    cachedMiss !== null && cachedMiss.company === null,
+  );
+
+  await prisma.gepirLookup.upsert({
+    where: { barcode: probe },
+    create: { barcode: probe, company: "ТОВ «ТЕСТ»" },
+    update: { company: "ТОВ «ТЕСТ»", fetchedAt: new Date() },
+  });
+  const upgraded = await prisma.gepirLookup.findUnique({ where: { barcode: probe } });
+  check("a later real answer replaces a cached miss", upgraded?.company === "ТОВ «ТЕСТ»");
+  await prisma.gepirLookup.deleteMany({ where: { barcode: probe } });
+
+  console.log("\n9. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

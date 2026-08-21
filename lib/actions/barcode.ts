@@ -6,6 +6,11 @@ import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { fetchProduct, suggestedItemName } from "@/lib/barcode-source";
 import { canContribute } from "@/lib/off-contribute";
+import {
+  fetchGepirCompany,
+  isUkrainianGtin,
+  shortenCompanyName,
+} from "@/lib/gepir";
 
 /**
  * Feature 10 — what a scanned barcode turns into.
@@ -19,6 +24,12 @@ import { canContribute } from "@/lib/off-contribute";
  *    reject anyway, but with a far worse message.
  * 2. Otherwise, look the code up in Open Food Facts for a suggested name.
  *
+ * 3. Feature 20 — if that misses too, ask GS1 Ukraine who owns the number.
+ *    Strictly a fallback, and strictly a hint: GEPIR is a registry of GTIN
+ *    licensees, not a product catalogue, so it yields a manufacturer and
+ *    never a product name. «Виробник: ТОВ «САНДОРА»» beats a blank "not
+ *    found" when the user is about to type the name themselves.
+ *
  * A miss is NOT an error: Open Food Facts has patchy Ukrainian coverage, and
  * an empty form is a perfectly good outcome. Only a signed-out caller or a
  * malformed code fails.
@@ -27,8 +38,11 @@ export type BarcodeLookup =
   | { kind: "existing"; itemId: string; name: string }
   | { kind: "product"; suggestedName: string; packSize: string | null }
   /** Feature 18.2 — `canShare` is false unless OFF credentials exist, so the
-   *  UI never offers something that would silently do nothing. */
-  | { kind: "unknown"; canShare: boolean };
+   *  UI never offers something that would silently do nothing.
+   *  Feature 20 — `manufacturer` is the GEPIR hint, null when GS1 Ukraine
+   *  has no record, was not asked, or did not answer. The UI must treat all
+   *  three the same: there is simply no hint to show. */
+  | { kind: "unknown"; canShare: boolean; manufacturer: string | null };
 
 export async function lookupBarcodeAction(
   barcode: string,
@@ -56,7 +70,11 @@ export async function lookupBarcodeAction(
   const suggestedName = product ? suggestedItemName(product) : null;
 
   if (!product || !suggestedName) {
-    return actionOk<BarcodeLookup>({ kind: "unknown", canShare: canContribute() });
+    return actionOk<BarcodeLookup>({
+      kind: "unknown",
+      canShare: canContribute(),
+      manufacturer: await manufacturerHint(code),
+    });
   }
 
   return actionOk<BarcodeLookup>({
@@ -64,4 +82,40 @@ export async function lookupBarcodeAction(
     suggestedName,
     packSize: product.quantityText,
   });
+}
+
+/**
+ * Feature 20 — the GEPIR fallback, cached.
+ *
+ * Cached in `GepirLookup` including the misses: "GS1 Ukraine has no record"
+ * is the common answer for a code Open Food Facts also lacks, and re-asking a
+ * scraped third-party site on every scan is traffic worth not sending. The
+ * cache is global rather than per-household because a barcode has the same
+ * manufacturer for everyone.
+ *
+ * Returns null on every failure path. A scan must not fail, or even slow
+ * down noticeably, because someone else's registry is unhappy.
+ */
+async function manufacturerHint(barcode: string): Promise<string | null> {
+  if (!isUkrainianGtin(barcode)) return null;
+
+  const cached = await prisma.gepirLookup.findUnique({ where: { barcode } });
+  if (cached) return cached.company;
+
+  const result = await fetchGepirCompany(barcode);
+
+  // Only "they answered" is worth remembering. Caching `unavailable` would
+  // turn one timeout into a permanent blank for that barcode.
+  if (result.kind === "company" || result.kind === "unregistered") {
+    const company =
+      result.kind === "company" ? shortenCompanyName(result.company.name) : null;
+    await prisma.gepirLookup.upsert({
+      where: { barcode },
+      create: { barcode, company },
+      update: { company, fetchedAt: new Date() },
+    });
+    return company;
+  }
+
+  return null;
 }

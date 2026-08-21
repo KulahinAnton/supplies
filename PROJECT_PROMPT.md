@@ -448,3 +448,42 @@ Consequently:
 - Note that "expires today" is `SOON`, not `EXPIRED` (`batchExpiryState` is
   inclusive of today), so «придатне» would have been *technically* true on the
   last day and still read as reassurance. Hence «спливає сьогодні».
+
+### Feature 20 — GS1 Ukraine (GEPIR) as a barcode fallback
+
+A last-resort source for barcodes Open Food Facts and its siblings do not
+know. Ordered strictly after them: OFF chain → miss → GEPIR.
+
+**It yields a manufacturer, never a product.** GEPIR is a registry of which
+company licensed a GTIN, not a product catalogue — it answers «ТОВ «САНДОРА»»
+and has no product-name field at all. So the name field is never pre-filled
+from it. The form shows a separate sentence: «За даними GS1 Україна, виробник
+— ТОВ «САНДОРА». Введіть назву вручну.» That is a genuine head start when the
+user is about to type the name, and it is worded as a distinct fact so it can
+never be mistaken for the product name.
+
+**Only 482 prefixes are asked about.** Not tidiness — a foreign GTIN makes
+gepir.gs1ua.org forward to the global GEPIR router, which never answers.
+Measured: a Ukrainian code replies in ~0.3–0.7s, a Belgian one hung past 40s.
+The prefix gate is what keeps the 6s timeout from being load-bearing.
+
+**There is no API.** The flow is a Symfony form — GET for a session cookie and
+a CSRF token, then POST. That makes it scraping, with scraping's lifespan:
+every failure path returns "no hint" rather than an error, and the parser is
+pure and tested against **real captured HTML** in `lib/__fixtures__/`, because
+invented markup would hide the exact failure this feature is exposed to.
+
+**Answers are cached in `GepirLookup`, misses included.** Global, not
+per-household: a barcode has the same manufacturer for everyone. Caching the
+misses is the point — "GS1 Ukraine has no record" is the common answer for a
+code OFF also lacks, and re-asking on every scan is the traffic worth not
+sending. `unavailable` is never cached, so one timeout cannot become a
+permanent blank.
+
+`GEPIR_BASE_URL` overrides the host, as `OFF_BASE_URL` does.
+
+Rejected: **base2base.ua**. It is a Blazor Server app whose UI talks over a
+SignalR WebSocket exchanging render-tree diffs — there is no REST endpoint to
+call. Emulating it means driving a stateful, versioned protocol that breaks on
+any redeploy of their site, and the headless-browser alternative does not fit
+in a Vercel serverless function.

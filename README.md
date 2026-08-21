@@ -8,7 +8,7 @@ Household stock and expiry tracker for a family. Mobile-first web app (installab
 - **One product, many batches.** Ten bottles of water that expire on three different dates is one item with three batches, entered in a single submit.
 - **FEFO consumption.** Taking stock draws from whatever expires soonest, and never touches an expired batch — those have to be discarded explicitly, so "we drank it" can't be silently recorded against milk that had already gone off.
 - **Shared shopping list**, grouped by shop (or any other axis you like), with drag and drop. Ticking something off puts it straight into stock.
-- **Barcode scanning** that fills the item form from Open Food Facts and its sibling databases, and can contribute back what they did not know.
+- **Barcode scanning** that fills the item form from Open Food Facts and its sibling databases, falls back to GS1 Ukraine for the manufacturer, and can contribute back what they did not know.
 - **Telegram bot** and a daily digest of what's expiring or running out.
 
 ## Quick start
@@ -96,6 +96,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (207), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (220), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
 Not yet exercised: the drag gesture on the shopping list, whose wiring, collision strategy and server action are verified but which has never been driven by an actual finger or mouse; and the first automatic run of the daily digest.
