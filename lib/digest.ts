@@ -17,6 +17,29 @@ import { formatDateKey, todayUTC } from "@/lib/period";
  * the same day sends nothing.
  */
 
+/**
+ * When the scheduled digest should land, in **Kyiv local time**.
+ *
+ * Vercel cron fires in UTC, and Kyiv is UTC+3 in summer and UTC+2 in winter,
+ * so no single UTC time is noon all year. `vercel.json` therefore fires at
+ * *both* candidate UTC hours (09:00 and 10:00) and this check decides which
+ * one is actually noon in Kyiv today — the other becomes a no-op.
+ *
+ * Change this and you must change `vercel.json` to match.
+ */
+export const DIGEST_HOUR_KYIV = 12;
+
+/** The hour in Kyiv right now, 0–23, DST handled by the runtime's tz data. */
+export function kyivHour(now: Date = new Date()): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Kyiv",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(now),
+  );
+}
+
 export type DigestResult = {
   households: number;
   messages: number;

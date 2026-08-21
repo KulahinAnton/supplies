@@ -1,4 +1,4 @@
-import { sendDigests } from "@/lib/digest";
+import { DIGEST_HOUR_KYIV, kyivHour, sendDigests } from "@/lib/digest";
 
 /**
  * Feature 19 — the endpoint Vercel Cron calls.
@@ -6,13 +6,17 @@ import { sendDigests } from "@/lib/digest";
  * Node runtime: it touches Prisma and the Telegram API.
  *
  * Guarded by CRON_SECRET, which Vercel sends as `Authorization: Bearer …`.
- * Without the guard anyone who found this URL could spam the family's chats,
- * and the URL is not a secret.
+ * The URL is not a secret, and without the guard anyone who found it could
+ * spam the family's chats.
  *
- * `respectHour` is false here: Vercel's Hobby plan runs cron at most once a
- * day, so the digest arrives when the cron fires rather than at each
- * household's `digestHour`. Calling it twice in a day is harmless —
- * `lastDigestOn` makes the second call a no-op.
+ * **Why two cron entries.** Vercel schedules in UTC; Kyiv is UTC+3 in summer
+ * and UTC+2 in winter, so no fixed UTC hour is noon all year. `vercel.json`
+ * fires at both 09:00 and 10:00 UTC, and this route sends only on whichever
+ * one is currently noon in Kyiv. The other returns `skipped` and does
+ * nothing — cheap, and it keeps the delivery time steady across the DST
+ * changeover without a paid plan's finer schedules.
+ *
+ * `lastDigestOn` makes a double fire harmless anyway.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +30,23 @@ export async function GET(request: Request) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const hour = kyivHour();
+  const url = new URL(request.url);
+  // `?force=1` sends regardless of the hour — for testing without waiting.
+  const force = url.searchParams.get("force") === "1";
+
+  if (!force && hour !== DIGEST_HOUR_KYIV) {
+    return Response.json({
+      ok: true,
+      skipped: true,
+      kyivHour: hour,
+      wanted: DIGEST_HOUR_KYIV,
+    });
+  }
+
   try {
-    const result = await sendDigests({ respectHour: false });
-    return Response.json({ ok: true, ...result });
+    const result = await sendDigests({ respectHour: false, force });
+    return Response.json({ ok: true, kyivHour: hour, ...result });
   } catch (error) {
     console.error("[digest] run failed:", error);
     return Response.json({ ok: false, error: "digest failed" }, { status: 500 });

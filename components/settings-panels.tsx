@@ -88,7 +88,8 @@ export function HouseholdPanel({
               }
             />
             <p className="text-xs text-muted-foreground">
-              Коли надсилати щоденне зведення в Telegram.
+              Використовується, лише якщо запускати розсилку вручну щогодини.
+              На Vercel зведення приходить о 12:00 за київським часом.
             </p>
           </div>
         </div>

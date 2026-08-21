@@ -7,7 +7,7 @@ Web app, Telegram bot and Postgres at **$0/month** for family-scale use.
 | Next.js app | Vercel (Hobby) | free |
 | Postgres | [Neon](https://neon.tech) free tier | free (0.5 GB) |
 | Telegram bot | a **webhook** served by the same Vercel app — no separate process | free |
-| Daily digest | Vercel Cron — see [Known gap](#known-gap-the-daily-digest) | free |
+| Daily digest | Vercel Cron, 12:00 Kyiv — see [The daily digest](#the-daily-digest) | free |
 
 Do these in order.
 
@@ -91,9 +91,15 @@ Long polling (`pnpm bot:dev`) is local-only: Vercel has no persistent process, w
 
 `git push` to `main`. Vercel rebuilds and runs `prisma migrate deploy` first, per the build-command override. Nothing else to do — including after a schema change, because the migration ships in the same commit.
 
-## Known gap: the daily digest
+## The daily digest
 
-Feature 9's morning digest **does not run on Vercel yet**. `pnpm digest:run` is a CLI script, and Vercel Cron can only call an HTTP endpoint — so it needs an API route wrapping `scripts/run-daily-digest.ts` plus a `vercel.json` cron entry. Everything else about the bot works; only the unprompted daily message is missing.
+`vercel.json` registers **two** cron entries, at 09:00 and 10:00 UTC. Vercel schedules in UTC and Kyiv is UTC+3 in summer, UTC+2 in winter, so no fixed UTC hour is noon all year. The route sends only on whichever firing is currently **12:00 in Kyiv** and skips the other, which keeps delivery steady across the DST changeover without needing a paid plan's finer schedules. `lastDigestOn` makes a double fire harmless regardless.
+
+Needs `CRON_SECRET` set in **Production** and a redeploy — env vars only reach the app on a new build. Check **Vercel → Cron Jobs** to confirm both entries registered.
+
+To change the time, edit `DIGEST_HOUR_KYIV` in `lib/digest.ts` **and** the two schedules in `vercel.json` to the matching UTC hours.
+
+The **«Надіслати зведення зараз»** button in Settings sends the same message on demand and needs no cron secret; it deliberately does not mark the day, so the scheduled one still arrives.
 
 ## Notes
 
