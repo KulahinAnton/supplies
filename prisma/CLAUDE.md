@@ -52,3 +52,21 @@ The fix, in this order:
 1. stop the dev server
 2. `rmdir /s /q .next` (it is locked while the server runs)
 3. `pnpm dev`
+
+## A stale `.next` also breaks auth, not just Prisma
+
+The rule above — clear `.next` after schema changes — has a second symptom
+that looks nothing like a database problem:
+
+    [auth][error] UntrustedHost: Host must be trusted.
+    URL was: http://localhost:3000/api/auth/session
+
+If the stack frames name `...runtime.prod.js` or `chunks/ssr/...prod.js` while
+you are running `pnpm dev`, `.next` holds a **production** build — usually
+because someone ran `pnpm build` in the same working tree. Those chunks carry
+`NODE_ENV=production`, where Auth.js stops trusting localhost automatically
+and demands `AUTH_TRUST_HOST` or `AUTH_URL`.
+
+The fix is the same: stop the dev server, delete `.next`, start it again. Do
+not add `AUTH_TRUST_HOST` to make it go away — that hides a stale build rather
+than fixing it. Set it only when deliberately serving `pnpm start` locally.
