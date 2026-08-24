@@ -15,6 +15,12 @@ export const batchRowSchema = z.object({
   quantity: quantityString,
   expiresAt: optionalDateOnly,
   openedAt: optionalDateOnly,
+  /**
+   * Feature 22 — where this batch goes. Omitted means "wherever the item
+   * says", which is what the shopping-list buy flow sends and what every
+   * batch predating the feature means.
+   */
+  locationId: z.string().optional(),
 });
 
 export const addStockSchema = z.object({

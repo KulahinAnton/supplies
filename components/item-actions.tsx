@@ -28,10 +28,15 @@ export function ItemActions({
   itemId,
   unit,
   barcode,
+  locations,
+  itemLocationId,
 }: {
   itemId: string;
   unit: Unit;
   barcode?: string | null;
+  /** Feature 22 — passed straight through to the per-row location picker. */
+  locations?: { id: string; name: string }[];
+  itemLocationId?: string | null;
 }) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
@@ -81,6 +86,8 @@ export function ItemActions({
             itemId={itemId}
             unit={unit}
             barcode={barcode}
+            locations={locations}
+            itemLocationId={itemLocationId}
             onDone={() => setAddOpen(false)}
           />
         </DialogContent>

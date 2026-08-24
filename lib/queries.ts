@@ -174,7 +174,13 @@ export async function getItemDetail(householdId: string, itemId: string) {
   const item = await prisma.item.findFirst({
     where: { id: itemId, householdId },
     include: {
-      batches: { include: { addedBy: { select: { name: true } } } },
+      batches: {
+        include: {
+          addedBy: { select: { name: true } },
+          // Feature 22 — a batch can sit somewhere other than the item's shelf.
+          location: { select: { id: true, name: true } },
+        },
+      },
       category: true,
       location: true,
       movements: {

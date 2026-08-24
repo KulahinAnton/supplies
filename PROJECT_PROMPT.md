@@ -538,3 +538,43 @@ a confident, wrong fact about the family's data — which is why the bug looked
 like a data problem rather than a broken lookup. Failures now render as
 failures. A wrong answer stated plainly is worse than an error, because
 nobody goes looking for a cause.
+
+### Feature 22 — per-batch storage location, and visible barcode/notes
+
+**The problem.** A household can keep the same product in two places — the
+kitchen fridge and the basement fridge. `Item.locationId` can only name one,
+so the second place was unrepresentable.
+
+**The model.** `StockBatch.locationId` is nullable and independent of the
+item's. The item's location remains the default: it is where this product
+normally goes, and it pre-fills every new row in the add-stock form. A batch
+row may override it.
+
+Null means "wherever the item says". That single rule covers three cases at
+once: batches created before this feature, rows submitted by callers that know
+nothing about locations (the shopping-list buy flow), and items with no
+location at all.
+
+**Migration.** Existing batches were backfilled from their parent item, since
+that is what they implicitly meant — the only location the app could express.
+Verified after applying: zero batches disagreed with their parent.
+
+**The merge key now includes the location.** `addStock` merges rows naming the
+same date so that "3 bottles, 12.03" twice becomes one batch of 6. Two rows
+for the same date on *different shelves* must not merge — doing so would
+silently move stock, which is precisely what this feature exists to prevent.
+Pinned by a smoke check.
+
+**A row may only name this household's shelves.** The id arrives from a
+client, so it is checked against the household's own locations; otherwise one
+household could file stock under another's shelf.
+
+**Display.** The item page shows a batch's location only when it *differs*
+from the item's own. Repeating the item's shelf on every batch is noise; the
+exception is the information. The items list still shows the item's default
+location, which remains true — it is the product's home, not a claim about
+every batch.
+
+**Also:** the item page now shows the **barcode** and **notes**. Both could be
+entered on the form and then never seen again — the barcode was effectively
+write-only. A field you can fill but not read is worse than no field at all.

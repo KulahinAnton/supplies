@@ -30,6 +30,7 @@ export const MESSAGES = {
   "item.duplicateBarcode": "Товар із таким штрихкодом уже існує: {name}.",
   "item.barcodeInvalid": "Це не схоже на штрихкод (потрібно 6–14 цифр).",
   "item.nameRequired": "Вкажіть назву товару.",
+  "item.locationNotFound": "Такого місця зберігання немає.",
   "item.notFound": "Товар не знайдено.",
   "item.archived": "Товар в архіві — спочатку поверніть його з архіву.",
 

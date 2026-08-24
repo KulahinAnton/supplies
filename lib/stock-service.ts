@@ -25,6 +25,8 @@ export type BatchRow = {
   quantity: string;
   expiresAt?: string;
   openedAt?: string;
+  /** Feature 22 — omitted means "wherever the item lives". */
+  locationId?: string;
 };
 
 async function loadItem(itemId: string, householdId: string) {
@@ -32,6 +34,21 @@ async function loadItem(itemId: string, householdId: string) {
     where: { id: itemId, householdId },
     include: { batches: true },
   });
+}
+
+/**
+ * Feature 22 — the storage locations this household is allowed to name.
+ *
+ * Batch rows arrive from a client that could send any id, so an id is only
+ * accepted if it belongs to this household. Without this check one household
+ * could file its stock under another household's shelf.
+ */
+async function householdLocationIds(householdId: string): Promise<Set<string>> {
+  const rows = await prisma.storageLocation.findMany({
+    where: { householdId },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
 }
 
 export async function addStock(
@@ -47,9 +64,16 @@ export async function addStock(
 
   // Merge rows naming the same date — two lines of "3 bottles, 12.03" are one
   // batch of 6, not two the FEFO planner has to tie-break.
+  const allowedLocations = await householdLocationIds(actor.householdId);
+
   const merged = new Map<
     string,
-    { quantity: Prisma.Decimal; expiresAt: Date | null; openedAt: Date | null }
+    {
+      quantity: Prisma.Decimal;
+      expiresAt: Date | null;
+      openedAt: Date | null;
+      locationId: string | null;
+    }
   >();
 
   for (const row of rows) {
@@ -75,12 +99,29 @@ export async function addStock(
       return actionError(ruleMessage("batch.openedInFuture"));
     }
 
-    const mergeKey = `${row.expiresAt ?? ""}|${row.openedAt ?? ""}`;
+    /**
+     * Feature 22 — an omitted location means "where this item lives". That
+     * keeps the shopping-list buy flow and the API honest without either
+     * having to know about locations, and matches what the migration wrote
+     * for every batch that predates the feature.
+     */
+    const locationId = row.locationId?.trim() ? row.locationId : item.locationId;
+    if (locationId && !allowedLocations.has(locationId)) {
+      return actionError(ruleMessage("item.locationNotFound"));
+    }
+
+    /**
+     * The location is part of the merge key. Two rows for the same date in
+     * different places are two batches — merging them would silently move
+     * stock, and the whole point of the feature is that the kitchen fridge and
+     * the basement fridge are not the same shelf.
+     */
+    const mergeKey = `${row.expiresAt ?? ""}|${row.openedAt ?? ""}|${locationId ?? ""}`;
     const existing = merged.get(mergeKey);
     if (existing) {
       existing.quantity = existing.quantity.plus(quantity);
     } else {
-      merged.set(mergeKey, { quantity, expiresAt, openedAt });
+      merged.set(mergeKey, { quantity, expiresAt, openedAt, locationId });
     }
   }
 
@@ -93,6 +134,7 @@ export async function addStock(
           quantity: row.quantity.toFixed(3),
           expiresAt: row.expiresAt,
           openedAt: row.openedAt,
+          locationId: row.locationId,
           addedById: actor.userId,
         },
       });

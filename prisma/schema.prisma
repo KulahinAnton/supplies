@@ -119,6 +119,7 @@ model StorageLocation {
 
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
   items       Item[]
+  batches     StockBatch[]
 
   @@unique([householdId, name])
 }
@@ -158,10 +159,16 @@ model StockBatch {
   quantity  Decimal   @db.Decimal(12, 3)
   expiresAt DateTime? @db.Date
   openedAt  DateTime? @db.Date
+  /// Feature 22 — where THIS batch is kept. Null means "wherever the item
+  /// says", which is what every batch created before this feature means.
+  /// A household can keep the same product in two places (kitchen fridge and
+  /// basement fridge), and the item's single location cannot express that.
+  locationId String?
   addedById String
   createdAt DateTime  @default(now())
 
   item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location  StorageLocation? @relation(fields: [locationId], references: [id])
   addedBy   User      @relation(fields: [addedById], references: [id], onDelete: Cascade)
   movements StockMovement[]
 

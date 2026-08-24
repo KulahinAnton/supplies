@@ -15,10 +15,10 @@ import type { Unit } from "@/lib/generated/prisma/enums";
 import { formatDateKey, todayUTC } from "@/lib/period";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
-type Row = { quantity: string; expiresAt: string; openedAt: string };
+type Row = { quantity: string; expiresAt: string; openedAt: string; locationId: string };
 type Values = { rows: Row[] };
 
-const emptyRow: Row = { quantity: "", expiresAt: "", openedAt: "" };
+const emptyRow: Row = { quantity: "", expiresAt: "", openedAt: "", locationId: "" };
 
 /**
  * PROJECT_PROMPT.md Feature 4 — one purchase, several expiry dates.
@@ -31,12 +31,18 @@ export function AddStockForm({
   itemId,
   unit,
   barcode,
+  locations,
+  itemLocationId,
   onDone,
 }: {
   itemId: string;
   unit: Unit;
   /** The item's stored barcode, when it has one — enables the scan check. */
   barcode?: string | null;
+  /** Feature 22 — the household's shelves, for the per-row picker. */
+  locations?: { id: string; name: string }[];
+  /** The item's own location, pre-selected on every new row. */
+  itemLocationId?: string | null;
   onDone?: () => void;
 }) {
   const router = useRouter();
@@ -48,8 +54,15 @@ export function AddStockForm({
   // The server rejects a future "opened" date; stop the picker offering one.
   const todayKey = formatDateKey(todayUTC());
 
+  /**
+   * Feature 22 — a new row starts at the item's own location, because that is
+   * where this product usually goes. Choosing a different shelf is the
+   * exception, and the exception is what should cost a tap.
+   */
+  const defaultRow = (): Row => ({ ...emptyRow, locationId: itemLocationId ?? "" });
+
   const { register, control, handleSubmit, formState } = useForm<Values>({
-    defaultValues: { rows: [{ ...emptyRow }] },
+    defaultValues: { rows: [defaultRow()] },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "rows" });
@@ -63,6 +76,7 @@ export function AddStockForm({
         quantity: row.quantity.trim(),
         expiresAt: row.expiresAt || undefined,
         openedAt: row.openedAt || undefined,
+        locationId: row.locationId || undefined,
       }));
 
     if (rows.length === 0) {
@@ -130,6 +144,33 @@ export function AddStockForm({
             </Button>
 
             {/*
+              Feature 22 — the same product can live in two places (kitchen
+              fridge, basement fridge), which the item's single location cannot
+              express. Only worth showing when there is a choice to make.
+            */}
+            {locations && locations.length > 1 ? (
+              <div className="col-span-3 space-y-1.5">
+                {index === 0 ? (
+                  <Label htmlFor={`rows.${index}.locationId`} className="text-xs">
+                    Де зберігати
+                  </Label>
+                ) : null}
+                <select
+                  id={`rows.${index}.locationId`}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  {...register(`rows.${index}.locationId` as const)}
+                >
+                  <option value="">Не вказано</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {/*
               "Opened" is a second-order detail — most stock-ins are of sealed
               packs — so it hides behind a toggle rather than adding a third
               always-visible column to a form used one-handed in a kitchen.
@@ -165,7 +206,7 @@ export function AddStockForm({
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => append({ ...emptyRow })}
+        onClick={() => append(defaultRow())}
       >
         <Plus className="size-4" />
         Ще одна дата

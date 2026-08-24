@@ -203,7 +203,64 @@ async function main() {
   check("a later real answer replaces a cached miss", upgraded?.company === "ТОВ «ТЕСТ»");
   await prisma.gepirLookup.deleteMany({ where: { barcode: probe } });
 
-  console.log("\n9. Cleanup");
+  // Feature 22 — per-batch storage location.
+  console.log("\n9. Batch storage locations");
+  const shelves = await prisma.storageLocation.findMany({
+    where: { householdId: household.id },
+    orderBy: { name: "asc" },
+    take: 2,
+  });
+  const locItem = await prisma.item.findFirstOrThrow({
+    where: { householdId: household.id, isArchived: false },
+  });
+
+  // Same date, two different shelves. These must NOT merge: merging would
+  // silently move stock, which is the whole point of the feature.
+  const sameDate = "2027-01-15";
+  const shelfBefore = await prisma.stockBatch.count({ where: { itemId: locItem.id } });
+  const shelfAdded = await addStock(actor, locItem.id, [
+    { quantity: "2", expiresAt: sameDate, locationId: shelves[0].id },
+    { quantity: "3", expiresAt: sameDate, locationId: shelves[1].id },
+  ]);
+  check("two shelves, one date -> two batches", shelfAdded.ok);
+  const shelfAfter = await prisma.stockBatch.count({ where: { itemId: locItem.id } });
+  check("same date on different shelves does not merge", shelfAfter - shelfBefore === 2, `+${shelfAfter - shelfBefore}`);
+
+  // Same date AND same shelf still merges, as it always did.
+  const beforeMerge = await prisma.stockBatch.count({ where: { itemId: locItem.id } });
+  await addStock(actor, locItem.id, [
+    { quantity: "1", expiresAt: "2027-02-20", locationId: shelves[0].id },
+    { quantity: "4", expiresAt: "2027-02-20", locationId: shelves[0].id },
+  ]);
+  const afterMerge = await prisma.stockBatch.count({ where: { itemId: locItem.id } });
+  check("same date on the same shelf still merges", afterMerge - beforeMerge === 1, `+${afterMerge - beforeMerge}`);
+
+  // An omitted location falls back to the item's own shelf.
+  const fallback = await addStock(actor, locItem.id, [
+    { quantity: "1", expiresAt: "2027-03-25" },
+  ]);
+  const fallbackBatch = await prisma.stockBatch.findFirstOrThrow({
+    where: { id: fallback.ok ? fallback.data.batchIds[0] : "" },
+  });
+  check(
+    "omitted location falls back to the item's own",
+    fallbackBatch.locationId === locItem.locationId,
+  );
+
+  // A location belonging to another household must be refused outright.
+  const intruderShelf = await prisma.storageLocation.create({
+    data: { householdId: other.id, name: "Чужа полиця" },
+  });
+  const refused = await addStock(actor, locItem.id, [
+    { quantity: "1", locationId: intruderShelf.id },
+  ]);
+  check("another household's shelf is refused", !refused.ok);
+
+  await prisma.stockBatch.deleteMany({
+    where: { itemId: locItem.id, expiresAt: { in: [new Date(sameDate), new Date("2027-02-20"), new Date("2027-03-25")] } },
+  });
+
+  console.log("\n10. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

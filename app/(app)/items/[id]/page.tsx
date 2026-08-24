@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getItemDetail } from "@/lib/queries";
+import { getCategoriesAndLocations, getItemDetail } from "@/lib/queries";
 import { batchExpiryState } from "@/lib/expiry";
 import { todayUTC } from "@/lib/period";
 import { formatDate, formatDateTime, formatQuantityWithUnit } from "@/lib/format";
@@ -27,7 +27,10 @@ export default async function ItemDetailPage({
 }) {
   const session = await requireSession();
   const { id } = await params;
-  const detail = await getItemDetail(session.householdId, id);
+  const [detail, { locations }] = await Promise.all([
+    getItemDetail(session.householdId, id),
+    getCategoriesAndLocations(session.householdId),
+  ]);
   if (!detail) notFound();
 
   const { item, warnDays, quantity, stock, expiry } = detail;
@@ -107,8 +110,41 @@ export default async function ItemDetailPage({
         </CardContent>
       </Card>
 
+      {/*
+        Both of these could be entered on the item form and then never seen
+        again — the barcode was write-only, and notes existed only in the
+        database. A field you can fill but not read is worse than no field.
+      */}
+      {item.barcode || item.notes ? (
+        <Card>
+          <CardContent className="space-y-3 py-4">
+            {item.barcode ? (
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs text-muted-foreground">Штрихкод</span>
+                <span className="font-mono text-sm tabular-nums select-all">
+                  {item.barcode}
+                </span>
+              </div>
+            ) : null}
+            {item.notes ? (
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground">Нотатки</span>
+                {/* Preserve the line breaks the user typed. */}
+                <p className="text-sm whitespace-pre-wrap">{item.notes}</p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {item.isArchived ? null : (
-        <ItemActions itemId={item.id} unit={item.unit} barcode={item.barcode} />
+        <ItemActions
+          itemId={item.id}
+          unit={item.unit}
+          barcode={item.barcode}
+          locations={locations}
+          itemLocationId={item.locationId}
+        />
       )}
 
       <Card>
@@ -141,6 +177,14 @@ export default async function ItemDetailPage({
                         {batch.expiresAt
                           ? `до ${formatDate(batch.expiresAt)}`
                           : "без терміну"}
+                        {/*
+                          Feature 22 — only when it differs from the item's own
+                          shelf. Repeating the item's location on every batch
+                          would be noise; the exception is the information.
+                        */}
+                        {batch.location && batch.location.id !== item.locationId
+                          ? ` · ${batch.location.name}`
+                          : ""}
                         {" · "}
                         {batch.addedBy.name}
                       </div>
