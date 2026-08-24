@@ -578,3 +578,24 @@ every batch.
 **Also:** the item page now shows the **barcode** and **notes**. Both could be
 entered on the form and then never seen again — the barcode was effectively
 write-only. A field you can fill but not read is worse than no field at all.
+
+### Feature 23 — sorting the stock list by expiry
+
+Two new modes beside the existing name and date-added ones:
+
+- **«Спочатку прострочені»** — earliest expiry first, so the most overdue item
+  is at the top and the next thing to go off is right behind it. One order
+  answering both "what have we lost?" and "what must we use up?".
+- **«Спочатку з довгим терміном»** — the mirror, for "what can wait?".
+
+**Undated items sink to the bottom in both directions.** No date means
+*unknown*, not *urgent* and not *safe*, and unknown never outranks a date. A
+naive reverse comparator would float undated items to the top of the "can
+wait" list — the one place nobody would think to check for a mistake. An
+unparseable date is treated the same way, so corrupt data can never
+masquerade as the most urgent thing in the house.
+
+**The date-added labels were renamed.** «Спочатку нові» / «Спочатку старі»
+read as either axis once expiry sorting existed; they are now «Нещодавно
+додані» / «Давно додані». The stored *keys* are unchanged, so a preference
+already in someone's localStorage keeps working — only the wording moved.
