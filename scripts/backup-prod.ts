@@ -1,23 +1,30 @@
 /**
  * `pnpm backup:prod` — a portable dump of the production database.
  *
- * Why this exists alongside Neon's own snapshots: everything Neon retains
- * (the 6-hour history window and the Free plan's single snapshot) lives inside
- * the same project it protects. This writes a file you hold, which is the only
- * copy that survives the account going away.
+ * Why this exists alongside Neon's own protection: the history window and the
+ * Free plan's single snapshot both live inside the project they protect. This
+ * writes a file you hold, which is the only copy that survives losing the
+ * account.
  *
- * It borrows `pg_dump` from the local Docker container rather than requiring
- * Postgres client tools on Windows. That also pins the version: pg_dump
- * refuses to run against a server newer than itself.
+ * The client comes from a throwaway `postgres:18` container rather than from
+ * the dev database container. Two reasons, one of them learned the hard way:
  *
- * It never touches the local dev database. The only thing taken from the
- * container is the binary.
+ *  - **Versions must match.** pg_dump refuses to dump a server newer than
+ *    itself. Neon runs 18.6; the dev container ships 17.11, so borrowing its
+ *    binary failed outright with "server version mismatch". The image tag here
+ *    must be >= whatever Neon is running.
+ *  - Backing up production has no business depending on the local dev database
+ *    being up.
+ *
+ * Nothing local is read or written except the dump file.
  */
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 
-const CONTAINER = process.env.BACKUP_CONTAINER ?? "supplies-db";
+/** Must be >= the Neon server version. Override if Neon moves ahead. */
+const CLIENT_IMAGE = process.env.BACKUP_PG_IMAGE ?? "postgres:18-alpine";
 const OUT_DIR = "backups";
 const ENV_FILE = ".env.backup";
 const VAR = "DATABASE_URL_PROD";
@@ -38,7 +45,7 @@ function readEnvFile(): string | undefined {
   return undefined;
 }
 
-function run(args: string[], env?: Record<string, string>) {
+function docker(args: string[], env?: Record<string, string>) {
   const result = spawnSync("docker", args, {
     encoding: "utf8",
     env: { ...process.env, ...env },
@@ -81,34 +88,29 @@ const port = parsed.port || "5432";
 const user = decodeURIComponent(parsed.username);
 const password = decodeURIComponent(parsed.password);
 const database = parsed.pathname.replace(/^\//, "");
-// Honour the URL. Neon needs sslmode=require and its strings carry it;
-// forcing it unconditionally would make this script unusable against any
-// server without TLS, including a local one used to test this script.
+// Honour the URL. Neon's strings carry sslmode=require; forcing it
+// unconditionally would make this unusable against a server without TLS.
 const sslmode = parsed.searchParams.get("sslmode") ?? "require";
+
 if (!user || !password || !database) {
   die(`${VAR} is missing a username, password or database name.`);
 }
 
-// Docker must be up: the container is where pg_dump lives.
-const alive = run(["ps", "--filter", `name=${CONTAINER}`, "--format", "{{.Names}}"]);
-if (alive.status !== 0) {
-  die(
-    "Docker is not running.",
-    "Start Docker Desktop, then `pnpm db:up`. This script uses the container's pg_dump.",
-  );
+if (docker(["info", "--format", "{{.ServerVersion}}"]).status !== 0) {
+  die("Docker is not running.", "Start Docker Desktop and try again.");
 }
-if (!alive.stdout.includes(CONTAINER)) {
-  die(`container "${CONTAINER}" is not running.`, "Run `pnpm db:up` first.");
-}
+
+if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
+const mount = `${resolve(OUT_DIR)}:/out`;
 
 const stamp = new Date()
   .toLocaleString("sv-SE", { hour12: false })
   .replace(/[: ]/g, "-")
   .slice(0, 16);
 const filename = `supplies-${stamp}.dump`;
-const remote = `/tmp/${filename}`;
 
 console.log(`\n→ Source  ${host}/${database} (direct, unpooled)`);
+console.log(`→ Client  ${CLIENT_IMAGE}`);
 console.log("→ Dumping…");
 const started = Date.now();
 
@@ -116,12 +118,13 @@ const started = Date.now();
  * `-e PGPASSWORD` with no value forwards it from this process's environment,
  * so the password never appears in the docker command line or in `ps`.
  */
-const dump = run(
+const dump = docker(
   [
-    "exec",
+    "run", "--rm",
     "-e", "PGPASSWORD",
     "-e", "PGSSLMODE",
-    CONTAINER,
+    "-v", mount,
+    CLIENT_IMAGE,
     "pg_dump",
     "-h", host,
     "-p", port,
@@ -132,13 +135,22 @@ const dump = run(
     "--no-acl",
     // Custom format: compressed, and pg_restore can list or selectively restore.
     "-Fc",
-    "-f", remote,
+    "-f", `/out/${filename}`,
   ],
   { PGPASSWORD: password, PGSSLMODE: sslmode },
 );
 
 if (dump.status !== 0) {
-  die("pg_dump failed.", dump.stderr.trim() || "no output from pg_dump");
+  const stderr = dump.stderr.trim();
+  if (stderr.includes("server version mismatch")) {
+    const server = stderr.match(/server version: ([\d.]+)/)?.[1] ?? "newer";
+    die(
+      `Neon is running Postgres ${server}, newer than ${CLIENT_IMAGE}.`,
+      `pg_dump cannot dump a server newer than itself. Use a matching image:\n` +
+        `  BACKUP_PG_IMAGE=postgres:${server.split(".")[0]}-alpine pnpm backup:prod`,
+    );
+  }
+  die("pg_dump failed.", stderr || "no output from pg_dump");
 }
 
 /**
@@ -146,7 +158,10 @@ if (dump.status !== 0) {
  * Reopening it and counting what is actually inside is the difference between
  * having a backup and believing you have one.
  */
-const listed = run(["exec", CONTAINER, "pg_restore", "-l", remote]);
+const listed = docker([
+  "run", "--rm", "-v", mount, CLIENT_IMAGE,
+  "pg_restore", "-l", `/out/${filename}`,
+]);
 if (listed.status !== 0) {
   die("the dump was written but cannot be read back.", listed.stderr.trim());
 }
@@ -161,11 +176,7 @@ if (tablesWithData === 0) {
   );
 }
 
-if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
 const local = `${OUT_DIR}/${filename}`;
-execFileSync("docker", ["cp", `${CONTAINER}:${remote}`, local], { stdio: "inherit" });
-run(["exec", CONTAINER, "rm", "-f", remote]);
-
 const kb = Math.round(statSync(local).size / 1024);
 const seconds = ((Date.now() - started) / 1000).toFixed(1);
 

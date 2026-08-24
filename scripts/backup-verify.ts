@@ -1,27 +1,35 @@
 /**
- * `pnpm backup:verify <file>` — prove a dump restores, without risking anything.
+ * `pnpm backup:verify <file>` — prove a dump restores, risking nothing.
  *
- * A backup nobody has restored is a hypothesis. This restores into a scratch
- * database created for the purpose and dropped afterwards, then prints exact
- * row counts so the file can be compared against what production should hold.
+ * A backup nobody has restored is a hypothesis. This starts a disposable
+ * Postgres of the same major version the dump came from, restores into it,
+ * prints exact row counts, and throws the whole container away.
  *
- * It never touches production and never touches the `supplies` dev database.
- * Pass --keep to leave the restored copy in place (as a separate database) if
- * you want a local copy of production data to inspect.
+ * It uses its own container rather than the dev database for two reasons: a
+ * custom-format archive written by pg_dump 18 cannot be read by pg_restore 17,
+ * and verifying a backup should be incapable of touching anything real.
+ * Production is never contacted; the dev database is never opened.
+ *
+ * --keep leaves the container running if you want a local copy of production
+ * to inspect.
  */
 
 import { spawnSync } from "node:child_process";
-import { basename } from "node:path";
 import { existsSync } from "node:fs";
+import { basename } from "node:path";
 
-const CONTAINER = process.env.BACKUP_CONTAINER ?? "supplies-db";
+const IMAGE = process.env.BACKUP_PG_IMAGE ?? "postgres:18-alpine";
 const args = process.argv.slice(2);
 const keep = args.includes("--keep");
 const file = args.find((arg) => !arg.startsWith("--"));
 
+const name = `supplies-restore-check-${Date.now()}`;
+const DB = "restore_check";
+
 function die(message: string, hint?: string): never {
   console.error(`\n✗ ${message}`);
   if (hint) console.error(`  ${hint}`);
+  spawnSync("docker", ["rm", "-f", name], { encoding: "utf8" });
   process.exit(1);
 }
 
@@ -33,42 +41,44 @@ function docker(argv: string[]) {
 
 if (!file) die("usage: pnpm backup:verify <path-to-dump> [--keep]");
 if (!existsSync(file)) die(`no such file: ${file}`);
-
-const alive = docker(["ps", "--filter", `name=${CONTAINER}`, "--format", "{{.Names}}"]);
-if (alive.status !== 0 || !alive.stdout.includes(CONTAINER)) {
-  die("Docker is not running, or the database container is down.", "Run `pnpm db:up` first.");
+if (docker(["info", "--format", "{{.ServerVersion}}"]).status !== 0) {
+  die("Docker is not running.", "Start Docker Desktop and try again.");
 }
-
-const scratch = `restore_check_${Date.now()}`;
-const remote = `/tmp/${basename(file)}`;
 
 console.log(`\n→ Restoring ${file}`);
-console.log(`  into scratch database ${scratch} (never production, never dev)\n`);
+console.log(`  into a disposable ${IMAGE} — not production, not your dev database\n`);
 
-docker(["cp", file, `${CONTAINER}:${remote}`]);
+const started = docker([
+  "run", "-d", "--name", name,
+  "-e", "POSTGRES_PASSWORD=verify",
+  IMAGE,
+]);
+if (started.status !== 0) die("could not start the scratch database.", started.stderr.trim());
 
-const created = docker(["exec", CONTAINER, "createdb", "-U", "postgres", scratch]);
-if (created.status !== 0) die("could not create the scratch database.", created.stderr.trim());
-
-function cleanup() {
-  docker(["exec", CONTAINER, "rm", "-f", remote]);
-  if (!keep) docker(["exec", CONTAINER, "dropdb", "-U", "postgres", "--if-exists", scratch]);
+// The container reports ready before Postgres accepts connections.
+let ready = false;
+for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
+  ready = docker(["exec", name, "pg_isready", "-U", "postgres"]).status === 0;
+  if (!ready) spawnSync("node", ["-e", "setTimeout(()=>{},500)"], { timeout: 700 });
 }
+if (!ready) die("the scratch database never became ready.");
+
+docker(["exec", name, "createdb", "-U", "postgres", DB]);
+docker(["cp", file, `${name}:/tmp/${basename(file)}`]);
 
 const restored = docker([
-  "exec", CONTAINER,
-  "pg_restore", "-U", "postgres", "-d", scratch, "--no-owner", "--no-acl", remote,
+  "exec", name, "pg_restore",
+  "-U", "postgres", "-d", DB, "--no-owner", "--no-acl",
+  `/tmp/${basename(file)}`,
 ]);
-
-// pg_restore warns about things like missing roles and still succeeds; only a
-// non-zero status with no tables restored is a real failure.
-if (restored.status !== 0 && restored.stderr.includes("error")) {
+// pg_restore warns about absent roles and still succeeds; only surface real errors.
+if (restored.status !== 0 && restored.stderr.trim()) {
   console.error(restored.stderr.trim());
 }
 
 /**
- * Exact counts, not pg_stat's estimates — those are populated by ANALYZE and
- * read as 0 straight after a restore, which would look like data loss.
+ * Exact counts, not pg_stat's estimates — those are filled in by ANALYZE and
+ * read as zero straight after a restore, which would look like data loss.
  */
 const countSql = `
 SELECT relname AS table,
@@ -79,13 +89,9 @@ FROM pg_stat_user_tables
 ORDER BY rows DESC, relname;`;
 
 const counts = docker([
-  "exec", CONTAINER, "psql", "-U", "postgres", "-d", scratch, "-P", "pager=off", "-c", countSql,
+  "exec", name, "psql", "-U", "postgres", "-d", DB, "-P", "pager=off", "-c", countSql,
 ]);
-
-if (counts.status !== 0) {
-  cleanup();
-  die("restored, but could not read the tables back.", counts.stderr.trim());
-}
+if (counts.status !== 0) die("restored, but could not read the tables back.", counts.stderr.trim());
 
 console.log(counts.stdout.trim());
 
@@ -93,15 +99,15 @@ const total = [...counts.stdout.matchAll(/\|\s+(\d+)\s*$/gm)]
   .reduce((sum, match) => sum + Number(match[1]), 0);
 
 if (total === 0) {
-  cleanup();
   die("the dump restored but every table is empty.", "This file is not a usable backup.");
 }
 
-cleanup();
-
 console.log(`\n✓ Restored and verified — ${total} rows across all tables.`);
-console.log(
-  keep
-    ? `  Kept as database "${scratch}" in the ${CONTAINER} container.\n`
-    : "  Scratch database dropped. Your dev database was not touched.\n",
-);
+
+if (keep) {
+  console.log(`  Kept running as container "${name}", database "${DB}".`);
+  console.log(`  Remove it with:  docker rm -f ${name}\n`);
+} else {
+  docker(["rm", "-f", name]);
+  console.log("  Scratch container removed. Nothing else was touched.\n");
+}
