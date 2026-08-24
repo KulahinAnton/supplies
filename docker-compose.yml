@@ -18,5 +18,37 @@ services:
       timeout: 5s
       retries: 10
 
+  # A local restore target for production dumps (`pnpm db:prod-copy`).
+  #
+  # Postgres 18 because Neon runs 18.6 and a custom-format archive written by
+  # pg_dump 18 cannot be read by pg_restore 17 — the dev container above
+  # simply cannot load these files.
+  #
+  # Behind a profile so it never starts with `pnpm db:up`: it holds real
+  # family data and should exist only while it is being used. Port 5435 — 5432
+  # is AquaBill's, 5433 is Kvartal's, 5434 is this project's dev database.
+  prodcopy:
+    image: postgres:18-alpine
+    container_name: supplies-prodcopy
+    profiles: ["prodcopy"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: supplies
+    ports:
+      - "5435:5432"
+    volumes:
+      # Postgres 18 images want a single mount at /var/lib/postgresql, not at
+      # .../data - mounting the old path makes the container restart-loop with
+      # "database files are incompatible with server".
+      - prodcopy_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d supplies"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   db_data:
+  prodcopy_data:

@@ -23,7 +23,9 @@
     "bot:local": "tsx scripts/set-telegram-webhook.ts --delete && tsx watch bot/index.ts",
     "digest:run": "tsx scripts/run-daily-digest.ts",
     "backup:prod": "tsx scripts/backup-prod.ts",
-    "backup:verify": "tsx scripts/backup-verify.ts"
+    "backup:verify": "tsx scripts/backup-verify.ts",
+    "db:prod-copy": "tsx scripts/prod-copy.ts",
+    "migrate:deploy": "tsx scripts/migrate-deploy.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

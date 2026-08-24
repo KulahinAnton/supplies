@@ -26,9 +26,9 @@ Pooled matters: Vercel runs the app as many short-lived serverless instances, an
 1. [vercel.com/new](https://vercel.com/new) → sign in with GitHub → import this repo.
 2. Vercel auto-detects Next.js and pnpm. **Before deploying**, open **Settings → Build & Development Settings** and override the **Build Command**:
    ```
-   pnpm prisma migrate deploy && pnpm build
+   pnpm migrate:deploy && pnpm build
    ```
-   This applies pending migrations to the production database on every deploy. Safe to repeat — it only applies what has not run yet, and never authors new migrations the way `migrate dev` does.
+   This applies pending migrations to the production database on every deploy. **`migrate:deploy`, not `prisma migrate deploy`** — migrations must not run through the pooled endpoint. Prisma guards them with a session-level advisory lock, and PgBouncer in transaction mode does not keep a client on one session, so a deploy fails with `P1002 ... Timed out trying to acquire a postgres advisory lock`. The script runs them against the direct host (dropping `-pooler`, or `DIRECT_URL` if set) and retries, since a Neon compute waking from zero can eat the whole 10s lock timeout. The app itself keeps the pooled URL, which is right for serverless. Safe to repeat — it only applies what has not run yet, and never authors new migrations the way `migrate dev` does.
 
    `pnpm build` itself runs `prisma generate` first. That is **not** redundant with the `postinstall` hook: once Vercel restores a build cache it skips installing ("Already up to date"), so `postinstall` never fires — and because `lib/generated/` is gitignored, the client is in neither the cache nor the repo. The build then fails with `Module not found: Can't resolve '@/lib/generated/prisma/client'`. Generating in the build script makes it independent of whether install ran.
 3. **Settings → Environment Variables**, for **Production**:

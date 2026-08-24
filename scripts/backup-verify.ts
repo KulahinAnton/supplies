@@ -50,6 +50,11 @@ function die(message: string, hint?: string): never {
   process.exit(1);
 }
 
+/** Blocking sleep. Spawning a process to wait returns too fast to be a wait. */
+function sleep(ms: number) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 function docker(argv: string[]) {
   const result = spawnSync("docker", argv, { encoding: "utf8" });
   if (result.error) die(`could not run docker: ${result.error.message}`);
@@ -82,7 +87,7 @@ if (started.status !== 0) die("could not start the scratch database.", started.s
 let ready = false;
 for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
   ready = docker(["exec", name, "pg_isready", "-U", "postgres"]).status === 0;
-  if (!ready) spawnSync("node", ["-e", "setTimeout(()=>{},500)"], { timeout: 700 });
+  if (!ready) sleep(1000);
 }
 if (!ready) die("the scratch database never became ready.");
 
