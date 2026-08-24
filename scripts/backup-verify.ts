@@ -15,13 +15,30 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { basename, join } from "node:path";
 
 const IMAGE = process.env.BACKUP_PG_IMAGE ?? "postgres:18-alpine";
 const args = process.argv.slice(2);
 const keep = args.includes("--keep");
-const file = args.find((arg) => !arg.startsWith("--"));
+const named = args.find((arg) => !arg.startsWith("--"));
+
+/**
+ * With no argument, verify the newest dump. The filenames carry a timestamp
+ * nobody remembers, and "check the backup I just took" is overwhelmingly the
+ * reason to run this — making that the default removes a step that otherwise
+ * ends in copying a filename by hand.
+ */
+function newestDump(): string | undefined {
+  if (!existsSync("backups")) return undefined;
+  const dumps = readdirSync("backups")
+    .filter((entry) => entry.endsWith(".dump"))
+    .map((entry) => join("backups", entry))
+    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
+  return dumps[0];
+}
+
+const file = named ?? newestDump();
 
 const name = `supplies-restore-check-${Date.now()}`;
 const DB = "restore_check";
@@ -39,13 +56,19 @@ function docker(argv: string[]) {
   return result;
 }
 
-if (!file) die("usage: pnpm backup:verify <path-to-dump> [--keep]");
+if (!file) {
+  die(
+    "no dump to verify.",
+    "Run `pnpm backup:prod` first, or name a file:\n" +
+      "  pnpm backup:verify backups/supplies-....dump [--keep]",
+  );
+}
 if (!existsSync(file)) die(`no such file: ${file}`);
 if (docker(["info", "--format", "{{.ServerVersion}}"]).status !== 0) {
   die("Docker is not running.", "Start Docker Desktop and try again.");
 }
 
-console.log(`\n→ Restoring ${file}`);
+console.log(`\n→ Restoring ${file}${named ? "" : "   (newest in backups/)"}`);
 console.log(`  into a disposable ${IMAGE} — not production, not your dev database\n`);
 
 const started = docker([
