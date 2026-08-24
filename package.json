@@ -21,7 +21,9 @@
     "bot:webhook:set": "tsx scripts/set-telegram-webhook.ts",
     "bot:webhook:delete": "tsx scripts/set-telegram-webhook.ts --delete",
     "bot:local": "tsx scripts/set-telegram-webhook.ts --delete && tsx watch bot/index.ts",
-    "digest:run": "tsx scripts/run-daily-digest.ts"
+    "digest:run": "tsx scripts/run-daily-digest.ts",
+    "backup:prod": "tsx scripts/backup-prod.ts",
+    "backup:verify": "tsx scripts/backup-verify.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -45,3 +45,7 @@ next-env.d.ts
 
 # the env template IS committed; real .env files are not
 !.env.example
+
+# Database dumps — contain password hashes, emails and Telegram chat ids
+backups/
+.env.backup

@@ -62,6 +62,7 @@ Postgres runs in Docker on host port **5434**. Docker Desktop must be running, a
 | `pnpm db:up` / `db:migrate` / `db:seed` / `db:studio` | Database |
 | `pnpm bot:dev` / `pnpm bot:start` | Telegram bot (long polling) |
 | `pnpm bot:webhook:set` / `:delete` | Register or remove the production webhook |
+| `pnpm backup:prod` / `backup:verify` | Dump the production database to a file, and prove that file restores |
 | `pnpm digest:run` | Daily expiry and out-of-stock digest (also runs via Vercel Cron, and on demand from Settings) |
 
 ## How the domain works
