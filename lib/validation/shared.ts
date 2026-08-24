@@ -47,3 +47,19 @@ export const optionalDateOnly = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, key("batch.expiryInPast"))
   .optional()
   .or(z.literal("").transform(() => undefined));
+
+/**
+ * The one definition of "looks like a barcode": 6–14 digits.
+ *
+ * It lives here because it had been written out three times — the item schema,
+ * the form lookup and the items-list search — and one copy lost its backslash,
+ * becoming /^d{6,14}$/, which matches the letter "d" and no digit at all. That
+ * made every scan from the items list report "not found" while the identical
+ * scan in the form worked, since only one copy was broken. Three literals
+ * cannot disagree if there is only one.
+ */
+export const BARCODE_PATTERN = /^\d{6,14}$/;
+
+export function isBarcodeShaped(value: string): boolean {
+  return BARCODE_PATTERN.test(value);
+}

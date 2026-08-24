@@ -7,6 +7,7 @@ import { ArrowDownUp, Plus, Search } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@/components/ui/button";
+import { renderMessage } from "@/lib/messages";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -64,7 +65,9 @@ export function ItemsList({
    * the list and then offer to create an item literally named "4823063114912".
    */
   const [scan, setScan] = useState<
-    { code: string; state: "searching" | "missing" } | null
+    | { code: string; state: "searching" | "missing" }
+    | { code: string; state: "error"; message: string }
+    | null
   >(null);
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
@@ -83,16 +86,23 @@ export function ItemsList({
     setScan({ code, state: "searching" });
     const result = await findItemByBarcodeAction(code);
 
-    if (result.ok && result.data.kind === "found") {
+    if (!result.ok) {
+      // Never report a failure as "you do not have this". A broken lookup
+      // once shipped as a confident "not found" here, which read as data and
+      // contradicted the item form; saying nothing would have been better,
+      // and saying what actually happened is better still.
+      setScan({ code, state: "error", message: renderMessage(result.error) });
+      return;
+    }
+
+    if (result.data.kind === "found") {
       router.push(`/items/${result.data.itemId}`);
       return;
     }
 
-    // An invalid code is treated as "not ours" rather than shown as an error:
-    // whatever the scanner read, we do not have it, and the create link still
-    // does the right thing.
     setScan({ code, state: "missing" });
   }
+
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -211,6 +221,10 @@ export function ItemsList({
       {scan ? (
         scan.state === "searching" ? (
           <p className="text-sm text-muted-foreground">Шукаємо за штрихкодом…</p>
+        ) : scan.state === "error" ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {scan.message}
+          </p>
         ) : (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
             <p className="min-w-0 text-xs text-muted-foreground">

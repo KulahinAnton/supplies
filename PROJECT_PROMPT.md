@@ -519,3 +519,22 @@ otherwise the user would have to click into the pre-filled field and back out
 to get the name suggestion. It is scheduled on a task boundary rather than
 called in the effect body: setting state synchronously in an effect is what
 causes cascading renders, and the React Compiler lint is right to reject it.
+
+### Feature 21 fix — one barcode pattern, and failures that admit it
+
+Two defects, found by the first real use of the items-page scan.
+
+**The pattern was written out three times and one copy lost its backslash** —
+`/^d{6,14}$/` rather than `/^\d{6,14}$/`. That matches the letter "d" repeated
+and no digit at all, so every scan from the items list was rejected as
+malformed while the identical scan in the item form worked. The two screens
+contradicted each other about the same barcode. There is now a single
+`BARCODE_PATTERN` in `lib/validation/shared.ts`, used by the item schema and
+both actions, with tests that assert real GTIN-8/12/13/14 codes pass.
+
+**The handler reported a failure as an answer.** `onScan` mapped any
+unsuccessful result to "not in your stock", so a validation fault rendered as
+a confident, wrong fact about the family's data — which is why the bug looked
+like a data problem rather than a broken lookup. Failures now render as
+failures. A wrong answer stated plainly is worse than an error, because
+nobody goes looking for a cause.

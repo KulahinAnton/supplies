@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
+import { isBarcodeShaped } from "@/lib/validation/shared";
 import { fetchProduct, suggestedItemName } from "@/lib/barcode-source";
 import { canContribute } from "@/lib/off-contribute";
 import {
@@ -50,7 +51,7 @@ export async function lookupBarcodeAction(
   const session = await requireSession();
 
   const code = barcode.trim();
-  if (!/^\d{6,14}$/.test(code)) {
+  if (!isBarcodeShaped(code)) {
     return actionError(ruleMessage("item.barcodeInvalid"));
   }
 
@@ -108,7 +109,7 @@ export async function findItemByBarcodeAction(
   const session = await requireSession();
 
   const code = barcode.trim();
-  if (!/^d{6,14}$/.test(code)) {
+  if (!isBarcodeShaped(code)) {
     return actionError(ruleMessage("item.barcodeInvalid"));
   }
 

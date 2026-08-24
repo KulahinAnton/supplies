@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { Unit } from "@/lib/generated/prisma/enums";
-import { key, nonNegativeQuantityString } from "@/lib/validation/shared";
+import {
+  BARCODE_PATTERN,
+  key,
+  nonNegativeQuantityString,
+} from "@/lib/validation/shared";
 
 // zod v4 accepts an enum-like object directly, which keeps the inferred type
 // as `Unit` rather than widening it to string.
@@ -15,7 +19,7 @@ export const itemSchema = z.object({
   barcode: z
     .string()
     .trim()
-    .regex(/^\d{6,14}$/, key("item.duplicateBarcode"))
+    .regex(BARCODE_PATTERN, key("item.duplicateBarcode"))
     .optional()
     .or(z.literal("").transform(() => undefined)),
   /** Feature 18.2 — explicit opt-in to publish this product to Open Food Facts. */
