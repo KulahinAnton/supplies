@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
@@ -42,12 +42,15 @@ export function ItemForm({
   hasBatches,
   existingItems = [],
   initialName,
+  initialBarcode,
 }: {
   categories: { id: string; name: string; isDefault: boolean }[];
   /** Feature 16.1 — every item name in the household, for the duplicate check. */
   existingItems?: { id: string; name: string }[];
   /** Feature 16.2 — carried from the /items search, so nothing is retyped. */
   initialName?: string;
+  /** Feature 21 — carried from a scan on /items that matched nothing. */
+  initialBarcode?: string;
   locations: { id: string; name: string; isDefault: boolean }[];
   item?: {
     id: string;
@@ -86,7 +89,7 @@ export function ItemForm({
       locationId: item?.locationId ?? defaultRowId(locations, false) ?? "",
       unit: item?.unit ?? "PIECE",
       minQty: item?.minQty ?? "0",
-      barcode: item?.barcode ?? undefined,
+      barcode: item?.barcode ?? initialBarcode ?? undefined,
       notes: item?.notes ?? undefined,
     },
   });
@@ -123,6 +126,27 @@ export function ItemForm({
       setValue("name", result.data.suggestedName, { shouldValidate: true });
     }
   }
+
+  /**
+   * Feature 21 — arriving here from a scan should behave like scanning here.
+   * The field is already filled, so the blur handler that normally starts the
+   * lookup never fires; without this the user would have to click into the
+   * barcode box and back out to get the name suggestion they just earned.
+   *
+   * Scheduled rather than called directly because the lookup sets state, and
+   * doing that synchronously inside an effect is what causes cascading
+   * renders — the React Compiler lint is right to reject it. A task boundary
+   * makes this identical to the user having triggered it. It runs once:
+   * `lookedUp` stops any re-render from re-asking.
+   */
+  useEffect(() => {
+    if (!initialBarcode || item) return;
+    const handle = setTimeout(() => void onBarcodeScanned(initialBarcode), 0);
+    return () => clearTimeout(handle);
+    // Mount only: a one-shot handover from the previous page, not a reaction
+    // to state that could loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onSubmit(values: Values) {
     setFormError(null);

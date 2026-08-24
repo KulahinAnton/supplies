@@ -85,6 +85,44 @@ export async function lookupBarcodeAction(
 }
 
 /**
+ * Feature 21 — the /items search scanning a code to jump straight to an item.
+ *
+ * Separate from `lookupBarcodeAction` on purpose. That one is for the item
+ * FORM and, on a miss, asks Open Food Facts and then GS1 Ukraine — up to
+ * several seconds of network for a question the search bar never asked. Here
+ * the only question is "do we already have this?", which is one indexed
+ * query, so searching stays instant.
+ *
+ * Archived items count as found. Their barcode still occupies the
+ * `[householdId, barcode]` unique index, so offering to create a new item
+ * would walk the user into a constraint error; showing them the archived
+ * item they already have is both truthful and what they actually need.
+ */
+export type BarcodeSearch =
+  | { kind: "found"; itemId: string }
+  | { kind: "missing" };
+
+export async function findItemByBarcodeAction(
+  barcode: string,
+): Promise<ActionResult<BarcodeSearch>> {
+  const session = await requireSession();
+
+  const code = barcode.trim();
+  if (!/^d{6,14}$/.test(code)) {
+    return actionError(ruleMessage("item.barcodeInvalid"));
+  }
+
+  const item = await prisma.item.findFirst({
+    where: { householdId: session.householdId, barcode: code },
+    select: { id: true },
+  });
+
+  return actionOk<BarcodeSearch>(
+    item ? { kind: "found", itemId: item.id } : { kind: "missing" },
+  );
+}
+
+/**
  * Feature 20 — the GEPIR fallback, cached.
  *
  * Cached in `GepirLookup` including the misses: "GS1 Ukraine has no record"

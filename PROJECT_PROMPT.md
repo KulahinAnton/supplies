@@ -487,3 +487,35 @@ SignalR WebSocket exchanging render-tree diffs — there is no REST endpoint to
 call. Emulating it means driving a stateful, versioned protocol that breaks on
 any redeploy of their site, and the headless-browser alternative does not fit
 in a Vercel serverless function.
+
+### Feature 21 — scanning from the items search
+
+`/items` gets a scan button beside the search field.
+
+- **Hit → open the item.** The scan already identified exactly one item, so
+  filtering the list to it would be asking a question with one answer.
+- **Miss → a hint under the search field**, naming the code, with a button to
+  create it. The code travels as `/items/new?barcode=…` and is pre-filled,
+  matching the existing `?name=` handover of Feature 16.2.
+
+**Archived items count as a hit.** Their barcode still occupies the
+`[householdId, barcode]` unique index, so offering "create" would walk the
+user into a constraint error; showing the archived item they already own is
+both truthful and what they need.
+
+**A separate action from `lookupBarcodeAction`.** That one serves the item
+*form*, and on a miss asks Open Food Facts and then GS1 Ukraine — seconds of
+network for a question the search bar never asked. `findItemByBarcodeAction`
+is one indexed query, so searching stays instant.
+
+**The code is never written into the search box.** The text filter matches
+names; a barcode there empties the list and then offers to create an item
+literally named «4823063114912». It lives in its own state with its own hint,
+and typing a name clears it, because typing replaces the scan as the active
+question.
+
+Arriving at the form with `?barcode=` starts the full lookup automatically —
+otherwise the user would have to click into the pre-filled field and back out
+to get the name suggestion. It is scheduled on a task boundary rather than
+called in the effect body: setting state synchronously in an effect is what
+causes cascading renders, and the React Compiler lint is right to reject it.

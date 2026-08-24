@@ -5,10 +5,11 @@ import { ItemForm } from "@/components/item-form";
 export default async function NewItemPage({
   searchParams,
 }: {
-  searchParams: Promise<{ name?: string }>;
+  searchParams: Promise<{ name?: string; barcode?: string }>;
 }) {
   const session = await requireSession();
-  const [{ categories, locations }, existingItems, { name }] = await Promise.all([
+  const [{ categories, locations }, existingItems, { name, barcode }] =
+    await Promise.all([
     getCategoriesAndLocations(session.householdId),
     getItemNames(session.householdId),
     searchParams,
@@ -23,6 +24,8 @@ export default async function NewItemPage({
         existingItems={existingItems}
         // Feature 16.2 — carried from the /items search, so nothing is retyped.
         initialName={name}
+        // Feature 21 — carried from a scan on /items that found no match.
+        initialBarcode={barcode}
       />
     </div>
   );

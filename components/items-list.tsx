@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowDownUp, Plus, Search } from "lucide-react";
+import { BarcodeScanButton } from "@/components/barcode-scan-button";
+import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -55,11 +58,41 @@ export function ItemsList({
   todayIso: string;
 }) {
   const [query, setQuery] = useState("");
+  /**
+   * Feature 21 — the outcome of the last scan. Deliberately NOT folded into
+   * `query`: the text filter matches names, so a barcode there would empty
+   * the list and then offer to create an item literally named "4823063114912".
+   */
+  const [scan, setScan] = useState<
+    { code: string; state: "searching" | "missing" } | null
+  >(null);
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [category, setCategory] = useState<string>("all");
   // Feature 12.2 — per-person, per-device, like the group collapse state.
   const [sort, setSort] = useItemSort();
   const today = useMemo(() => new Date(todayIso), [todayIso]);
+
+  /**
+   * A hit navigates straight to the item — the scan already said exactly which
+   * one, so making the user pick it out of a filtered list would be asking a
+   * question that has only one answer. A miss stays on the page and offers to
+   * create it, carrying the code so it is never retyped.
+   */
+  async function onScan(code: string) {
+    setScan({ code, state: "searching" });
+    const result = await findItemByBarcodeAction(code);
+
+    if (result.ok && result.data.kind === "found") {
+      router.push(`/items/${result.data.itemId}`);
+      return;
+    }
+
+    // An invalid code is treated as "not ours" rather than shown as an error:
+    // whatever the scanner read, we do not have it, and the create link still
+    // does the right thing.
+    setScan({ code, state: "missing" });
+  }
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -86,12 +119,19 @@ export function ItemsList({
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              // Typing a name replaces the scan as the active question; a
+              // stale barcode hint below the field would answer neither.
+              setScan(null);
+            }}
             placeholder="Пошук за назвою…"
             className="pl-9"
             type="search"
           />
         </div>
+
+        <BarcodeScanButton onScan={onScan} />
 
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -165,13 +205,44 @@ export function ItemsList({
       </div>
 
       {/*
+        Feature 21 — the scan result, directly under the search field where the
+        user is looking. A hit never reaches here; it has already navigated.
+      */}
+      {scan ? (
+        scan.state === "searching" ? (
+          <p className="text-sm text-muted-foreground">Шукаємо за штрихкодом…</p>
+        ) : (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+            <p className="min-w-0 text-xs text-muted-foreground">
+              Штрихкоду{" "}
+              <span className="font-medium text-foreground">{scan.code}</span>{" "}
+              ще немає серед ваших запасів.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  href={`/items/new?barcode=${encodeURIComponent(scan.code)}`}
+                />
+              }
+            >
+              <Plus className="size-3.5" />
+              Створити
+            </Button>
+          </div>
+        )
+      ) : null}
+
+      {/*
         Feature 16.2 — searching is the first act, creating the fallback. Most
         duplicates exist because the person could not find the item, so the
         create affordance appears next to the search results rather than being
         the obvious path at the top of the page. The query is carried into the
         form so nothing is retyped.
       */}
-      {query.trim().length > 0 ? (
+      {query.trim().length > 0 && !scan ? (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
           <p className="min-w-0 text-xs text-muted-foreground">
             {visible.length > 0

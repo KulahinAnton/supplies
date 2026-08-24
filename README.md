@@ -8,6 +8,7 @@ Household stock and expiry tracker for a family. Mobile-first web app (installab
 - **One product, many batches.** Ten bottles of water that expire on three different dates is one item with three batches, entered in a single submit.
 - **FEFO consumption.** Taking stock draws from whatever expires soonest, and never touches an expired batch — those have to be discarded explicitly, so "we drank it" can't be silently recorded against milk that had already gone off.
 - **Shared shopping list**, grouped by shop (or any other axis you like), with drag and drop. Ticking something off puts it straight into stock.
+- **Barcode search and scanning** — scan from the items list to jump straight to what you already have, or to start creating what you do not.
 - **Barcode scanning** that fills the item form from Open Food Facts and its sibling databases, falls back to GS1 Ukraine for the manufacturer, and can contribute back what they did not know.
 - **Telegram bot** and a daily digest of what's expiring or running out.
 
