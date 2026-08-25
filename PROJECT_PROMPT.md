@@ -599,3 +599,19 @@ masquerade as the most urgent thing in the house.
 read as either axis once expiry sorting existed; they are now «Нещодавно
 додані» / «Давно додані». The stored *keys* are unchanged, so a preference
 already in someone's localStorage keeps working — only the wording moved.
+
+### Feature 22.1 — db:prod-copy points the app at the copy
+
+The script used to load the dump and then print a DATABASE_URL for someone to
+paste into `.env.local` themselves. Skipping that step leaves the app on the
+dev database, and the symptom is the worst kind: the app looks exactly as it
+did before, so a restore that fully succeeded reads as having failed.
+
+It now writes `.env.local` itself when the file is absent, says so when it
+already points at the copy, and refuses to overwrite a file pointing anywhere
+else — printing the line to change instead, since that file may hold unrelated
+overrides. `--no-env` skips it entirely.
+
+It also says the two things that are not obvious: **restart the dev server**,
+because env files are read once at startup, and **log in with the production
+password**, because this is the real user table.

@@ -16,7 +16,13 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 
 const CONTAINER = "supplies-prodcopy";
@@ -26,6 +32,7 @@ const URL = `postgresql://postgres:postgres@localhost:${PORT}/${DB}`;
 
 const args = process.argv.slice(2);
 const named = args.find((arg) => !arg.startsWith("--"));
+const skipEnv = args.includes("--no-env");
 
 function die(message: string, hint?: string): never {
   console.error(`\n✗ ${message}`);
@@ -111,19 +118,54 @@ const total = [...counts.stdout.matchAll(/\|\s+(\d+)\s*$/gm)]
   .reduce((sum, match) => sum + Number(match[1]), 0);
 if (total === 0) die("the copy is empty — that dump has no data in it.");
 
-console.log(`\n✓ Loaded — ${total} rows.\n`);
-console.log("  Point the app at it by creating .env.local with:\n");
-console.log(`    DATABASE_URL="${URL}"\n`);
-console.log("  Next.js reads .env.local ahead of .env, so `pnpm dev` uses the copy");
-console.log("  while the Prisma CLI keeps using your dev database — meaning");
-console.log("  `db:seed` and `migrate dev` cannot reach this copy by accident.");
+console.log(`\n✓ Loaded — ${total} rows.`);
+
+/**
+ * Point the app at the copy, rather than printing a line for someone to paste.
+ *
+ * Loading production data and then leaving the app on the dev database is a
+ * half-finished job, and its symptom is the worst kind: the app looks exactly
+ * as before, so the restore reads as having failed when it in fact succeeded.
+ *
+ * Next.js reads .env.local ahead of .env; the Prisma CLI reads only .env. So
+ * the app moves to the copy while db:seed and migrate dev stay pointed at the
+ * dev database and cannot reach this data by accident.
+ */
+const ENV_LOCAL = ".env.local";
+const line = `DATABASE_URL="${URL}"`;
+
+if (skipEnv) {
+  console.log(`\n  --no-env given; ${ENV_LOCAL} left alone. To point the app here:`);
+  console.log(`    ${line}`);
+} else if (!existsSync(ENV_LOCAL)) {
+  writeFileSync(
+    ENV_LOCAL,
+    [
+      "# Local overrides. Next.js reads this ahead of .env; the Prisma CLI does not.",
+      "# Written by `pnpm db:prod-copy` to point the app at the production copy.",
+      "# Delete this file to go back to the dev database on port 5434.",
+      line,
+      "",
+    ].join("\n"),
+  );
+  console.log(`\n✓ Wrote ${ENV_LOCAL} — the app now points at the copy.`);
+} else if (readFileSync(ENV_LOCAL, "utf8").includes(line)) {
+  console.log(`\n✓ ${ENV_LOCAL} already points at the copy.`);
+} else {
+  // Someone else's file, possibly holding unrelated overrides. Say what to
+  // change; never overwrite it.
+  console.log(`\n! ${ENV_LOCAL} exists and points elsewhere. Change its DATABASE_URL to:`);
+  console.log(`    ${line}`);
+}
+
+console.log("\n  RESTART the dev server — env files are read once, at startup.");
+console.log("  Log in with your PRODUCTION password: this is the real user table.");
 console.log("\n  If the app errors about a missing column, the copy predates a local");
 console.log("  migration. Bring it up to date with:");
-console.log(`    DATABASE_URL="${URL}" pnpm prisma migrate deploy\n`);
-console.log("  This is real family data — password hashes, emails, Telegram chat ids.");
-console.log("  When you are done with it:");
-console.log("    docker compose --profile prodcopy down       # stop, keep the data");
-console.log("    docker volume rm supplies_prodcopy_data      # erase it");
+console.log(`    DATABASE_URL="${URL}" pnpm prisma migrate deploy`);
+console.log("\n  This is real family data — password hashes, emails, Telegram chat ids.");
+console.log("  When you are done:");
+console.log("    del .env.local                              # back to the dev database");
+console.log("    docker compose --profile prodcopy down      # stop, keep the data");
+console.log("    docker volume rm supplies_prodcopy_data     # erase it");
 console.log("");
-// NOT `down -v`: that removes every volume in the compose project, including
-// db_data — the dev database. Name the one volume instead.
