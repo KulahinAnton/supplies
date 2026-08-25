@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { prisma } from "@/lib/prisma";
-import { addStock, consume } from "@/lib/stock-service";
+import { addStock, consume, consumeBatch } from "@/lib/stock-service";
 import { getDashboard, getItemViews, getShoppingView } from "@/lib/queries";
 import { itemQuantity } from "@/lib/stock";
 import { renderMessage } from "@/lib/messages";
@@ -260,7 +260,41 @@ async function main() {
     where: { itemId: locItem.id, expiresAt: { in: [new Date(sameDate), new Date("2027-02-20"), new Date("2027-03-25")] } },
   });
 
-  console.log("\n10. Cleanup");
+  // Feature 24 — taking from one batch, expired included.
+  console.log("\n10. Taking from a specific batch");
+  const takeItem = await prisma.item.findFirstOrThrow({
+    where: { householdId: household.id, isArchived: false },
+  });
+  const takeBatch = await prisma.stockBatch.create({
+    data: {
+      itemId: takeItem.id,
+      quantity: "5.000",
+      // Deliberately expired: this is the case the item-level take refuses.
+      expiresAt: new Date("2020-01-01"),
+      addedById: anton.id,
+    },
+  });
+
+  const overTake = await consumeBatch(actor, takeBatch.id, "6");
+  check("cannot take more than the batch holds", !overTake.ok);
+
+  const tookExpired = await consumeBatch(actor, takeBatch.id, "2");
+  check("an EXPIRED batch can still be taken from", tookExpired.ok);
+
+  const afterTake = await prisma.stockBatch.findUniqueOrThrow({ where: { id: takeBatch.id } });
+  check("batch quantity dropped by exactly the amount taken", afterTake.quantity.toString() === "3", afterTake.quantity.toString());
+
+  const movement = await prisma.stockMovement.findFirstOrThrow({
+    where: { batchId: takeBatch.id },
+    orderBy: { occurredAt: "desc" },
+  });
+  // Used and binned are different facts; only the movement log keeps them apart.
+  check("it is recorded as CONSUME, not WASTE", movement.reason === "CONSUME", movement.reason);
+
+  await prisma.stockMovement.deleteMany({ where: { batchId: takeBatch.id } });
+  await prisma.stockBatch.delete({ where: { id: takeBatch.id } });
+
+  console.log("\n11. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

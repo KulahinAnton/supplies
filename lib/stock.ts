@@ -148,6 +148,16 @@ export function planConsume(
   const ordered = fefoOrder(batches, today);
   const available = ordered.reduce((sum, batch) => sum.plus(batch.quantity), ZERO);
 
+  /**
+   * Feature 24 — "немає доступного запасу" is technically true and useless
+   * when the shelf is full of expired cartons: it reads as "you have none",
+   * when the truth is "you have some and FEFO will not touch it". Say which,
+   * and point at the action that does work.
+   */
+  if (available.isZero() && batches.some(isLive)) {
+    return { ok: false, error: ruleMessage("stock.allExpired") };
+  }
+
   if (available.lessThan(quantity)) {
     return {
       ok: false,
@@ -193,6 +203,42 @@ export function planCorrection(
  * Discarding a batch (§3.3) — the only way expired stock leaves. Returns the
  * negative delta for the WASTE movement.
  */
+/**
+ * Feature 24 — take a named quantity from ONE batch, expired or not.
+ *
+ * FEFO (`planConsume`) deliberately skips expired batches so that "we drank
+ * it" can never be recorded *silently* against food that had gone off. That
+ * safeguard is about silence, not about prohibition: someone looking at a
+ * specific batch and choosing it has made the judgement the rule exists to
+ * force. So this does not consider expiry at all — the caller has.
+ *
+ * The distinction from `planDiscard` is what the movement means: this is
+ * CONSUME (we used it), that is WASTE (we threw it away). Recording one as
+ * the other would corrupt the only record of what the household actually
+ * eats.
+ */
+export function planConsumeBatch(
+  batch: StockBatchInput,
+  quantity: Decimal,
+  unit: Unit,
+): { ok: true; delta: Decimal } | { ok: false; error: RuleMessage } {
+  if (quantity.lessThanOrEqualTo(ZERO)) {
+    return { ok: false, error: ruleMessage("stock.quantityPositive") };
+  }
+  if (!isLive(batch)) {
+    return { ok: false, error: ruleMessage("stock.batchEmpty") };
+  }
+  if (quantity.greaterThan(batch.quantity)) {
+    return {
+      ok: false,
+      error: ruleMessage("stock.batchShortfall", {
+        available: formatQuantityWithUnitLong(batch.quantity, unit),
+      }),
+    };
+  }
+  return { ok: true, delta: quantity.negated() };
+}
+
 export function planDiscard(
   batch: StockBatchInput,
 ): { ok: true; delta: Decimal } | { ok: false; error: RuleMessage } {

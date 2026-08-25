@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { parseDateOnly, todayUTC } from "@/lib/period";
-import { planConsume } from "@/lib/stock";
+import { planConsumeBatch, planConsume } from "@/lib/stock";
 
 /**
  * The stock write path, independent of HOW the caller authenticated.
@@ -198,4 +198,61 @@ export async function consume(
   });
 
   return actionOk();
+}
+
+/**
+ * Feature 24 — take a named quantity from ONE batch, expired or not.
+ *
+ * Lives here rather than in the action for the same reason `consume` does:
+ * this is a stock write, and stock writes have one implementation that both
+ * front ends call. The bot will want this the moment someone tries to use up
+ * an expired carton from their phone.
+ *
+ * FEFO refuses expired batches so consumption is never recorded *silently*
+ * against food that had gone off. Choosing a batch by hand is the opposite of
+ * silent, so expiry is not consulted here — the person already has.
+ */
+export async function consumeBatch(
+  actor: Actor,
+  batchId: string,
+  quantity: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
+  const batch = await prisma.stockBatch.findFirst({
+    where: { id: batchId, item: { householdId: actor.householdId } },
+    include: { item: { select: { unit: true } } },
+  });
+  if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
+
+  let amount: Prisma.Decimal;
+  try {
+    amount = new Prisma.Decimal(quantity.replace(",", "."));
+  } catch {
+    return actionError(ruleMessage("stock.quantityPositive"));
+  }
+
+  const plan = planConsumeBatch(batch, amount, batch.item.unit);
+  if (!plan.ok) return actionError(plan.error);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.stockBatch.update({
+      where: { id: batch.id },
+      data: { quantity: batch.quantity.plus(plan.delta).toFixed(3) },
+    });
+    // CONSUME, not WASTE: used and binned are different facts, and this log is
+    // the only place that distinction survives.
+    await tx.stockMovement.create({
+      data: {
+        itemId: batch.itemId,
+        batchId: batch.id,
+        delta: plan.delta.toFixed(3),
+        reason: "CONSUME",
+        userId: actor.userId,
+        note: note ?? null,
+      },
+    });
+  });
+
+  // The caller revalidates /items/[id]; it cannot know which item this was.
+  return actionOk({ itemId: batch.itemId });
 }

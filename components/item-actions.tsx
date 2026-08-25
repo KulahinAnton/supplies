@@ -18,6 +18,7 @@ import { AddStockForm } from "@/components/add-stock-form";
 import {
   consumeAction,
   correctBatchAction,
+  consumeBatchAction,
   discardBatchAction,
 } from "@/lib/actions/stock";
 import { renderMessage } from "@/lib/messages";
@@ -140,9 +141,31 @@ export function BatchActions({
 }) {
   const router = useRouter();
   const [correctOpen, setCorrectOpen] = useState(false);
+  const [takeOpen, setTakeOpen] = useState(false);
+  const [takeValue, setTakeValue] = useState("");
   const [value, setValue] = useState(currentQuantity);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  /**
+   * Feature 24 — take from THIS batch. The item-level button is FEFO and
+   * refuses expired stock, which leaves someone holding an expired carton no
+   * way to record using it except to lie about it as waste.
+   */
+  async function take() {
+    setError(null);
+    setPending(true);
+    const result = await consumeBatchAction({ batchId, quantity: takeValue });
+    setPending(false);
+    if (!result.ok) {
+      setError(renderMessage(result.error));
+      return;
+    }
+    toast.success("Записали");
+    setTakeOpen(false);
+    setTakeValue("");
+    router.refresh();
+  }
 
   async function discard() {
     setPending(true);
@@ -175,6 +198,17 @@ export function BatchActions({
       <Button
         variant="ghost"
         size="icon"
+        aria-label="Взяти з цієї партії"
+        onClick={() => {
+          setError(null);
+          setTakeOpen(true);
+        }}
+      >
+        <Minus className="size-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         aria-label="Виправити кількість"
         onClick={() => setCorrectOpen(true)}
       >
@@ -189,6 +223,52 @@ export function BatchActions({
       >
         <Trash2 className="size-3.5 text-destructive" />
       </Button>
+
+      <Dialog open={takeOpen} onOpenChange={setTakeOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Взяти з цієї партії</DialogTitle>
+            <DialogDescription>
+              Саме з цієї — навіть якщо термін уже минув.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="take-batch-qty">Скільки ({UNIT_SHORT[unit]})</Label>
+            <Input
+              id="take-batch-qty"
+              inputMode="decimal"
+              autoFocus
+              placeholder={currentQuantity}
+              value={takeValue}
+              onChange={(event) => setTakeValue(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              У партії: {currentQuantity} {UNIT_SHORT[unit]}
+            </p>
+          </div>
+
+          {error ? (
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={pending}
+              onClick={() => setTakeValue(currentQuantity)}
+            >
+              Усю партію
+            </Button>
+            <Button className="flex-1" onClick={take} disabled={pending || !takeValue}>
+              {pending ? "Записуємо…" : "Взяти"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={correctOpen} onOpenChange={setCorrectOpen}>
         <DialogContent className="sm:max-w-sm">

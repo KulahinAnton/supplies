@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@/lib/generated/prisma/client";
+import type { Unit } from "@/lib/generated/prisma/enums";
 import { itemExpiryState, batchExpiryState } from "@/lib/expiry";
 import { renderMessage } from "@/lib/messages";
 import { dateOnlyUTC } from "@/lib/period";
@@ -9,6 +10,7 @@ import {
   itemQuantity,
   needsRestock,
   planConsume,
+  planConsumeBatch,
   planCorrection,
   planDiscard,
   stockState,
@@ -228,8 +230,15 @@ describe("planConsume", () => {
     const plan = planConsume(item, batches, d("1"), today);
     expect(plan.ok).toBe(false);
     if (plan.ok) return;
-    expect(plan.error.key).toBe("stock.shortfall");
-    expect(plan.error.params).toMatchObject({ available: "0 штук" });
+    /**
+     * The refusal is unchanged — FEFO must never draw on expired stock. What
+     * changed is the reason given. This used to report a shortfall of "0
+     * штук", which reads as "you have none" while ten sit on the shelf, and
+     * left the person no idea that taking from the batch directly would work.
+     * The old assertion pinned that wording, which is how a confusing message
+     * survives a test suite.
+     */
+    expect(plan.error.key).toBe("stock.allExpired");
   });
 
   it("consumes a batch exactly to zero without a stray third decimal", () => {
@@ -295,5 +304,89 @@ describe("planDiscard", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.key).toBe("stock.batchEmpty");
+  });
+});
+
+describe("Feature 24 — taking from a specific batch", () => {
+  const unit: Unit = "PIECE";
+  const today = dateOnlyUTC(2026, 8, 25);
+  const batch = (id: string, qty: string, expiresAt: Date | null) => ({
+    id,
+    quantity: new Prisma.Decimal(qty),
+    expiresAt,
+    createdAt: dateOnlyUTC(2026, 1, 1),
+  });
+
+  describe("planConsumeBatch", () => {
+    /**
+     * The whole point. FEFO refuses expired stock so consumption is never
+     * recorded silently against food that had gone off; choosing this batch
+     * by hand is the opposite of silent.
+     */
+    it("allows taking from an expired batch", () => {
+      const expired = batch("b1", "3", dateOnlyUTC(2026, 8, 1));
+      const plan = planConsumeBatch(expired, new Prisma.Decimal("2"), unit);
+      expect(plan.ok).toBe(true);
+      if (plan.ok) expect(plan.delta.toString()).toBe("-2");
+    });
+
+    it("refuses more than the batch holds, naming what is there", () => {
+      const plan = planConsumeBatch(
+        batch("b1", "3", null),
+        new Prisma.Decimal("5"),
+        unit,
+      );
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.error.key).toBe("stock.batchShortfall");
+    });
+
+    it("refuses zero, negatives and an empty batch", () => {
+      const live = batch("b1", "3", null);
+      expect(planConsumeBatch(live, new Prisma.Decimal("0"), unit).ok).toBe(false);
+      expect(planConsumeBatch(live, new Prisma.Decimal("-1"), unit).ok).toBe(false);
+      const empty = batch("b2", "0", null);
+      const plan = planConsumeBatch(empty, new Prisma.Decimal("1"), unit);
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.error.key).toBe("stock.batchEmpty");
+    });
+
+    it("allows taking the batch down to exactly zero", () => {
+      const plan = planConsumeBatch(batch("b1", "3", null), new Prisma.Decimal("3"), unit);
+      expect(plan.ok).toBe(true);
+      if (plan.ok) expect(plan.delta.toString()).toBe("-3");
+    });
+  });
+
+  describe("planConsume when everything is expired", () => {
+    /**
+     * The reported bug: with only expired stock, FEFO's available total is
+     * zero, so the shortfall message said there was nothing to take. There
+     * was — it just could not be taken that way.
+     */
+    it("says the stock is expired rather than absent", () => {
+      const item = { minQty: new Prisma.Decimal("0"), unit };
+      const batches = [batch("b1", "4", dateOnlyUTC(2026, 8, 1))];
+      const plan = planConsume(item, batches, new Prisma.Decimal("1"), today);
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.error.key).toBe("stock.allExpired");
+    });
+
+    it("still reports a plain shortfall when some stock is usable", () => {
+      const item = { minQty: new Prisma.Decimal("0"), unit };
+      const batches = [
+        batch("b1", "4", dateOnlyUTC(2026, 8, 1)), // expired
+        batch("b2", "1", dateOnlyUTC(2027, 1, 1)), // usable
+      ];
+      const plan = planConsume(item, batches, new Prisma.Decimal("3"), today);
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.error.key).toBe("stock.shortfall");
+    });
+
+    it("reports nothing-to-consume when there is genuinely no stock", () => {
+      const item = { minQty: new Prisma.Decimal("0"), unit };
+      const plan = planConsume(item, [batch("b1", "0", null)], new Prisma.Decimal("1"), today);
+      expect(plan.ok).toBe(false);
+      if (!plan.ok) expect(plan.error.key).not.toBe("stock.allExpired");
+    });
   });
 });

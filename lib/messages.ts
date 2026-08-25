@@ -20,6 +20,9 @@ export const MESSAGES = {
     "Не вистачає {missing} — доступно (не прострочено) лише {available}",
   "stock.quantityPositive": "Кількість має бути більшою за нуль.",
   "stock.nothingToConsume": "У цього товару немає запасу.",
+  "stock.allExpired":
+    "Усе прострочено. Візьміть із конкретної партії або спишіть її.",
+  "stock.batchShortfall": "У цій партії лише {available}",
   "stock.batchNotFound": "Партію не знайдено.",
   "stock.batchEmpty": "Ця партія вже порожня.",
   "stock.correctionNegative": "Кількість не може бути від'ємною.",

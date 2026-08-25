@@ -35,6 +35,13 @@ export const consumeSchema = z.object({
   note: z.string().trim().max(300).optional(),
 });
 
+/** Feature 24 — take from one named batch, expiry notwithstanding. */
+export const consumeBatchSchema = z.object({
+  batchId: z.string().min(1, key("stock.batchNotFound")),
+  quantity: quantityString,
+  note: z.string().trim().max(300).optional(),
+});
+
 export const discardSchema = z.object({
   batchId: z.string().min(1, key("stock.batchNotFound")),
   note: z.string().trim().max(300).optional(),

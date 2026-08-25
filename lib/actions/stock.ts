@@ -7,9 +7,10 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { planCorrection, planDiscard } from "@/lib/stock";
-import { addStock, consume } from "@/lib/stock-service";
+import { addStock, consume, consumeBatch } from "@/lib/stock-service";
 import {
   addStockSchema,
+  consumeBatchSchema,
   consumeSchema,
   correctionSchema,
   discardSchema,
@@ -69,6 +70,30 @@ export async function consumeAction(input: unknown): Promise<ActionResult> {
  * Feature 4 — discard. The ONLY way expired stock leaves, which is what lets
  * FEFO skip expired batches without them piling up invisibly.
  */
+/**
+ * Feature 24 — consume a specific batch, including an expired one.
+ *
+ * The item-level "take" is FEFO and skips expired stock on purpose. This is
+ * the deliberate override: the person is looking at one batch and chose it.
+ * It records CONSUME, not WASTE — used and binned are different facts, and
+ * the movement log is the only place that distinction survives.
+ */
+export async function consumeBatchAction(input: unknown): Promise<ActionResult> {
+  const session = await requireSession();
+  const parsed = consumeBatchSchema.safeParse(input);
+  if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
+
+  const result = await consumeBatch(
+    session,
+    parsed.data.batchId,
+    parsed.data.quantity,
+    parsed.data.note,
+  );
+  if (!result.ok) return result;
+  refresh(result.data.itemId);
+  return actionOk();
+}
+
 export async function discardBatchAction(input: unknown): Promise<ActionResult> {
   const session = await requireSession();
   const parsed = discardSchema.safeParse(input);

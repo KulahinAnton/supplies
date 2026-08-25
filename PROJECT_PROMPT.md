@@ -615,3 +615,39 @@ overrides. `--no-env` skips it entirely.
 It also says the two things that are not obvious: **restart the dev server**,
 because env files are read once at startup, and **log in with the production
 password**, because this is the real user table.
+
+### Feature 24 — taking from a specific batch, expired included
+
+**The problem.** With only expired stock, «Взяти» refused and said there was
+none — «немає доступного запасу» — while the shelf held four cartons. FEFO's
+available total is zero because it skips expired batches, so the message was
+technically true and practically a lie, and it offered no way forward except
+to record the food as waste, which is a different fact.
+
+**The rule, restated.** §3.3's "consumption skips expired batches" exists so
+that "we drank it" can never be recorded **silently** against food that had
+gone off. That is a rule about silence, not prohibition. Someone looking at
+one batch and choosing it has already made the judgement the rule exists to
+force.
+
+So there are now two verbs:
+
+- **Item-level «Взяти»** — FEFO, still refuses expired stock. Unchanged.
+- **Per-batch «Взяти»** — takes from exactly that batch, expiry not consulted,
+  because the caller has consulted it.
+
+Both write `CONSUME`. Discarding still writes `WASTE`. Used and binned are
+different facts and the movement log is the only place that distinction
+survives, so the per-batch take is deliberately *not* implemented as a
+discard.
+
+**`consumeBatch` lives in `lib/stock-service.ts`**, not in the action, like
+every other stock write: one implementation, two front ends. The bot will want
+it the first time someone tries to finish an expired carton from their phone.
+
+**The item-level message now tells the truth.** When live stock exists but
+FEFO can reach none of it, `planConsume` returns `stock.allExpired` — «Усе
+прострочено. Візьміть із конкретної партії або спишіть її.» — instead of a
+shortfall of zero. The old test asserted the misleading wording, which is how
+a confusing message survives a test suite; it now asserts the clear one, with
+the refusal itself unchanged.
