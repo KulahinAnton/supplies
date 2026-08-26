@@ -266,7 +266,8 @@ export function ItemForm({
           <Label htmlFor="minQty">Мінімальний запас</Label>
           <Input id="minQty" inputMode="decimal" {...register("minQty")} />
           <p className="text-xs text-muted-foreground">
-            Нижче цього — потрапляє до списку покупок. 0 — не нагадувати.
+            Нижче цього — потрапляє до списку покупок. 0 — не нагадувати,
+            навіть коли товар закінчиться.
           </p>
         </div>
       </div>

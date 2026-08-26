@@ -68,7 +68,9 @@ Each item has `minQty` (Decimal, default 0 = "don't track"). Given current stock
 | `LOW` | `minQty > 0` and `0 < q <= minQty` |
 | `OK` | otherwise |
 
-Items in `OUT` or `LOW` are **shopping-list candidates** (Feature 6). `minQty = 0` opts an item out of low-stock nagging entirely without deleting it.
+Items in `OUT` or `LOW` are **shopping-list candidates** (Feature 6) — *unless* `minQty = 0`, which opts the item out of **every** reminder: shopping candidates, the dashboard «Закінчується» panel and the Telegram digest. See Feature 25; this used to mean "out of LOW only", and OUT still nagged.
+
+`stockState` itself is unaffected: an empty item still reads `OUT` and still shows the badge. The state is a fact about the shelf; the reminder is a policy about whether the household wants to hear it.
 
 ### 3.5 Expiry state
 
@@ -651,3 +653,29 @@ FEFO can reach none of it, `planConsume` returns `stock.allExpired` — «Усе
 shortfall of zero. The old test asserted the misleading wording, which is how
 a confusing message survives a test suite; it now asserts the clear one, with
 the refusal itself unchanged.
+
+### Feature 25 — minQty 0 means no reminders at all
+
+**Reported:** items with `minQty` set to 0 kept appearing in the dashboard's
+«Закінчується» panel and in the Telegram digest.
+
+**Cause.** `needsRestock` took only the `StockState`, and an empty item reads
+`OUT` whatever its threshold. So `minQty = 0` suppressed `LOW` and nothing
+else. That was the documented rule — §3.4 said "opts out of low-stock nagging"
+and a test pinned it — but the item form had always promised «0 — не
+нагадувати» with no qualification, and half an opt-out is not an opt-out.
+
+Worse, it failed in precisely the case the setting exists for: something you
+keep occasionally, do not want chased about, and which therefore sits at zero
+most of the time. It came back every single day.
+
+**Now** `needsRestock(item, state)` takes the item, because the threshold is
+the opt-out and the state alone cannot express it. `stockState` is untouched —
+the item still reads `OUT` and the badge still says «Закінчився». Fact and
+policy are separate.
+
+**Consequence worth knowing:** `minQty` defaults to 0, so an item whose
+minimum was never set now never appears in a reminder. That is the honest
+reading of "0 = don't remind", but it does mean restock reminders are
+opt-*in*. Changing the new-item default from 0 to 1 would flip that back
+without weakening the opt-out.

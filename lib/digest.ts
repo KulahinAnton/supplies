@@ -155,7 +155,7 @@ export async function digestText(
 ): Promise<string | null> {
   const items = await getItemViews(householdId);
   const expiring = items.filter((item) => needsAttention(item.expiry));
-  const restock = items.filter((item) => needsRestock(item.stock));
+  const restock = items.filter((item) => needsRestock(item, item.stock));
 
   if (expiring.length === 0 && restock.length === 0) return null;
 

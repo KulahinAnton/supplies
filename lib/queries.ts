@@ -136,7 +136,7 @@ export async function getDashboard(householdId: string): Promise<DashboardData> 
     });
 
   const restock = items
-    .filter((item) => needsRestock(item.stock))
+    .filter((item) => needsRestock(item, item.stock))
     .sort((a, b) => {
       if (a.stock !== b.stock) return a.stock === "OUT" ? -1 : 1;
       return a.name.localeCompare(b.name, "uk-UA");
@@ -285,7 +285,7 @@ export async function getAttentionCounts(householdId: string) {
   const items = await getItemViews(householdId);
   return {
     expiring: items.filter((item) => needsAttention(item.expiry)).length,
-    restock: items.filter((item) => needsRestock(item.stock)).length,
+    restock: items.filter((item) => needsRestock(item, item.stock)).length,
   };
 }
 

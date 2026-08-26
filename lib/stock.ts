@@ -83,8 +83,25 @@ export function stockState(
   return "OK";
 }
 
-/** True for the states that make an item a shopping-list candidate (§3.4). */
-export function needsRestock(state: StockState): boolean {
+/**
+ * True when this item should be *nagged about* — shopping candidate, dashboard
+ * «Закінчується», Telegram digest (§3.4).
+ *
+ * Takes the item, not just the state, because `minQty` is the opt-out and the
+ * state alone cannot express it. The form promises «0 — не нагадувати», and
+ * for a long time that was only half true: minQty 0 suppressed LOW, but an
+ * item that hit zero still reported OUT and reappeared in every reminder the
+ * app has. Opting out of being nagged has to mean opting out of being nagged.
+ *
+ * `stockState` is deliberately untouched: OUT remains a fact about the shelf
+ * and the badge still shows it. This is policy, not fact — whether the
+ * household wants to hear about it.
+ */
+export function needsRestock(
+  item: { minQty: Decimal },
+  state: StockState,
+): boolean {
+  if (!item.minQty.greaterThan(ZERO)) return false;
   return state === "OUT" || state === "LOW";
 }
 

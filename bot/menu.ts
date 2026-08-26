@@ -61,7 +61,7 @@ export function backHome(): InlineKeyboard {
 
 export async function lowView(householdId: string): Promise<View> {
   const items = (await getItemViews(householdId)).filter((item) =>
-    needsRestock(item.stock),
+    needsRestock(item, item.stock),
   );
 
   if (items.length === 0) {

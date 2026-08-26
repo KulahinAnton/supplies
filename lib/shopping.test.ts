@@ -43,7 +43,7 @@ describe("shoppingCandidates (§3.4 → Feature 6)", () => {
   });
 
   it("sorts by Ukrainian collation within a state", () => {
-    const items = [item("b", "Яблука", "0"), item("a", "Апельсини", "0")];
+    const items = [item("b", "Яблука", "1"), item("a", "Апельсини", "1")];
     const batches = new Map<string, StockBatchInput[]>([
       ["a", []],
       ["b", []],
@@ -69,12 +69,22 @@ describe("shoppingCandidates (§3.4 → Feature 6)", () => {
     expect(shoppingCandidates(items, batches, new Set())).toEqual([]);
   });
 
-  it("still suggests a minQty-0 item once it is completely out", () => {
+  /**
+   * Reversed deliberately. §3.4 used to opt minQty-0 items out of LOW only, so
+   * running out entirely still put them on the list — the reasoning being that
+   * zero of something is worth buying whatever the threshold says.
+   *
+   * In practice that made the opt-out unreliable in exactly the case people
+   * use it for: an item you keep occasionally, do not want chased about, and
+   * which therefore sits at zero most of the time. It reappeared on the
+   * dashboard and in the Telegram digest every day. The item form had always
+   * promised «0 — не нагадувати» without qualification, and now that is true.
+   */
+  it("does not suggest a minQty-0 item even when completely out", () => {
     const items = [item("opted-out", "Спеції", "0")];
     const batches = new Map<string, StockBatchInput[]>([["opted-out", []]]);
 
-    const result = shoppingCandidates(items, batches, new Set());
-    expect(result.map((c) => c.state)).toEqual(["OUT"]);
+    expect(shoppingCandidates(items, batches, new Set())).toEqual([]);
   });
 
   it("reports the current quantity and threshold for the prompt text", () => {

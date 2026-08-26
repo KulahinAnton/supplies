@@ -52,7 +52,7 @@ export function shoppingCandidates(
     if (onList.has(item.id)) continue;
     const batches = batchesByItem.get(item.id) ?? [];
     const state = stockState(item, batches);
-    if (!needsRestock(state)) continue;
+    if (!needsRestock(item, state)) continue;
     candidates.push({
       itemId: item.id,
       name: item.name,

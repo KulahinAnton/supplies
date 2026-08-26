@@ -86,7 +86,7 @@ describe("§3.6 worked example — Milk", () => {
     const after = [A, batch("B", "0", B.expiresAt), batch("C", "0.500", null)];
     expect(itemQuantity(after).toString()).toBe("1.5");
     expect(stockState(item, after)).toBe("LOW");
-    expect(needsRestock(stockState(item, after))).toBe(true);
+    expect(needsRestock(item, stockState(item, after))).toBe(true);
   });
 
   it("rejects consume(4.0) whole, naming the 0.5 shortfall", () => {
@@ -388,5 +388,48 @@ describe("Feature 24 — taking from a specific batch", () => {
       expect(plan.ok).toBe(false);
       if (!plan.ok) expect(plan.error.key).not.toBe("stock.allExpired");
     });
+  });
+});
+
+describe("Feature 25 — minQty 0 opts out of every reminder", () => {
+  const unit: Unit = "PIECE";
+  const empty = [
+    { id: "b", quantity: new Prisma.Decimal("0"), expiresAt: null, createdAt: new Date() },
+  ];
+
+  /**
+   * The reported bug. The item form promises «0 — не нагадувати», but minQty 0
+   * only ever suppressed LOW: an item that reached zero still reported OUT and
+   * came back through the dashboard, the shopping candidates and the Telegram
+   * digest. Half an opt-out is not an opt-out.
+   */
+  it("does not nag about an item that ran out with minQty 0", () => {
+    const item = { minQty: new Prisma.Decimal("0"), unit };
+    expect(stockState(item, empty)).toBe("OUT");
+    expect(needsRestock(item, stockState(item, empty))).toBe(false);
+  });
+
+  it("still nags when a minimum was actually set", () => {
+    const item = { minQty: new Prisma.Decimal("1"), unit };
+    expect(needsRestock(item, stockState(item, empty))).toBe(true);
+  });
+
+  /**
+   * The state itself is a fact about the shelf and must not change — the badge
+   * still says «Закінчився». Only the nagging is opt-out.
+   */
+  it("leaves the OUT state intact, so the badge still tells the truth", () => {
+    const optedOut = { minQty: new Prisma.Decimal("0"), unit };
+    const nagging = { minQty: new Prisma.Decimal("2"), unit };
+    expect(stockState(optedOut, empty)).toBe(stockState(nagging, empty));
+  });
+
+  it("suppresses LOW as well, as it always did", () => {
+    const item = { minQty: new Prisma.Decimal("0"), unit };
+    const some = [
+      { id: "b", quantity: new Prisma.Decimal("1"), expiresAt: null, createdAt: new Date() },
+    ];
+    expect(stockState(item, some)).toBe("OK");
+    expect(needsRestock(item, stockState(item, some))).toBe(false);
   });
 });
