@@ -7,7 +7,7 @@ import { ruleMessage } from "@/lib/messages";
 import { isBarcodeShaped } from "@/lib/validation/shared";
 import {
   fetchProduct,
-  parsePackSize,
+  needsLocalName,
   suggestedItemName,
 } from "@/lib/barcode-source";
 import { canContribute } from "@/lib/off-contribute";
@@ -29,6 +29,11 @@ import {
  *    It also stops a duplicate being created, which the unique index would
  *    reject anyway, but with a far worse message.
  * 2. Otherwise, look the code up in Open Food Facts for a suggested name.
+ *
+ * 2a. Feature 29 — if OFF misses, or answers in untranslated English, ask
+ *    METRO Ukraine. Their own labels (METRO Chef, aro) are in no open
+ *    database, and OFF holds them as English stubs; METRO names them in
+ *    Ukrainian, pack size included, and its search is exact on EAN.
  *
  * 3. Feature 20 — if that misses too, ask GS1 Ukraine who owns the number.
  *    Strictly a fallback, and strictly a hint: GEPIR is a registry of GTIN
@@ -75,22 +80,42 @@ export async function lookupBarcodeAction(
   const product = await fetchProduct(code);
   const suggestedName = product ? suggestedItemName(product) : null;
 
-  if (!product || !suggestedName) {
-    /**
-     * Feature 29 — METRO before GEPIR, because it answers a better question.
-     * METRO gives the product ("METRO Chef Курага 500г"); GEPIR only ever
-     * gives the company that licensed the number. If METRO knows it, the name
-     * is filled in and there is nothing left for a manufacturer hint to add.
-     */
+  /**
+   * Feature 29 — METRO before GEPIR, because it answers a better question.
+   * METRO gives the product («METRO Chef Картопляні трикутники 2,5кг»); GEPIR
+   * only ever gives the company that licensed the number. If METRO knows it,
+   * the name is filled in and there is nothing left for a hint to add.
+   *
+   * Feature 29.1 — asked not only when OFF MISSES, but also when OFF answers
+   * with untranslated English. Own-label goods are where that happens: OFF has
+   * 4337182256663 as «METRO Chef HASH BROWN TRIANGLES» and no pack size, while
+   * METRO has «METRO Chef Картопляні трикутники 2,5кг». An English name in a
+   * Ukrainian-only UI is the outcome `parseOffProduct` already avoids INSIDE
+   * OFF by preferring `product_name_uk`; this extends the same preference
+   * across sources. `needsLocalName` draws the line — a Latin name that is
+   * the brand ("Nutella") is a proper noun and stays.
+   *
+   * OFF still wins when it answers in Ukrainian, and still wins when METRO
+   * does not stock the code — a Latin name beats an empty form. METRO is
+   * asked at most once per barcode ever, since `metroName` caches misses too.
+   *
+   * No `packSize`: METRO writes the size at the END of the name («…2,5кг»),
+   * where `parsePackSize` — anchored at the start, for OFF's "1.5 l" — cannot
+   * see it. It is already part of the name the user gets, and nothing reads
+   * this field, so pretending to fill it would be the only thing lost.
+   */
+  if (!product || !suggestedName || needsLocalName(product)) {
     const metro = await metroName(code);
     if (metro) {
       return actionOk<BarcodeLookup>({
         kind: "product",
         suggestedName: metro,
-        packSize: parsePackSize(metro),
+        packSize: null,
       });
     }
+  }
 
+  if (!product || !suggestedName) {
     return actionOk<BarcodeLookup>({
       kind: "unknown",
       canShare: canContribute(),
@@ -190,7 +215,7 @@ async function metroName(barcode: string): Promise<string | null> {
  * Feature 20 — the GEPIR fallback, cached.
 
  *
- * Cached in `GepirLookup` including the misses: "GS1 Ukraine has no record"
+ * Cached in `BarcodeFact` including the misses: "GS1 Ukraine has no record"
  * is the common answer for a code Open Food Facts also lacks, and re-asking a
  * scraped third-party site on every scan is traffic worth not sending. The
  * cache is global rather than per-household because a barcode has the same

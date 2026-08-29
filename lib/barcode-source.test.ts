@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  needsLocalName,
   parseOffProduct,
   parsePackSize,
   suggestedItemName,
@@ -178,5 +179,68 @@ describe("suggestedItemName", () => {
     expect(
       suggestedItemName({ brand: null, name: null, quantityText: null }),
     ).toBeNull();
+  });
+});
+
+describe("needsLocalName", () => {
+  it("is satisfied by a Cyrillic product name", () => {
+    expect(
+      needsLocalName({
+        brand: "Моршинська",
+        name: "Вода мінеральна негазована",
+        quantityText: "1.5 l",
+      }),
+    ).toBe(false);
+  });
+
+  it("asks for a better name when OFF left the description in English", () => {
+    // The real 4337182256663 entry: brand in place, product name untranslated.
+    expect(
+      needsLocalName({
+        brand: "METRO Chef",
+        name: "HASH BROWN TRIANGLES",
+        quantityText: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps a Latin name that is the brand itself", () => {
+    // Nobody wants "Nutella" or "Coca-Cola" replaced by a wholesale
+    // description, and neither entry has a product_name_uk to tell them apart
+    // from the METRO Chef case — the brand does.
+    expect(
+      needsLocalName({ brand: "Nutella", name: "Nutella", quantityText: "" }),
+    ).toBe(false);
+    expect(
+      needsLocalName({
+        brand: "Coca-Cola",
+        name: "Coca-Cola",
+        quantityText: "330 ml",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a variant name led by its brand", () => {
+    expect(
+      needsLocalName({
+        brand: "Coca-Cola",
+        name: "Coca-Cola Zero",
+        quantityText: "330 ml",
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores the pack size, which is localised for every entry alike", () => {
+    // "Coca-Cola 330 мл" as a whole suggestion contains Cyrillic; the NAME
+    // does not, so the decision must not be taken on the composed string.
+    expect(
+      needsLocalName({ brand: null, name: "Coca-Cola", quantityText: "330 ml" }),
+    ).toBe(true);
+  });
+
+  it("treats a bare brand as needing a name", () => {
+    expect(
+      needsLocalName({ brand: "METRO Chef", name: null, quantityText: null }),
+    ).toBe(true);
   });
 });

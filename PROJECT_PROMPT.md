@@ -901,3 +901,48 @@ METRO is a wholesale catalogue whose pack sizes are cases — «12 х 0,33л» w
 a household would say one bottle. Every failure path returns no suggestion.
 `METRO_BASE_URL` and `METRO_STORE_ID` are overridable; unsetting the base URL
 is not a kill switch, so if it should be removable, say so and I will add one.
+
+#### 29.1 — METRO also answers when Open Food Facts replies in English
+
+Confirming Feature 29 with a real METRO Chef code, `4337182256663`, showed the
+feature would not have fired at all: OFF **does** know that barcode, as
+«METRO Chef HASH BROWN TRIANGLES» with no pack size. Since OFF came first and
+its answer was non-empty, METRO was never asked, and a Ukrainian-only UI got an
+English name.
+
+So OFF's answer is now judged before it is accepted. `needsLocalName` decides,
+on the product NAME alone:
+
+- Cyrillic anywhere in it → OFF answered in Ukrainian, keep it.
+- Otherwise, a name led by its own brand is a proper noun — «Nutella»,
+  «Coca-Cola» — keep it. Nobody wants a brand replaced by a wholesale
+  description.
+- Otherwise it is untranslated prose («HASH BROWN TRIANGLES» under brand
+  «METRO Chef») → ask METRO, and use its name if it has one.
+
+Two details this rule had to avoid. `product_name_uk` is **not** the signal:
+none of the three real entries above has one, including the two worth keeping.
+And the check is on the name, never on the composed suggestion —
+`suggestedItemName` appends a localised pack size, so "Coca-Cola 330 мл"
+contains Cyrillic without being any more Ukrainian than the METRO Chef stub is.
+
+Verified against the live shops:
+
+| barcode | source chosen | name |
+|---|---|---|
+| 4337182256663 | METRO | METRO Chef Картопляні трикутники 2,5кг |
+| 4820000000000 | METRO | aro Крупа перлова ячмінна 1кг |
+| 5449000000996 | OFF | Coca-Cola 330 мл |
+| 3017620422003 | OFF | Nutella |
+| 4823063114912 | — | GEPIR manufacturer hint |
+
+OFF still wins whenever METRO does not stock the code: a Latin name beats an
+empty form. The extra call costs at most one request per barcode ever, because
+`BarcodeFact` caches METRO's misses as well as its hits.
+
+`packSize` is no longer computed for METRO hits. `parsePackSize` is anchored at
+the start of the string for OFF's "1.5 l", and METRO writes the size at the end
+(«…2,5кг»), so the call could only ever return null — and nothing in the UI
+reads the field, which is why that went unnoticed. The size still reaches the
+user inside the name.
+

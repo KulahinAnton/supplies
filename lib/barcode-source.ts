@@ -175,3 +175,39 @@ export async function fetchProduct(barcode: string): Promise<OffProduct | null> 
   }
   return null;
 }
+
+/**
+ * Feature 29.1 — is OFF's answer good enough, or worth a second opinion?
+ *
+ * `parseOffProduct` already prefers `product_name_uk` "since the app is
+ * Ukrainian-only and a Latin-script name is worse than nothing for someone
+ * scanning a shelf at home". That preference stops at the edge of OFF: when
+ * the entry has only an English name, the caller can go ask a source that
+ * answers in Ukrainian instead.
+ *
+ * A Latin name is not automatically bad, though — brands are proper nouns and
+ * nobody wants "Nutella" translated. What is bad is untranslated PROSE, and
+ * real OFF entries separate the two cleanly:
+ *
+ *     Nutella      brand "Nutella"    name "Nutella"                → keep
+ *     Coca-Cola    brand "Coca-Cola"  name "Coca-Cola"              → keep
+ *     METRO Chef   brand "METRO Chef" name "HASH BROWN TRIANGLES"   → ask
+ *
+ * So: Cyrillic anywhere in the name means OFF answered in Ukrainian; failing
+ * that, a name led by its own brand is the product's actual name rather than a
+ * description left in English. `product_name_uk` is NOT usable as the signal —
+ * none of the three entries above has one, including the two worth keeping.
+ *
+ * Reads the NAME alone, never the composed suggestion: `suggestedItemName`
+ * appends a localised pack size, so "Coca-Cola 330 мл" contains Cyrillic
+ * without being any more Ukrainian than "HASH BROWN TRIANGLES" is. A missing
+ * name counts as needing one — a bare brand is exactly the case to ask about.
+ */
+export function needsLocalName(product: OffProduct): boolean {
+  const name = product.name?.trim();
+  if (!name) return true;
+  if (/\p{Script=Cyrillic}/u.test(name)) return false;
+
+  const brand = product.brand?.trim();
+  return !brand || !name.toLowerCase().startsWith(brand.toLowerCase());
+}
