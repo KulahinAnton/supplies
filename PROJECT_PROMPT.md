@@ -773,10 +773,20 @@ on the server and used to seed the client state. Back restores exactly what was
 on screen because the browser already remembers URLs — no restore logic, no
 sessionStorage, and the view is now linkable.
 
-**Written with `history.replaceState`, not `router.replace`.** The latter is a
-navigation: every keystroke in the search box would refetch the page and
-re-query the database. Only the address bar needs to change, so that the
-history entry this page occupies still describes it when the user returns.
+**Written with `router.replace`, debounced.** The first attempt used
+`history.replaceState` to avoid a server round trip per keystroke. It does not
+work: replaceState never tells Next's router, so Back was answered from the
+cached payload for a bare `/items` and this effect then overwrote the restored
+parameters with the empty state it had just been handed. A real navigation
+keeps the router cache keyed by the URL the user actually sees; a 350ms
+debounce stops the search box navigating on every character, and an equality
+check makes the mount pass a no-op.
+
+**Do not wrap this list in `Suspense` around `useSearchParams`.** The second
+attempt read the URL on the client to dodge the caching problem. The subtree
+then never hydrated — every filter chip rendered but had no React fiber and no
+click handler, so the whole list was inert while looking perfectly normal. The
+state is seeded from the page's `searchParams` props instead.
 
 **Defaults are never written**, so an untouched list stays at plain `/items`
 rather than carrying four parameters that all say "nothing is set".

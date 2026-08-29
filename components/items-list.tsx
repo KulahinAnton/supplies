@@ -101,23 +101,25 @@ export function ItemsList({
   /**
    * Feature 27 — keep the URL describing what is on screen.
    *
-   * `history.replaceState`, deliberately, not `router.replace`: the latter is
-   * a navigation, so every keystroke in the search box would refetch the page
-   * from the server and re-query the database. All that is needed here is for
-   * the address bar to describe the current view, so that the history entry
-   * this page occupies still describes it when the user comes Back to it.
+   * `router.replace`, not `history.replaceState`. replaceState is cheaper —
+   * no server round trip — but it never tells Next's router, so Back was
+   * answered from the cached payload for a bare /items and the restored
+   * parameters were promptly overwritten by this effect. A real navigation
+   * keeps the router cache keyed by the URL the user actually sees.
    *
-   * Defaults are left out of the URL, so an untouched list stays at plain
-   * /items instead of carrying four parameters that say "nothing is set".
+   * Debounced, because the search box would otherwise navigate on every
+   * keystroke. The equality check makes the mount pass a no-op: on arrival the
+   * URL already describes the state it seeded.
    */
   useEffect(() => {
     const search = itemListSearch({ query, filter, category, sort });
-    window.history.replaceState(
-      null,
-      "",
-      search ? `${window.location.pathname}?${search}` : window.location.pathname,
-    );
-  }, [query, filter, category, sort]);
+    const next = search ? `/items?${search}` : "/items";
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (next === current) return;
+
+    const timer = setTimeout(() => router.replace(next, { scroll: false }), 350);
+    return () => clearTimeout(timer);
+  }, [query, filter, category, sort, router]);
 
   /**
    * A hit navigates straight to the item — the scan already said exactly which
