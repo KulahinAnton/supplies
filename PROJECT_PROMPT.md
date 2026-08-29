@@ -862,3 +862,42 @@ short list would strand anyone who picked 10 and then filtered down to 8.
 
 **Categories come from the whole household**, never the page: a chip list that
 changed as you paged would be unusable.
+
+### Feature 29 — METRO Ukraine as a barcode source
+
+METRO's own labels — METRO Chef, aro, METRO Professional — are in no open
+database. Open Food Facts has never heard of them and GEPIR can only ever name
+the company, so scanning one produced nothing useful.
+
+Their shop knows them. Two unauthenticated JSON calls: search resolves a
+barcode to an internal id, then a second endpoint turns that id into a
+description («METRO Chef Курага 500г»).
+
+**Placed before GEPIR, after Open Food Facts.** It answers a better question
+than GEPIR — the product rather than the company — so when it hits, the name
+is filled in and a manufacturer hint has nothing to add.
+
+**The exactness had to be established by experiment.** No response contains an
+EAN — not the search, not the detail endpoint, not the rendered product page —
+so a match cannot be checked against the question that produced it. If the
+search were fuzzy it would confidently prefill the wrong product, which is
+worse than finding nothing. Five valid-check-digit codes that no product uses
+all returned zero results, while a real EAN returned the right product, so the
+search is exact on EAN.
+
+That test mattered: the first suspicious result, `4820000000000` returning
+«aro Крупа перлова», looked like fuzzy matching. Its check digit is valid — it
+is simply aro's real barcode.
+
+**Caching moved to one table.** `BarcodeFact(barcode, source, value)` replaced
+`GepirLookup`; two sources answering the same question about the same key did
+not warrant two tables, and a third would have made it three. The migration
+carries the existing GEPIR answers across rather than making every cached
+lookup happen again.
+
+**Caveats, since this is an undocumented internal API.** It can change without
+notice, it is a commercial site's endpoint rather than a public one, and
+METRO is a wholesale catalogue whose pack sizes are cases — «12 х 0,33л» where
+a household would say one bottle. Every failure path returns no suggestion.
+`METRO_BASE_URL` and `METRO_STORE_ID` are overridable; unsetting the base URL
+is not a kill switch, so if it should be removable, say so and I will add one.

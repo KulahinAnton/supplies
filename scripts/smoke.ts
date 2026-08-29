@@ -222,27 +222,27 @@ async function main() {
   // re-scrapes a third-party site on every scan or hides a real answer.
   console.log("\n8. GEPIR lookup cache");
   const probe = "4820000000000";
-  await prisma.gepirLookup.deleteMany({ where: { barcode: probe } });
+  await prisma.barcodeFact.deleteMany({ where: { barcode: probe } });
   check(
     "cold cache is a miss",
-    (await prisma.gepirLookup.findUnique({ where: { barcode: probe } })) === null,
+    (await prisma.barcodeFact.findUnique({ where: { barcode_source: { barcode: probe, source: "gepir" } } })) === null,
   );
 
-  await prisma.gepirLookup.create({ data: { barcode: probe, company: null } });
-  const cachedMiss = await prisma.gepirLookup.findUnique({ where: { barcode: probe } });
+  await prisma.barcodeFact.create({ data: { barcode: probe, source: "gepir", value: null } });
+  const cachedMiss = await prisma.barcodeFact.findUnique({ where: { barcode_source: { barcode: probe, source: "gepir" } } });
   check(
     "a negative answer is cached, and differs from never asked",
-    cachedMiss !== null && cachedMiss.company === null,
+    cachedMiss !== null && cachedMiss.value === null,
   );
 
-  await prisma.gepirLookup.upsert({
-    where: { barcode: probe },
-    create: { barcode: probe, company: "ТОВ «ТЕСТ»" },
-    update: { company: "ТОВ «ТЕСТ»", fetchedAt: new Date() },
+  await prisma.barcodeFact.upsert({
+    where: { barcode_source: { barcode: probe, source: "gepir" } },
+    create: { barcode: probe, source: "gepir", value: "ТОВ «ТЕСТ»" },
+    update: { value: "ТОВ «ТЕСТ»", fetchedAt: new Date() },
   });
-  const upgraded = await prisma.gepirLookup.findUnique({ where: { barcode: probe } });
-  check("a later real answer replaces a cached miss", upgraded?.company === "ТОВ «ТЕСТ»");
-  await prisma.gepirLookup.deleteMany({ where: { barcode: probe } });
+  const upgraded = await prisma.barcodeFact.findUnique({ where: { barcode_source: { barcode: probe, source: "gepir" } } });
+  check("a later real answer replaces a cached miss", upgraded?.value === "ТОВ «ТЕСТ»");
+  await prisma.barcodeFact.deleteMany({ where: { barcode: probe } });
 
   // Feature 22 — per-batch storage location.
   console.log("\n9. Batch storage locations");

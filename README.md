@@ -8,7 +8,7 @@ Household stock and expiry tracker for a family. Mobile-first web app (installab
 - **One product, many batches.** Ten bottles of water that expire on three different dates is one item with three batches, entered in a single submit.
 - **FEFO consumption.** Taking stock draws from whatever expires soonest and never touches an expired batch, so "we drank it" can't be recorded *silently* against milk that had already gone off. Taking from one named batch, expired included, is a separate deliberate act — and still records eating it as eating it, not as waste.
 - **Shared shopping list**, grouped by shop (or any other axis you like), with drag and drop. Ticking something off puts it straight into stock.
-- **Barcode scanning.** Scan from the items list to jump straight to what you already have, or to start creating what you do not. On a new item the form fills itself from Open Food Facts and its sibling databases, falls back to GS1 Ukraine for the manufacturer, and can contribute back what none of them knew.
+- **Barcode scanning.** Scan from the items list to jump straight to what you already have, or to start creating what you do not. On a new item the form fills itself from Open Food Facts and its sibling databases, falls back to METRO Ukraine for own-label goods and to GS1 Ukraine for the manufacturer, and can contribute back what none of them knew.
 - **Sets of interchangeable products.** Two brands of milk, or the same product after the manufacturer changed its barcode, count as one thing for restocking: one minimum for the set, one reminder, while each stays a separate item with its own batches and dates.
 - **Telegram bot** and a daily digest of what's expiring or running out.
 
@@ -104,6 +104,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–28 are implemented and running in production on Vercel + Neon. `pnpm test` (291), `pnpm test:db` (39 checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–29 are implemented and running in production on Vercel + Neon. `pnpm test` (298), `pnpm test:db` (39 checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
 Not exercised by any automated check: the **camera barcode scan** and the **drag-to-reorder gesture**. The wiring, collision strategy and server actions behind both are verified, but neither has been driven by a real finger — a headless browser can supply neither a camera nor a touch drag.

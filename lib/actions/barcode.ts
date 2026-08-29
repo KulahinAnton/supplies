@@ -5,8 +5,13 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { isBarcodeShaped } from "@/lib/validation/shared";
-import { fetchProduct, suggestedItemName } from "@/lib/barcode-source";
+import {
+  fetchProduct,
+  parsePackSize,
+  suggestedItemName,
+} from "@/lib/barcode-source";
 import { canContribute } from "@/lib/off-contribute";
+import { fetchMetroProduct } from "@/lib/metro";
 import {
   fetchGepirCompany,
   isUkrainianGtin,
@@ -71,6 +76,21 @@ export async function lookupBarcodeAction(
   const suggestedName = product ? suggestedItemName(product) : null;
 
   if (!product || !suggestedName) {
+    /**
+     * Feature 29 — METRO before GEPIR, because it answers a better question.
+     * METRO gives the product ("METRO Chef Курага 500г"); GEPIR only ever
+     * gives the company that licensed the number. If METRO knows it, the name
+     * is filled in and there is nothing left for a manufacturer hint to add.
+     */
+    const metro = await metroName(code);
+    if (metro) {
+      return actionOk<BarcodeLookup>({
+        kind: "product",
+        suggestedName: metro,
+        packSize: parsePackSize(metro),
+      });
+    }
+
     return actionOk<BarcodeLookup>({
       kind: "unknown",
       canShare: canContribute(),
@@ -124,7 +144,51 @@ export async function findItemByBarcodeAction(
 }
 
 /**
+ * Feature 20 + 29 — ask an external source once, then remember the answer.
+ *
+ * Caches misses as well as hits: "nobody has heard of this code" is the common
+ * reply for anything the open databases lack, and re-asking someone else's
+ * service on every scan is the traffic worth not sending. `unavailable` is
+ * never cached, so one timeout cannot become a permanent blank.
+ */
+async function cachedFact(
+  barcode: string,
+  source: "gepir" | "metro",
+  ask: () => Promise<{ known: boolean; value: string | null }>,
+): Promise<string | null> {
+  const cached = await prisma.barcodeFact.findUnique({
+    where: { barcode_source: { barcode, source } },
+  });
+  if (cached) return cached.value;
+
+  const answer = await ask();
+  if (!answer.known) return null;
+
+  await prisma.barcodeFact.upsert({
+    where: { barcode_source: { barcode, source } },
+    create: { barcode, source, value: answer.value },
+    update: { value: answer.value, fetchedAt: new Date() },
+  });
+  return answer.value;
+}
+
+/**
+ * Feature 29 — METRO's own labels (METRO Chef, aro) are in no open database,
+ * and GEPIR can only ever name the company. Their shop knows the product, and
+ * its search is exact on EAN, so a hit is the product rather than a guess.
+ */
+async function metroName(barcode: string): Promise<string | null> {
+  return cachedFact(barcode, "metro", async () => {
+    const result = await fetchMetroProduct(barcode);
+    if (result.kind === "product") return { known: true, value: result.product.name };
+    if (result.kind === "unknown") return { known: true, value: null };
+    return { known: false, value: null };
+  });
+}
+
+/**
  * Feature 20 — the GEPIR fallback, cached.
+
  *
  * Cached in `GepirLookup` including the misses: "GS1 Ukraine has no record"
  * is the common answer for a code Open Food Facts also lacks, and re-asking a
@@ -138,23 +202,12 @@ export async function findItemByBarcodeAction(
 async function manufacturerHint(barcode: string): Promise<string | null> {
   if (!isUkrainianGtin(barcode)) return null;
 
-  const cached = await prisma.gepirLookup.findUnique({ where: { barcode } });
-  if (cached) return cached.company;
-
-  const result = await fetchGepirCompany(barcode);
-
-  // Only "they answered" is worth remembering. Caching `unavailable` would
-  // turn one timeout into a permanent blank for that barcode.
-  if (result.kind === "company" || result.kind === "unregistered") {
-    const company =
-      result.kind === "company" ? shortenCompanyName(result.company.name) : null;
-    await prisma.gepirLookup.upsert({
-      where: { barcode },
-      create: { barcode, company },
-      update: { company, fetchedAt: new Date() },
-    });
-    return company;
-  }
-
-  return null;
+  return cachedFact(barcode, "gepir", async () => {
+    const result = await fetchGepirCompany(barcode);
+    if (result.kind === "company") {
+      return { known: true, value: shortenCompanyName(result.company.name) };
+    }
+    if (result.kind === "unregistered") return { known: true, value: null };
+    return { known: false, value: null };
+  });
 }

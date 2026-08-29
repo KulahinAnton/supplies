@@ -307,18 +307,27 @@ model PasswordResetToken {
   @@index([userId])
 }
 
-/// Feature 20 — cached GS1 Ukraine (GEPIR) answers.
+/// Feature 20 + 29 — cached answers from the external barcode sources.
 ///
-/// Deliberately NOT scoped to a household: a barcode maps to the same
-/// manufacturer for everyone, and scoping it would re-scrape a third-party
-/// site once per family for no gain.
+/// One table rather than one per source: GEPIR and METRO answer the same
+/// question about the same key, and a third source would otherwise mean a
+/// third near-identical table.
 ///
-/// Misses are cached too (`company` null). A barcode GS1 Ukraine does not know
-/// is the common case, and re-asking on every scan is exactly the traffic
-/// worth not sending.
-model GepirLookup {
-  barcode   String   @id
+/// NOT scoped to a household — a barcode means the same thing for everyone.
+///
+/// Misses are cached too (`value` null). "Nobody has heard of this code" is
+/// the common answer for anything the open databases lack, and re-asking a
+/// third party on every scan is exactly the traffic worth not sending. An
+/// *unavailable* answer is never cached, so one timeout cannot become a
+/// permanent blank.
+model BarcodeFact {
+  barcode   String
+  /// "gepir" (manufacturer) or "metro" (product name).
+  source    String
   /// Null means "asked, and they have no record" — not "never asked".
-  company   String?
+  value     String?
   fetchedAt DateTime @default(now())
+
+  @@id([barcode, source])
 }
+
