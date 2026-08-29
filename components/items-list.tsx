@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowDownUp, Plus, Search } from "lucide-react";
+import { ArrowDownUp, Boxes, Plus, Search } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,8 @@ export type ItemRow = {
   nextExpiryIso: string | null;
   categoryName: string;
   locationName: string | null;
+  /** Feature 26.1 — the set this item is counted with, if any. */
+  groupName: string | null;
   /** Epoch ms — Date does not survive the server/client boundary intact. */
   createdAtMs: number;
 };
@@ -301,6 +303,18 @@ export function ItemsList({
                     {item.minQtyLabel ? ` · мінімум ${item.minQtyLabel}` : ""}
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {/*
+                      Feature 26.1 — a grouped item's own minimum is ignored and
+                      it never appears in reminders on its own. Without saying
+                      so here, an item sitting at zero and silently absent from
+                      the shopping list looks like a bug.
+                    */}
+                    {item.groupName ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium whitespace-nowrap text-muted-foreground">
+                        <Boxes className="size-3" />
+                        {item.groupName}
+                      </span>
+                    ) : null}
                     <StockBadge state={item.stock} />
                     <ExpiryBadge
                       state={item.expiry}

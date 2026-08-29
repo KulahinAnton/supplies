@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Boxes, Plus } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getArchivedItems, getItemViews } from "@/lib/queries";
+import { getArchivedItems, getItemGroups, getItemViews } from "@/lib/queries";
 import { formatQuantityWithUnit } from "@/lib/format";
 import { todayUTC } from "@/lib/period";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ export default async function ItemsPage() {
   const session = await requireSession();
   const items = await getItemViews(session.householdId);
   const archivedCount = (await getArchivedItems(session.householdId)).length;
+  // Feature 26.2 — the entry point to the sets view, offered only once there
+  // is something to look at. A permanent button for an unused feature is
+  // clutter; an absent one for a used feature is a dead end.
+  const groupCount = (await getItemGroups(session.householdId)).length;
   const today = todayUTC();
 
   // Decimal cannot cross the server/client boundary — format here.
@@ -26,6 +30,7 @@ export default async function ItemsPage() {
     nextExpiryIso: item.nextExpiry ? item.nextExpiry.toISOString() : null,
     categoryName: item.categoryName,
     locationName: item.locationName,
+    groupName: item.groupName,
     createdAtMs: item.createdAt.getTime(),
   }));
 
@@ -42,10 +47,23 @@ export default async function ItemsPage() {
             {items.length > 0 ? `${items.length} позицій` : "Поки порожньо"}
           </p>
         </div>
-        <Button nativeButton={false} render={<Link href="/items/new" />}>
-          <Plus className="size-4" />
-          Додати
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          {groupCount > 0 ? (
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Набори"
+              nativeButton={false}
+              render={<Link href="/groups" />}
+            >
+              <Boxes className="size-4" />
+            </Button>
+          ) : null}
+          <Button nativeButton={false} render={<Link href="/items/new" />}>
+            <Plus className="size-4" />
+            Додати
+          </Button>
+        </div>
       </div>
 
       {items.length === 0 ? (

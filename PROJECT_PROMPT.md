@@ -726,3 +726,35 @@ no threshold at all and they would quietly stop being watched.
 *same* product under a new barcode — one item, several codes, no new concept —
 and remains worth doing separately. Groups answer the other half: different
 products the household treats as interchangeable.
+
+### Feature 26.1 / 26.2 — the set badge, and the sets view
+
+**26.1 — a badge on the items list.** A grouped item's own minimum is ignored
+and it never appears in a reminder on its own. Without saying so on the row,
+an item sitting at zero and silently absent from the shopping list looks like
+a bug. The badge names the set it is counted with.
+
+**26.2 — `/groups`, and `/groups/[id]`.** The list shows every set with its
+member count and threshold; the detail page shows the combined total, its
+state, and the members, and is where members are added and removed.
+
+- **Adding is by search or by barcode scan**, over items the household already
+  has. The page deliberately **cannot create items**: a set is a way of
+  counting things you already track, and minting items here would put a
+  second, thinner item form in front of the user and produce items with no
+  category, no location and no stock. An unknown scanned code says so and
+  points at «Запаси».
+- **Items already in another set are offered, with that set named.** The item
+  form has always allowed changing the set, so refusing here would be an
+  inconsistency to discover; naming the current set means a move is never a
+  surprise.
+- **Incompatible units are shown but not addable**, with the reason on hover.
+  Hiding them would read as the item not existing.
+- **Creating and deleting sets stays in Settings**, beside categories and
+  storage locations. This view is about what is *in* a set, not which sets
+  exist.
+
+**Entry points:** the Settings row opens its set, and the items page shows a
+sets button — only once at least one set exists, since a permanent button for
+an unused feature is clutter and an absent one for a used feature is a dead
+end. Not added to the bottom nav: five labelled items crowd a narrow phone.

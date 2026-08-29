@@ -1,5 +1,7 @@
 "use server";
 
+import { canJoinGroup } from "@/lib/item-group";
+
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
@@ -357,6 +359,62 @@ export async function reorderItemGroupsAction(
     ),
   );
 
+  refresh();
+  return actionOk();
+}
+
+/**
+ * Feature 26.2 — put an existing item into a set from the set's own page.
+ *
+ * Moving an item that already belongs to another set is allowed rather than
+ * refused: the item form has always let you change the set, and refusing here
+ * would be an inconsistency the user has to discover. The picker shows which
+ * set an item is currently in, so the move is never a surprise.
+ */
+export async function addItemToGroupAction(
+  groupId: string,
+  itemId: string,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const [group, item] = await Promise.all([
+    prisma.itemGroup.findFirst({
+      where: { id: groupId, householdId: session.householdId },
+      include: {
+        items: { where: { id: { not: itemId } }, select: { unit: true }, take: 1 },
+      },
+    }),
+    prisma.item.findFirst({
+      where: { id: itemId, householdId: session.householdId },
+      select: { id: true, unit: true },
+    }),
+  ]);
+  if (!group) return actionError(ruleMessage("group.notFound"));
+  if (!item) return actionError(ruleMessage("item.notFound"));
+
+  const verdict = canJoinGroup(group.items[0]?.unit ?? null, item.unit);
+  if (!verdict.ok) return actionError(verdict.error);
+
+  await prisma.item.update({ where: { id: item.id }, data: { groupId } });
+  refresh();
+  return actionOk();
+}
+
+/** Feature 26.2 — take an item out of its set. The item itself is untouched. */
+export async function removeItemFromGroupAction(
+  itemId: string,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const item = await prisma.item.findFirst({
+    where: { id: itemId, householdId: session.householdId },
+    select: { id: true },
+  });
+  if (!item) return actionError(ruleMessage("item.notFound"));
+
+  // Its own minQty starts applying again, which is why the item list shows the
+  // set badge: leaving one is a change in what gets reminded about.
+  await prisma.item.update({ where: { id: item.id }, data: { groupId: null } });
   refresh();
   return actionOk();
 }

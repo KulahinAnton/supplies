@@ -472,3 +472,48 @@ export async function getItemGroups(householdId: string) {
     unit: group.items[0]?.unit ?? null,
   }));
 }
+
+/**
+ * Feature 26.2 — one set with its members, plus the items that could join it.
+ *
+ * Candidates exclude only the current members: an item already in *another*
+ * set is offered, with that set named, because moving one is legitimate and
+ * hiding it would look like the item does not exist.
+ */
+export async function getItemGroupDetail(householdId: string, groupId: string) {
+  const group = await prisma.itemGroup.findFirst({
+    where: { id: groupId, householdId },
+  });
+  if (!group) return null;
+
+  const items = await prisma.item.findMany({
+    where: { householdId, isArchived: false },
+    include: { batches: true, group: { select: { id: true, name: true } } },
+    orderBy: { name: "asc" },
+  });
+
+  const members = items
+    .filter((item) => item.groupId === group.id)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      quantity: itemQuantity(item.batches),
+    }));
+
+  const view = buildGroupView(group, members);
+
+  const candidates = items
+    .filter((item) => item.groupId !== group.id)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      barcode: item.barcode,
+      currentGroupName: item.group?.name ?? null,
+      // The set counts one unit; anything else cannot be summed with it.
+      compatible: view.unit === null || item.unit === view.unit,
+    }));
+
+  return { group, view, members, candidates };
+}

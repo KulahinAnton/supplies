@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check } from "lucide-react";
+import { ArrowUpRight, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   reorderItemGroupsAction,
   saveItemGroupAction,
 } from "@/lib/actions/settings";
+import Link from "next/link";
 import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
@@ -78,6 +79,17 @@ export function ItemGroupPanel({ rows }: { rows: ItemGroupRow[] }) {
 
         return (
           <div className="flex items-center gap-1.5">
+            {/* The threshold lives here; what is IN the set lives on its own
+                page, which is where you add and remove members. */}
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={`Відкрити набір ${row.name}`}
+              nativeButton={false}
+              render={<Link href={`/groups/${row.id}`} />}
+            >
+              <ArrowUpRight className="size-4" />
+            </Button>
             <Input
               className="h-8 w-20"
               inputMode="decimal"
