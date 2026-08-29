@@ -65,9 +65,17 @@ export function GroupMembers({
     router.refresh();
   }
 
+  /**
+   * The search term deliberately SURVIVES an add.
+   *
+   * Adding used to clear it, which emptied the results after every single
+   * item — so filling a set of six meant typing «горошок» six times. The added
+   * item leaves the candidate list on its own once the page refreshes, since
+   * it is a member now, so what remains on screen is exactly what is still
+   * left to add.
+   */
   async function add(itemId: string) {
     setScanMiss(null);
-    setQuery("");
     await run(() => addItemToGroupAction(groupId, itemId));
   }
 

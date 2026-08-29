@@ -816,3 +816,15 @@ still works after a refresh, and when the URL is shared.
 `from` arrives inside a URL, so it is **re-parsed and re-serialised**, never
 pasted through: only `q`, `filter`, `cat` and `sort` survive, and the filter and
 sort are validated. The result can only ever describe a list this app renders.
+
+### Feature 26.3 — the search survives adding to a set
+
+Adding an item cleared the search box, so the results emptied after every
+single add and filling a set of six meant typing «горошок» six times. Filling a
+set is inherently a repeated action; the form was built as though it were a
+one-off.
+
+The term now stays. The added item leaves the candidate list by itself once
+the page refreshes — it is a member now — so what remains on screen is exactly
+what is still left to add, and the next slot fills from further down the
+matches.
