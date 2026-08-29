@@ -828,3 +828,37 @@ The term now stays. The added item leaves the candidate list by itself once
 the page refreshes — it is a member now — so what remains on screen is exactly
 what is still left to add, and the next slot fills from further down the
 matches.
+
+### Feature 28 — pagination, with the page chosen on the server
+
+The list shows one page at a time — 10, 25, 50, 100 or all — and the server
+sends only that page.
+
+**Filtering and sorting had to move server-side with it.** They cannot be
+split: filtering one page in the browser filters the wrong set, and the result
+looks entirely plausible. `lib/item-filter.ts` now holds the predicate the
+component used to own, so the rule is applied once, in one place, and tested.
+
+**The server still loads every item, and that is not laziness.** `stock` and
+`expiry` are derived from batches by the engine and never stored, so nothing
+can know which items belong on page 1 without considering all of them.
+Expressing §3.4 and §3.5 in SQL would be a second implementation of the rules,
+free to disagree with the first. What the page buys is the wire and the DOM:
+25 rows reach the browser instead of the whole cupboard, which is what costs
+on a phone.
+
+**Every control navigates explicitly**, replacing the effect that watched all
+the state and rewrote the URL. That effect could not tell a filter change (go
+to page 1) from a pager click (go to page 4), and would have bounced the user
+back to page 1 the moment they paged.
+
+**A page past the end clamps to the last real page** rather than rendering
+nothing: narrowing a filter while on page 7 would otherwise show an empty list,
+which reads as "your filter matched nothing".
+
+**The page-size control shows whenever the list does**, not only when there are
+several pages — it is how you get back to seeing everything, so hiding it on a
+short list would strand anyone who picked 10 and then filtered down to 8.
+
+**Categories come from the whole household**, never the page: a chip list that
+changed as you paged would be unusable.

@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–27 implemented and running in production on Vercel + Neon. 11 migrations, seed idempotent, `pnpm test` (272 across 16 files), `pnpm test:db` (38 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–28 implemented and running in production on Vercel + Neon. 11 migrations, seed idempotent, `pnpm test` (291 across 18 files), `pnpm test:db` (39 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 

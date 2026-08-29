@@ -104,6 +104,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–27 are implemented and running in production on Vercel + Neon. `pnpm test` (272), `pnpm test:db` (38 checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–28 are implemented and running in production on Vercel + Neon. `pnpm test` (291), `pnpm test:db` (39 checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
 Not exercised by any automated check: the **camera barcode scan** and the **drag-to-reorder gesture**. The wiring, collision strategy and server actions behind both are verified, but neither has been driven by a real finger — a headless browser can supply neither a camera nor a touch drag.
