@@ -2,9 +2,9 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–12 implemented against a live Postgres. Four migrations applied, seed idempotent, `pnpm test` (150), `pnpm test:db` (26 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–27 implemented and running in production on Vercel + Neon. 11 migrations, seed idempotent, `pnpm test` (272 across 16 files), `pnpm test:db` (38 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
-> Not yet exercised: the bot's command handlers and message delivery (need a real Telegram token), and the **drag gesture** of Feature 11 — its wiring, collision strategy and the server action behind it are verified, but a real finger/mouse drag has not been performed.
+> Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 
 ## Stack
 
@@ -32,6 +32,9 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 - `pnpm bot:dev` / `pnpm bot:start` — Telegram bot (long polling) → [bot/CLAUDE.md](bot/CLAUDE.md)
 - `pnpm bot:webhook:set` / `pnpm bot:webhook:delete` — register/remove the production webhook (needs public HTTPS `APP_URL` + `TELEGRAM_WEBHOOK_SECRET`)
 - `pnpm digest:run [--force]` — daily expiry + out-of-stock digest
+- `pnpm migrate:deploy` — migrations against the DIRECT Neon endpoint. **This is the deploy's build command**, not `prisma migrate deploy`: Prisma takes a session-level advisory lock, and the pooled endpoint cannot hold one (Feature 19.2)
+- `pnpm backup:prod` / `pnpm backup:verify [file]` — dump production to `backups/`, and prove a dump restores by loading it into a throwaway Postgres
+- `pnpm db:prod-copy [file]` — load a dump into a local Postgres 18 on port 5435 and point the app at it via `.env.local`. The Prisma CLI keeps reading `.env`, so `db:seed` and `migrate dev` cannot reach production data by accident
 
 ## Before first run
 
@@ -57,7 +60,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
 - `auth.ts` (root) — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation
 - `lib/prisma.ts` — Prisma singleton (pg adapter); `lib/generated/prisma/` — generated client (gitignored)
-- **Pure engine, colocated tests, no DB:** `lib/stock.ts` (`itemQuantity`, `availableQuantity`, `stockState`, `fefoOrder`, `planConsume`, `planCorrection`, `planDiscard`), `lib/expiry.ts` (batch/item states, urgency), `lib/shopping.ts` (candidates), `lib/period.ts` (date-only, UTC), `lib/format.ts` (uk-UA, plurals), `lib/telegram-link.ts` (signed link tokens), `lib/barcode-source.ts` (`parseOffProduct`), `lib/gepir.ts` (GS1 Ukraine fallback — manufacturer only, 482 prefixes only)
+- **Pure engine, colocated tests, no DB:** `lib/stock.ts` (`itemQuantity`, `availableQuantity`, `stockState`, `fefoOrder`, `planConsume`, `planCorrection`, `planDiscard`), `lib/expiry.ts` (batch/item states, urgency), `lib/shopping.ts` (candidates), `lib/period.ts` (date-only, UTC), `lib/format.ts` (uk-UA, plurals), `lib/telegram-link.ts` (signed link tokens), `lib/barcode-source.ts` (`parseOffProduct`), `lib/gepir.ts` (GS1 Ukraine fallback — manufacturer only, 482 prefixes only), `lib/item-group.ts` (Feature 26 sets: combined total, derived unit, one-unit rule), `lib/item-list-params.ts` (Feature 27 list view state as URL params), `lib/digest.ts` (`kyivHour`, DST-correct scheduling)
 - `lib/stock-service.ts` — **the single stock write path**, called by both the server actions and the bot. Takes an `Actor` instead of reading a session, which is what makes "one implementation, two front ends" real
 - `lib/shopping-groups.ts` — pure grouping (Feature 11): `null` groupId means «Загальна група»
 - `lib/actions/` — server actions (session guard + validation + `revalidatePath`); `lib/validation/` — zod schemas shared client/server

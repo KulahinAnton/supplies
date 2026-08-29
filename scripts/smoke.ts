@@ -42,6 +42,9 @@ async function main() {
     await prisma.stockBatch.findMany({ where: { itemId: water.id } }),
   );
   const before = await prisma.stockBatch.count({ where: { itemId: water.id } });
+  const purchasesBefore = await prisma.stockMovement.count({
+    where: { itemId: water.id, reason: "PURCHASE" },
+  });
   const added = await addStock(actor, water.id, [
     { quantity: "2", expiresAt: "2027-01-10" },
     { quantity: "1", expiresAt: "2027-03-10" },
@@ -51,10 +54,17 @@ async function main() {
   if (added.ok) check("created 3 batches", added.data.batchIds.length === 3);
   const after = await prisma.stockBatch.count({ where: { itemId: water.id } });
   check("batch rows +3", after === before + 3, `${before} → ${after}`);
-  const purchases = await prisma.stockMovement.count({
+  const purchasesAfter = await prisma.stockMovement.count({
     where: { itemId: water.id, reason: "PURCHASE" },
   });
-  check("one PURCHASE movement per batch", purchases === after, `${purchases}`);
+  // A DELTA, like the batch count above. Comparing absolute totals only held
+  // on a pristine seed, so this file stopped being re-runnable the moment
+  // anything else in it created a batch — which the later sections now do.
+  check(
+    "one PURCHASE movement per batch",
+    purchasesAfter - purchasesBefore === 3,
+    `+${purchasesAfter - purchasesBefore}`,
+  );
 
   console.log("\n2. Rows naming the same date merge into one batch");
   const mergeItem = await prisma.item.findFirstOrThrow({

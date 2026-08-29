@@ -67,3 +67,26 @@ It compiles fine — nothing in the types requires the parent — so this only s
 ```
 
 Grouping the label with its items is also the correct semantics, not merely a workaround for the error.
+
+## Do not wrap a list in `Suspense` around `useSearchParams`
+
+Feature 27 first read the items list's filter state from the URL on the client,
+with `<Suspense fallback={null}>` around the component, as Next's docs suggest
+for `useSearchParams`. **The subtree then never hydrated.** Every filter chip
+and category button rendered exactly as expected and had no React fiber and no
+click handler, so the whole list was inert while looking completely normal —
+no error, no warning, nothing in the console.
+
+The tell, if you suspect it:
+
+```js
+[...document.querySelectorAll('button')].map(b => ({
+  t: b.textContent.trim(),
+  hydrated: Object.keys(b).some(k => k.startsWith('__react')),
+}))
+```
+
+Nav buttons showed `hydrated: true` while every button inside the boundary
+showed `false`. Seed such state from the page's `searchParams` props instead,
+and write it back with `router.replace` — see PROJECT_PROMPT.md Feature 27 for
+why `history.replaceState` does not work here either.

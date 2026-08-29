@@ -6,10 +6,10 @@ Household stock and expiry tracker for a family. Mobile-first web app (installab
 
 - **Shared pantry.** Everyone has their own login; the household sees one inventory.
 - **One product, many batches.** Ten bottles of water that expire on three different dates is one item with three batches, entered in a single submit.
-- **FEFO consumption.** Taking stock draws from whatever expires soonest, and never touches an expired batch — those have to be discarded explicitly, so "we drank it" can't be silently recorded against milk that had already gone off.
+- **FEFO consumption.** Taking stock draws from whatever expires soonest and never touches an expired batch, so "we drank it" can't be recorded *silently* against milk that had already gone off. Taking from one named batch, expired included, is a separate deliberate act — and still records eating it as eating it, not as waste.
 - **Shared shopping list**, grouped by shop (or any other axis you like), with drag and drop. Ticking something off puts it straight into stock.
-- **Barcode search and scanning** — scan from the items list to jump straight to what you already have, or to start creating what you do not.
-- **Barcode scanning** that fills the item form from Open Food Facts and its sibling databases, falls back to GS1 Ukraine for the manufacturer, and can contribute back what they did not know.
+- **Barcode scanning.** Scan from the items list to jump straight to what you already have, or to start creating what you do not. On a new item the form fills itself from Open Food Facts and its sibling databases, falls back to GS1 Ukraine for the manufacturer, and can contribute back what none of them knew.
+- **Sets of interchangeable products.** Two brands of milk, or the same product after the manufacturer changed its barcode, count as one thing for restocking: one minimum for the set, one reminder, while each stays a separate item with its own batches and dates.
 - **Telegram bot** and a daily digest of what's expiring or running out.
 
 ## Quick start
@@ -63,15 +63,21 @@ Postgres runs in Docker on host port **5434**. Docker Desktop must be running, a
 | `pnpm bot:dev` / `pnpm bot:start` | Telegram bot (long polling) |
 | `pnpm bot:webhook:set` / `:delete` | Register or remove the production webhook |
 | `pnpm backup:prod` / `backup:verify` | Dump the production database to a file, and prove that file restores |
+| `pnpm db:prod-copy` | Load a production dump into a local database and point the app at it |
+| `pnpm migrate:deploy` | Apply migrations against the direct (unpooled) endpoint — the deploy build command |
 | `pnpm digest:run` | Daily expiry and out-of-stock digest (also runs via Vercel Cron, and on demand from Settings) |
 
 ## How the domain works
 
-An **Item** is a kind of thing ("Молоко 2,5%"). A **StockBatch** is a concrete lot of it with its own quantity *and its own expiry date* — because two cartons bought a week apart go off on different days.
+An **Item** is a kind of thing ("Молоко 2,5%"). A **StockBatch** is a concrete lot of it with its own quantity, *its own expiry date* — because two cartons bought a week apart go off on different days — and *its own storage location*, because the same product can sit in the kitchen fridge and the basement fridge at once.
+
+An **ItemGroup** is a set of interchangeable items. It owns the low-stock threshold, so a household short of "milk" is reminded once rather than once per brand; a grouped item's own minimum is ignored while it is in the set, and every member must share one unit, since litres and pieces cannot be summed.
 
 An item's quantity is **never stored**. It is the sum of its live batches, computed on read, so the number cannot drift away from reality. Every batch change writes a `StockMovement` in the same transaction, which is what makes "who used the last of it" answerable.
 
 Stock state is `OUT` / `LOW` / `OK`; expiry state is `EXPIRED` / `SOON` / `FRESH` / `NONE`. They are tracked and displayed **independently**, because an item can be well stocked and half-expired, and collapsing them into one badge would hide whichever half is worse.
+
+A minimum of **0 means no reminders at all** — not even when the item runs out. The state still reads `OUT` and the badge still says so; what stops is the nagging.
 
 [PROJECT_PROMPT.md](PROJECT_PROMPT.md) §3 has the full rules; §3.6 is a worked example that `lib/stock.test.ts` reproduces verbatim.
 
@@ -98,6 +104,6 @@ Ukrainian is the **interface language**, and only that:
 
 ## Status
 
-Features 0–19 are implemented and running in production on Vercel + Neon. `pnpm test` (220), `pnpm test:db`, `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+Features 0–27 are implemented and running in production on Vercel + Neon. `pnpm test` (272), `pnpm test:db` (38 checks), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 
-Not yet exercised: the drag gesture on the shopping list, whose wiring, collision strategy and server action are verified but which has never been driven by an actual finger or mouse; and the first automatic run of the daily digest.
+Not exercised by any automated check: the **camera barcode scan** and the **drag-to-reorder gesture**. The wiring, collision strategy and server actions behind both are verified, but neither has been driven by a real finger — a headless browser can supply neither a camera nor a touch drag.
