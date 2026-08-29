@@ -70,17 +70,27 @@ export function availableQuantity(
  * it separately. The two axes are deliberately independent — merging them
  * would hide "you have 10 bottles, 2 of which went off".
  */
+/**
+ * The §3.4 rule itself, over a bare quantity and threshold.
+ *
+ * Extracted so an item and a Feature 26 group cannot drift apart: a group is
+ * the same question asked of a sum, and two copies of this arithmetic would
+ * eventually disagree about what "low" means.
+ */
+export function stateFor(quantity: Decimal, minQty: Decimal): StockState {
+  if (quantity.lessThanOrEqualTo(ZERO)) return "OUT";
+  // minQty 0 opts out of low-stock nagging entirely.
+  if (minQty.greaterThan(ZERO) && quantity.lessThanOrEqualTo(minQty)) {
+    return "LOW";
+  }
+  return "OK";
+}
+
 export function stockState(
   item: StockItemInput,
   batches: readonly StockBatchInput[],
 ): StockState {
-  const quantity = itemQuantity(batches);
-  if (quantity.lessThanOrEqualTo(ZERO)) return "OUT";
-  // minQty 0 opts the item out of low-stock nagging entirely.
-  if (item.minQty.greaterThan(ZERO) && quantity.lessThanOrEqualTo(item.minQty)) {
-    return "LOW";
-  }
-  return "OK";
+  return stateFor(itemQuantity(batches), item.minQty);
 }
 
 /**

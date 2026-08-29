@@ -8,6 +8,7 @@ import { ruleMessage } from "@/lib/messages";
 import {
   categorySchema,
   householdSettingsSchema,
+  itemGroupSchema,
   locationSchema,
 } from "@/lib/validation/settings";
 import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
@@ -266,6 +267,95 @@ export async function setDefaultLocationAction(
       });
     }
   });
+
+  refresh();
+  return actionOk();
+}
+
+/**
+ * Feature 26 — create or rename a set of interchangeable items.
+ *
+ * Modelled on `saveLocationAction`: same ownership proof, same name-clash
+ * check, same append-at-the-end ordering for a new row.
+ */
+export async function saveItemGroupAction(input: unknown): Promise<ActionResult> {
+  const session = await requireSession();
+  const parsed = itemGroupSchema.safeParse(input);
+  if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
+
+  const { id, name, minQty } = parsed.data;
+
+  const clash = await prisma.itemGroup.findFirst({
+    where: {
+      householdId: session.householdId,
+      name,
+      ...(id ? { id: { not: id } } : {}),
+    },
+    select: { id: true },
+  });
+  if (clash) return actionError(ruleMessage("group.nameTaken"));
+
+  if (id) {
+    const owned = await prisma.itemGroup.findFirst({
+      where: { id, householdId: session.householdId },
+      select: { id: true },
+    });
+    if (!owned) return actionError(ruleMessage("auth.forbidden"));
+    await prisma.itemGroup.update({ where: { id }, data: { name, minQty } });
+  } else {
+    const count = await prisma.itemGroup.count({
+      where: { householdId: session.householdId },
+    });
+    await prisma.itemGroup.create({
+      data: { householdId: session.householdId, name, minQty, sortOrder: count },
+    });
+  }
+
+  refresh();
+  return actionOk();
+}
+
+/**
+ * Deleting a group with members is refused rather than cascading.
+ *
+ * Emptying it silently would leave those items with no threshold at all — the
+ * group was carrying it — so they would quietly stop being reminded about.
+ * Making the person remove the members first is the only way they find that
+ * out at the time rather than weeks later.
+ */
+export async function deleteItemGroupAction(id: string): Promise<ActionResult> {
+  const session = await requireSession();
+  const group = await prisma.itemGroup.findFirst({
+    where: { id, householdId: session.householdId },
+    include: { _count: { select: { items: true } } },
+  });
+  if (!group) return actionError(ruleMessage("auth.forbidden"));
+  if (group._count.items > 0) return actionError(ruleMessage("group.hasItems"));
+
+  await prisma.itemGroup.delete({ where: { id } });
+  refresh();
+  return actionOk();
+}
+
+/** Feature 26 — same whole-list rewrite as the other reorderable settings. */
+export async function reorderItemGroupsAction(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const owned = await prisma.itemGroup.findMany({
+    where: { id: { in: orderedIds }, householdId: session.householdId },
+    select: { id: true },
+  });
+  if (owned.length !== orderedIds.length) {
+    return actionError(ruleMessage("auth.forbidden"));
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.itemGroup.update({ where: { id }, data: { sortOrder: index } }),
+    ),
+  );
 
   refresh();
   return actionOk();

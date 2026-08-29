@@ -1,5 +1,9 @@
 "use server";
 
+import type { Unit } from "@/lib/generated/prisma/enums";
+import { canJoinGroup } from "@/lib/item-group";
+import type { RuleMessage } from "@/lib/messages";
+
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +18,38 @@ function refresh(itemId?: string) {
   revalidatePath("/items");
   revalidatePath("/dashboard");
   if (itemId) revalidatePath(`/items/${itemId}`);
+}
+
+/**
+ * Feature 26 — may this item join that set?
+ *
+ * Proves the set belongs to the caller's household, then enforces the one-unit
+ * rule. Mixed units are refused rather than summed: 2 litres plus 3 pieces is
+ * 5 of nothing, and a reminder computed from it is advice nobody can act on.
+ * This is the last moment the person still knows which item they meant.
+ */
+async function checkGroup(
+  householdId: string,
+  groupId: string | null,
+  unit: Unit,
+  itemId?: string,
+): Promise<RuleMessage | null> {
+  if (!groupId) return null;
+
+  const group = await prisma.itemGroup.findFirst({
+    where: { id: groupId, householdId },
+    include: {
+      items: {
+        where: itemId ? { id: { not: itemId } } : {},
+        select: { unit: true },
+        take: 1,
+      },
+    },
+  });
+  if (!group) return ruleMessage("group.notFound");
+
+  const verdict = canJoinGroup(group.items[0]?.unit ?? null, unit);
+  return verdict.ok ? null : verdict.error;
 }
 
 export async function createItemAction(
@@ -37,12 +73,20 @@ export async function createItemAction(
     }
   }
 
+  const groupProblem = await checkGroup(
+    session.householdId,
+    data.groupId || null,
+    data.unit,
+  );
+  if (groupProblem) return actionError(groupProblem);
+
   const item = await prisma.item.create({
     data: {
       householdId: session.householdId,
       name: data.name,
       categoryId: data.categoryId,
       locationId: data.locationId || null,
+      groupId: data.groupId || null,
       unit: data.unit,
       minQty: new Prisma.Decimal(data.minQty).toFixed(3),
       barcode: data.barcode ?? null,
@@ -82,6 +126,16 @@ export async function updateItemAction(input: unknown): Promise<ActionResult> {
     return actionError(ruleMessage("item.unitLocked"));
   }
 
+  // Feature 26 — excludes this item from the unit check, or an item already in
+  // the set would be compared against itself and could never be re-saved.
+  const groupProblem = await checkGroup(
+    session.householdId,
+    data.groupId || null,
+    data.unit,
+    data.id,
+  );
+  if (groupProblem) return actionError(groupProblem);
+
   if (data.barcode && data.barcode !== existing.barcode) {
     const clash = await prisma.item.findFirst({
       where: {
@@ -104,6 +158,7 @@ export async function updateItemAction(input: unknown): Promise<ActionResult> {
       name: data.name,
       categoryId: data.categoryId,
       locationId: data.locationId || null,
+      groupId: data.groupId || null,
       unit: data.unit,
       minQty: new Prisma.Decimal(data.minQty).toFixed(3),
       barcode: data.barcode ?? null,

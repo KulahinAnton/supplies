@@ -1,9 +1,9 @@
 import { InlineKeyboard } from "grammy";
 import { todayUTC } from "@/lib/period";
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
-import { getItemViews } from "@/lib/queries";
+import { getRestockEntries, getItemViews } from "@/lib/queries";
 import { needsAttention } from "@/lib/expiry";
-import { needsRestock } from "@/lib/stock";
+
 import { MESSAGES } from "@/lib/messages";
 
 /**
@@ -60,20 +60,20 @@ export function backHome(): InlineKeyboard {
 }
 
 export async function lowView(householdId: string): Promise<View> {
-  const items = (await getItemViews(householdId)).filter((item) =>
-    needsRestock(item, item.stock),
-  );
+  // Feature 26 — same list the app and the digest show: groups stand in for
+  // their members, so the bot cannot disagree with the dashboard.
+  const entries = await getRestockEntries(householdId);
 
-  if (items.length === 0) {
+  if (entries.length === 0) {
     return { text: MESSAGES["bot.nothingLow"], keyboard: backHome() };
   }
 
-  const lines = items.map(
-    (item) =>
-      `• ${item.name} — ${
-        item.stock === "OUT"
+  const lines = entries.map(
+    (entry) =>
+      `• ${entry.name} — ${
+        entry.state === "OUT" || !entry.unit
           ? "закінчився"
-          : formatQuantityWithUnit(item.quantity, item.unit)
+          : formatQuantityWithUnit(entry.quantity, entry.unit)
       }`,
   );
 

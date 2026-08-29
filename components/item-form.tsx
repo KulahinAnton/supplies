@@ -38,6 +38,7 @@ const UNIT_OPTIONS: { value: Unit; label: string }[] = (
 export function ItemForm({
   categories,
   locations,
+  itemGroups = [],
   item,
   hasBatches,
   existingItems = [],
@@ -52,11 +53,14 @@ export function ItemForm({
   /** Feature 21 — carried from a scan on /items that matched nothing. */
   initialBarcode?: string;
   locations: { id: string; name: string; isDefault: boolean }[];
+  /** Feature 26 — sets of interchangeable items; the set owns the minimum. */
+  itemGroups?: { id: string; name: string }[];
   item?: {
     id: string;
     name: string;
     categoryId: string;
     locationId: string | null;
+    groupId: string | null;
     unit: Unit;
     minQty: string;
     barcode: string | null;
@@ -87,12 +91,16 @@ export function ItemForm({
       categoryId:
         item?.categoryId ?? defaultRowId(categories, true) ?? "",
       locationId: item?.locationId ?? defaultRowId(locations, false) ?? "",
+      groupId: item?.groupId ?? "",
       unit: item?.unit ?? "PIECE",
       minQty: item?.minQty ?? "0",
       barcode: item?.barcode ?? initialBarcode ?? undefined,
       notes: item?.notes ?? undefined,
     },
   });
+
+  // Feature 26 — the threshold field depends on whether a set is chosen.
+  const groupId = useWatch({ control, name: "groupId" });
 
   // Feature 16.1 — recomputed as the name changes; excludes the item being
   // edited so it never flags itself. `useWatch` rather than `watch()`: it
@@ -262,14 +270,49 @@ export function ItemForm({
           ) : null}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="minQty">Мінімальний запас</Label>
-          <Input id="minQty" inputMode="decimal" {...register("minQty")} />
-          <p className="text-xs text-muted-foreground">
-            Нижче цього — потрапляє до списку покупок. 0 — не нагадувати,
-            навіть коли товар закінчиться.
-          </p>
-        </div>
+        {/*
+          Feature 26 — when the item belongs to a set, the SET carries the
+          threshold. Showing this field anyway would be showing a setting that
+          silently does nothing, which is worse than not offering it.
+        */}
+        {groupId ? (
+          <div className="space-y-2">
+            <Label>Мінімальний запас</Label>
+            <p className="rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+              Задається для набору — у «Налаштування → Набори товарів».
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="minQty">Мінімальний запас</Label>
+            <Input id="minQty" inputMode="decimal" {...register("minQty")} />
+            <p className="text-xs text-muted-foreground">
+              Нижче цього — потрапляє до списку покупок. 0 — не нагадувати,
+              навіть коли товар закінчиться.
+            </p>
+          </div>
+        )}
+
+        {itemGroups.length > 0 ? (
+          <div className="space-y-2">
+            <Label htmlFor="groupId">Набір</Label>
+            <select
+              id="groupId"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              {...register("groupId")}
+            >
+              <option value="">Без набору</option>
+              {itemGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Взаємозамінні товари рахуються разом — мінімум один на весь набір.
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-2">

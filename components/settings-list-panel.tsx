@@ -66,7 +66,8 @@ export function SettingsListPanel({
   /** Explicit, or dnd-kit's aria ids differ between server and client. */
   dndId: string;
   onReorder: (orderedIds: string[]) => Promise<Result>;
-  onSetDefault: (id: string) => Promise<Result>;
+  /** Omit where the concept does not apply — Feature 26 groups have no default. */
+  onSetDefault?: (id: string) => Promise<Result>;
   onDelete: (id: string) => Promise<Result>;
   onAdd: (name: string) => Promise<Result>;
   renderExtra?: (row: SettingsRow) => ReactNode;
@@ -147,7 +148,9 @@ export function SettingsListPanel({
                   row={row}
                   pending={pending}
                   extra={renderExtra?.(row)}
-                  onSetDefault={() => run(() => onSetDefault(row.id))}
+                  onSetDefault={
+                    onSetDefault ? () => run(() => onSetDefault(row.id)) : undefined
+                  }
                   onDelete={() =>
                     run(() => onDelete(row.id), () => {
                       setOrder(null);
@@ -191,7 +194,7 @@ function SortableSettingsRow({
   row: SettingsRow;
   pending: boolean;
   extra?: ReactNode;
-  onSetDefault: () => void;
+  onSetDefault?: () => void;
   onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -226,6 +229,9 @@ function SortableSettingsRow({
 
       {extra}
 
+      {/* No star where "default" is meaningless — a disabled one would still
+          look like a setting the user had failed to reach. */}
+      {onSetDefault ? (
       <Button
         size="icon"
         variant="ghost"
@@ -247,6 +253,7 @@ function SortableSettingsRow({
           )}
         />
       </Button>
+      ) : null}
 
       <Button
         size="icon"

@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth-guard";
 import {
   getCategoriesAndLocations,
   getItemDetail,
+  getItemGroups,
   getItemNames,
 } from "@/lib/queries";
 import { ItemForm } from "@/components/item-form";
@@ -18,8 +19,9 @@ export default async function EditItemPage({
   const detail = await getItemDetail(session.householdId, id);
   if (!detail) notFound();
 
-  const [{ categories, locations }, existingItems] = await Promise.all([
+  const [{ categories, locations }, itemGroups, existingItems] = await Promise.all([
     getCategoriesAndLocations(session.householdId),
+    getItemGroups(session.householdId),
     getItemNames(session.householdId),
   ]);
   const { item } = detail;
@@ -31,12 +33,14 @@ export default async function EditItemPage({
         categories={categories}
         locations={locations}
         existingItems={existingItems}
+        itemGroups={itemGroups}
         hasBatches={item.batches.length > 0}
         item={{
           id: item.id,
           name: item.name,
           categoryId: item.categoryId,
           locationId: item.locationId,
+          groupId: item.groupId,
           unit: item.unit,
           minQty: item.minQty.toString(),
           barcode: item.barcode,

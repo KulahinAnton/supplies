@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { key } from "@/lib/validation/shared";
+import { key, nonNegativeQuantityString } from "@/lib/validation/shared";
 
 export const householdSettingsSchema = z.object({
   name: z.string().trim().min(1, key("auth.nameRequired")),
@@ -30,6 +30,13 @@ export const categorySchema = z.object({
     .transform((value) =>
       value === "" || value === undefined ? null : (value as number),
     ),
+});
+
+/** Feature 26 — a set of interchangeable items, with its own threshold. */
+export const itemGroupSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(1, key("group.nameRequired")),
+  minQty: nonNegativeQuantityString,
 });
 
 export const locationSchema = z.object({

@@ -679,3 +679,50 @@ minimum was never set now never appears in a reminder. That is the honest
 reading of "0 = don't remind", but it does mean restock reminders are
 opt-*in*. Changing the new-item default from 0 to 1 would flip that back
 without weakening the opt-out.
+
+### Feature 26 — sets of interchangeable items («Набори»)
+
+**The problem.** The same product arrives under a new barcode when a
+manufacturer changes it, or under a different brand. `@@unique([householdId,
+barcode])` forces those into separate items, and each then carries its own
+`minQty` — so the household maintains three thresholds for one need and gets
+three reminders that all mean "buy milk".
+
+**The model.** `ItemGroup` (household-scoped, named, sortable) owns a `minQty`.
+`Item.groupId` is nullable. Members stay separate items: separate batches,
+separate expiry dates, and the item list still shows which brand is in the
+cupboard. What changes is who answers "are we short?".
+
+**The group owns the threshold.** A member's own `minQty` is ignored while it
+is grouped, so there is exactly one number to maintain. The item form replaces
+the field with a line saying where the threshold now lives — showing an input
+that silently does nothing is worse than not offering it.
+
+**One line per group, everywhere a reminder appears** — dashboard, shopping
+suggestions, Telegram digest, bot, and the nav badge count. `getRestockEntries`
+builds that list once so no surface can disagree; a grouped item never appears
+on its own.
+
+**The unit is derived, never stored.** Every member must share one unit, and
+`canJoinGroup` refuses a mismatch at the moment of joining. Summing 2 litres
+and 3 pieces gives 5 of nothing, and a reminder built on it is advice nobody
+can act on. Deriving the unit from the members means the invariant cannot
+drift the way a stored copy could.
+
+**`stateFor(quantity, minQty)` was extracted** from `stockState` so an item and
+a group ask the same question of a different total. Two copies of that
+arithmetic would eventually disagree about what "low" means.
+
+**A group suggestion goes on the shopping list as free text**, because the app
+cannot know which brand will be bought — the shopper decides in the shop.
+Writing down any member settles the need, so the group stops asking.
+
+**An empty group never reminds**, whatever its threshold: that is someone
+mid-setup, not a shopping need. Deleting a group with members is refused
+rather than cascading, since emptying it silently would leave those items with
+no threshold at all and they would quietly stop being watched.
+
+**Not built:** multiple barcodes per item. That is the better answer to the
+*same* product under a new barcode — one item, several codes, no new concept —
+and remains worth doing separately. Groups answer the other half: different
+products the household treats as interchangeable.

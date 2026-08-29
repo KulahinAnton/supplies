@@ -88,7 +88,12 @@ export type ListRow = {
 };
 
 export type Candidate = {
-  itemId: string;
+  /**
+   * Feature 26 — null for a group. A group is several products, so there is
+   * no single item to write down; it goes on the list as free text and the
+   * shopper picks a brand in the shop.
+   */
+  itemId: string | null;
   name: string;
   state: "OUT" | "LOW";
   detail: string;
@@ -262,7 +267,7 @@ export function ShoppingList({
             <ul className="divide-y">
               {candidates.map((candidate) => (
                 <li
-                  key={candidate.itemId}
+                  key={candidate.itemId ?? `group:${candidate.name}`}
                   className="flex items-center justify-between gap-3 py-2.5"
                 >
                   <div className="min-w-0">
@@ -278,7 +283,11 @@ export function ShoppingList({
                     variant="outline"
                     disabled={pending}
                     onClick={() =>
-                      run(() => addListRowAction({ itemId: candidate.itemId }))
+                      run(() =>
+                        candidate.itemId
+                          ? addListRowAction({ itemId: candidate.itemId })
+                          : addListRowAction({ freeText: candidate.name }),
+                      )
                     }
                   >
                     <Plus className="size-3.5" />

@@ -4,6 +4,7 @@
 // digest (`pnpm digest:run`). Client-safety is enforced by the Prisma import
 // below instead: pulling this into a browser bundle fails the build loudly.
 
+import { buildGroupView, groupNeedsRestock } from "@/lib/item-group";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { Unit } from "@/lib/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
@@ -48,6 +49,9 @@ export type ItemView = {
   createdAt: Date;
   /** Feature 13 — the window actually used for this item, after inheritance. */
   warnDays: number;
+  /** Feature 26 — the set this item is counted with, if any. */
+  groupId: string | null;
+  groupName: string | null;
 };
 
 const liveBatch = (batch: { quantity: Prisma.Decimal }) =>
@@ -68,6 +72,7 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
       batches: true,
       category: { select: { name: true, expiryWarnDays: true } },
       location: { select: { name: true } },
+      group: { select: { id: true, name: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -97,6 +102,8 @@ export async function getItemViews(householdId: string): Promise<ItemView[]> {
       warnDays,
       categoryName: item.category.name,
       locationName: item.location?.name ?? null,
+      groupId: item.groupId,
+      groupName: item.group?.name ?? null,
       nextExpiry: dated[0]?.expiresAt ?? null,
       batchCount: live.length,
       createdAt: item.createdAt,
@@ -109,7 +116,8 @@ export type DashboardData = {
   /** Feature 13 — true when some category uses a different window. */
   hasCategoryOverrides: boolean;
   expiring: ItemView[];
-  restock: ItemView[];
+  /** Feature 26 — items, plus groups standing in for their members. */
+  restock: RestockEntry[];
   recent: Awaited<ReturnType<typeof getRecentMovements>>;
 };
 
@@ -135,12 +143,8 @@ export async function getDashboard(householdId: string): Promise<DashboardData> 
       return aDate - bDate;
     });
 
-  const restock = items
-    .filter((item) => needsRestock(item, item.stock))
-    .sort((a, b) => {
-      if (a.stock !== b.stock) return a.stock === "OUT" ? -1 : 1;
-      return a.name.localeCompare(b.name, "uk-UA");
-    });
+  // Feature 26 — groups stand in for their members; see getRestockEntries.
+  const restock = await getRestockEntries(householdId, items);
 
   return {
     expiryWarnDays: household.expiryWarnDays,
@@ -239,11 +243,53 @@ export async function getShoppingView(householdId: string) {
     items.map((item) => [item.id, item.batches]),
   );
 
+  /**
+   * Feature 26 — a grouped item is never suggested on its own; its group
+   * speaks for it. Otherwise three brands of milk produce three suggestions
+   * that all mean "buy milk".
+   */
   const candidates: ShoppingCandidate[] = shoppingCandidates(
-    items,
+    items.filter((item) => item.groupId === null),
     batchesByItem,
     onList,
   );
+
+  const itemGroups = await prisma.itemGroup.findMany({
+    where: { householdId },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  for (const group of itemGroups) {
+    const members = items.filter((item) => item.groupId === group.id);
+    const view = buildGroupView(
+      group,
+      members.map((item) => ({
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        quantity: itemQuantity(item.batches),
+      })),
+    );
+    if (!groupNeedsRestock(view)) continue;
+    // Writing down any brand settles the need; the group should stop asking.
+    if (members.some((item) => onList.has(item.id))) continue;
+
+    candidates.push({
+      // No itemId: the app cannot know which brand will be bought, so this
+      // goes on the list as free text and the shopper decides in the shop.
+      itemId: null,
+      name: group.name,
+      state: view.state,
+      quantity: view.quantity,
+      minQty: view.minQty,
+      unit: view.unit ?? members[0]?.unit ?? "PIECE",
+    });
+  }
+
+  candidates.sort((a, b) => {
+    if (a.state !== b.state) return a.state === "OUT" ? -1 : 1;
+    return a.name.localeCompare(b.name, "uk-UA");
+  });
 
   // Feature 11 — the named groups. «Загальна група» is not among them; it is
   // the implicit `groupId = null` bucket that lib/shopping-groups.ts adds.
@@ -280,12 +326,77 @@ export async function getMembers(householdId: string) {
   });
 }
 
+/**
+ * Feature 26 — what to remind about, with groups standing in for their members.
+ *
+ * A grouped item never appears on its own: the household is short of "milk",
+ * not of a brand, and listing three brands separately turns one need into
+ * three lines that all mean the same thing. The group's threshold is the only
+ * one consulted for its members — an item's own minQty is ignored while it is
+ * grouped, which is why the item form hides that field.
+ *
+ * Built once, here, so the dashboard, the shopping suggestions, the Telegram
+ * digest and the nav badge cannot disagree about what is running out.
+ */
+export type RestockEntry =
+  | { kind: "item"; id: string; name: string; state: StockState; quantity: Prisma.Decimal; unit: Unit; minQty: Prisma.Decimal }
+  | { kind: "group"; id: string; name: string; state: StockState; quantity: Prisma.Decimal; unit: Unit | null; minQty: Prisma.Decimal; memberCount: number };
+
+export async function getRestockEntries(
+  householdId: string,
+  items?: ItemView[],
+): Promise<RestockEntry[]> {
+  const views = items ?? (await getItemViews(householdId));
+
+  const ungrouped = views
+    .filter((item) => item.groupId === null)
+    .filter((item) => needsRestock(item, item.stock))
+    .map((item): RestockEntry => ({
+      kind: "item",
+      id: item.id,
+      name: item.name,
+      state: item.stock,
+      quantity: item.quantity,
+      unit: item.unit,
+      minQty: item.minQty,
+    }));
+
+  const groups = await prisma.itemGroup.findMany({
+    where: { householdId },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  const grouped: RestockEntry[] = [];
+  for (const group of groups) {
+    const members = views.filter((item) => item.groupId === group.id);
+    const view = buildGroupView(group, members);
+    if (!groupNeedsRestock(view)) continue;
+    grouped.push({
+      kind: "group",
+      id: view.id,
+      name: view.name,
+      state: view.state,
+      quantity: view.quantity,
+      unit: view.unit,
+      minQty: view.minQty,
+      memberCount: view.memberCount,
+    });
+  }
+
+  return [...ungrouped, ...grouped].sort((a, b) => {
+    if (a.state !== b.state) return a.state === "OUT" ? -1 : 1;
+    return a.name.localeCompare(b.name, "uk-UA");
+  });
+}
+
 /** Header chips: how many things want attention right now. */
 export async function getAttentionCounts(householdId: string) {
   const items = await getItemViews(householdId);
   return {
     expiring: items.filter((item) => needsAttention(item.expiry)).length,
-    restock: items.filter((item) => needsRestock(item, item.stock)).length,
+    // Feature 26 — a group of three brands is one thing to buy, so it counts
+    // once. Counting members would inflate the badge past what the list shows.
+    restock: (await getRestockEntries(householdId, items)).length,
   };
 }
 
@@ -335,4 +446,29 @@ export async function getItemNames(householdId: string) {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+/**
+ * Feature 26 — the sets, for the settings panel.
+ *
+ * The unit comes from the members rather than a stored column, so it is always
+ * the unit the set is actually counted in.
+ */
+export async function getItemGroups(householdId: string) {
+  const groups = await prisma.itemGroup.findMany({
+    where: { householdId },
+    orderBy: { sortOrder: "asc" },
+    include: {
+      items: { select: { unit: true }, take: 1 },
+      _count: { select: { items: true } },
+    },
+  });
+
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    minQty: group.minQty,
+    itemCount: group._count.items,
+    unit: group.items[0]?.unit ?? null,
+  }));
 }

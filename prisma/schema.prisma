@@ -47,6 +47,7 @@ model Household {
   items     Item[]
   shopping  ShoppingListItem[]
   shoppingGroups ShoppingGroup[]
+  itemGroups ItemGroup[]
 }
 
 model User {
@@ -130,6 +131,10 @@ model Item {
   name        String
   categoryId  String
   locationId  String?
+  /// Feature 26 — an optional set of interchangeable products (the same thing
+  /// under different brands or barcodes). The GROUP carries the low-stock
+  /// threshold; a grouped item's own minQty is ignored.
+  groupId     String?
   unit        Unit
   /// §3.4 — low-stock threshold. 0 opts the item out of low-stock warnings.
   minQty      Decimal  @default(0) @db.Decimal(12, 3)
@@ -142,6 +147,7 @@ model Item {
   household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
   category    Category         @relation(fields: [categoryId], references: [id])
   location    StorageLocation? @relation(fields: [locationId], references: [id])
+  group       ItemGroup?       @relation(fields: [groupId], references: [id])
   batches     StockBatch[]
   movements   StockMovement[]
   shoppingRows ShoppingListItem[]
@@ -149,6 +155,35 @@ model Item {
   // Postgres treats NULLs as distinct, so many items may have no barcode.
   @@unique([householdId, barcode])
   @@index([householdId, isArchived])
+  @@index([householdId, groupId])
+}
+
+/// Feature 26 — a set of interchangeable items counted as one for restocking.
+///
+/// The case: the same product under a new barcode after a manufacturer change,
+/// or two brands the household treats as the same thing. They stay separate
+/// items — different batches, different expiry dates, and you can still see
+/// which brand you hold — but you are short of "milk", not of a brand.
+///
+/// The group owns `minQty`; a member item's own threshold is ignored while it
+/// is grouped, so there is exactly one number to maintain.
+///
+/// The group's UNIT is derived from its members rather than stored: every
+/// member must share one unit, since summing litres and pieces would produce a
+/// total nobody can act on. Deriving it means the invariant cannot drift.
+model ItemGroup {
+  id          String  @id @default(uuid())
+  householdId String
+  name        String
+  sortOrder   Int     @default(0)
+  /// Feature 25 applies here too: 0 means no reminders at all.
+  minQty      Decimal @default(0) @db.Decimal(12, 3)
+  createdAt   DateTime @default(now())
+
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  items       Item[]
+
+  @@unique([householdId, name])
 }
 
 /// §3.1 — a concrete lot with its own quantity AND its own expiry date.

@@ -14,6 +14,8 @@ export const itemSchema = z.object({
   name: z.string().trim().min(1, key("item.nameRequired")),
   categoryId: z.string().min(1, key("item.nameRequired")),
   locationId: z.string().optional(),
+  /** Feature 26 — the set this item is counted with. Empty = none. */
+  groupId: z.string().optional(),
   unit: unitField,
   minQty: nonNegativeQuantityString,
   barcode: z

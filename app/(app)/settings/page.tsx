@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth-guard";
 import { findDuplicateGroups } from "@/lib/duplicates";
 import {
   getCategoriesAndLocations,
+  getItemGroups,
   getHousehold,
   getMembers,
   hasTelegramLink,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/queries";
 import { CategoryPanel } from "@/components/category-panel";
 import { DuplicatesPanel } from "@/components/duplicates-panel";
+import { ItemGroupPanel } from "@/components/item-group-panel";
 import { LocationPanel } from "@/components/location-panel";
 import {
   HouseholdPanel,
@@ -19,10 +21,11 @@ import {
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const [household, { categories, locations }, members, telegramLinked] =
+  const [household, { categories, locations }, itemGroups, members, telegramLinked] =
     await Promise.all([
       getHousehold(session.householdId),
       getCategoriesAndLocations(session.householdId),
+      getItemGroups(session.householdId),
       getMembers(session.householdId),
       hasTelegramLink(session.userId),
     ]);
@@ -67,6 +70,19 @@ export default async function SettingsPage() {
           }))}
         />
       </div>
+
+      {/* Feature 26 — full width: the rows carry a name and a threshold. */}
+      <ItemGroupPanel
+        rows={itemGroups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          itemCount: group.itemCount,
+          // A set has no "default" — the star is hidden for this panel.
+          isDefault: false,
+          minQty: group.minQty.toString(),
+          unit: group.unit,
+        }))}
+      />
 
       <DuplicatesPanel groups={duplicateGroups} />
 

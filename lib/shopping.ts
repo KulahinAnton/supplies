@@ -24,7 +24,8 @@ export type CandidateItem = StockItemInput & {
 };
 
 export type ShoppingCandidate = {
-  itemId: string;
+  /** Feature 26 — null for a group: no single item to add. */
+  itemId: string | null;
   name: string;
   state: StockState;
   quantity: Decimal;

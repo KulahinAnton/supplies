@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth-guard";
-import { getCategoriesAndLocations, getItemNames } from "@/lib/queries";
+import { getItemGroups, getCategoriesAndLocations, getItemNames } from "@/lib/queries";
 import { ItemForm } from "@/components/item-form";
 
 export default async function NewItemPage({
@@ -8,12 +8,13 @@ export default async function NewItemPage({
   searchParams: Promise<{ name?: string; barcode?: string }>;
 }) {
   const session = await requireSession();
-  const [{ categories, locations }, existingItems, { name, barcode }] =
+  const [{ categories, locations }, itemGroups, existingItems, { name, barcode }] =
     await Promise.all([
-    getCategoriesAndLocations(session.householdId),
-    getItemNames(session.householdId),
-    searchParams,
-  ]);
+      getCategoriesAndLocations(session.householdId),
+      getItemGroups(session.householdId),
+      getItemNames(session.householdId),
+      searchParams,
+    ]);
 
   return (
     <div className="space-y-5">
@@ -22,6 +23,7 @@ export default async function NewItemPage({
         categories={categories}
         locations={locations}
         existingItems={existingItems}
+        itemGroups={itemGroups}
         // Feature 16.2 — carried from the /items search, so nothing is retyped.
         initialName={name}
         // Feature 21 — carried from a scan on /items that found no match.

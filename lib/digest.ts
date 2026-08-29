@@ -1,8 +1,8 @@
 import { Bot } from "grammy";
 import { prisma } from "@/lib/prisma";
-import { getItemViews } from "@/lib/queries";
+import { getItemViews, getRestockEntries } from "@/lib/queries";
 import { needsAttention } from "@/lib/expiry";
-import { needsRestock } from "@/lib/stock";
+
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { formatDateKey, todayUTC } from "@/lib/period";
 
@@ -155,7 +155,8 @@ export async function digestText(
 ): Promise<string | null> {
   const items = await getItemViews(householdId);
   const expiring = items.filter((item) => needsAttention(item.expiry));
-  const restock = items.filter((item) => needsRestock(item, item.stock));
+  // Feature 26 — one line per group, not one per brand inside it.
+  const restock = await getRestockEntries(householdId, items);
 
   if (expiring.length === 0 && restock.length === 0) return null;
 
@@ -182,11 +183,11 @@ export async function digestText(
       "📉 Закінчується:\n" +
         restock
           .map(
-            (item) =>
-              `• ${item.name} — ${
-                item.stock === "OUT"
+            (entry) =>
+              `• ${entry.name} — ${
+                entry.state === "OUT" || !entry.unit
                   ? "закінчився"
-                  : formatQuantityWithUnit(item.quantity, item.unit)
+                  : formatQuantityWithUnit(entry.quantity, entry.unit)
               }`,
           )
           .join("\n"),

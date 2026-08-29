@@ -101,25 +101,49 @@ export default async function DashboardPage() {
               </p>
             ) : (
               <ul className="divide-y">
-                {restock.map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={`/items/${item.id}`}
-                      className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-accent"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{item.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatQuantityWithUnit(item.quantity, item.unit)}
-                          {item.minQty.greaterThan(0)
-                            ? ` · мінімум ${formatQuantityWithUnit(item.minQty, item.unit)}`
-                            : null}
-                        </div>
+                {restock.map((entry) => {
+                  const detail = (
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">
+                        {entry.name}
+                        {/* Feature 26 — say it is a set, or "0" reads as one product. */}
+                        {entry.kind === "group" ? (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                            набір · {entry.memberCount}
+                          </span>
+                        ) : null}
                       </div>
-                      <StockBadge state={item.stock} />
-                    </Link>
-                  </li>
-                ))}
+                      <div className="text-xs text-muted-foreground">
+                        {entry.unit
+                          ? formatQuantityWithUnit(entry.quantity, entry.unit)
+                          : "—"}
+                        {entry.minQty.greaterThan(0) && entry.unit
+                          ? ` · мінімум ${formatQuantityWithUnit(entry.minQty, entry.unit)}`
+                          : null}
+                      </div>
+                    </div>
+                  );
+
+                  return (
+                    <li key={`${entry.kind}:${entry.id}`}>
+                      {/* A group has no page of its own to link to. */}
+                      {entry.kind === "item" ? (
+                        <Link
+                          href={`/items/${entry.id}`}
+                          className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-accent"
+                        >
+                          {detail}
+                          <StockBadge state={entry.state} />
+                        </Link>
+                      ) : (
+                        <div className="-mx-2 flex items-center justify-between gap-3 px-2 py-2.5">
+                          {detail}
+                          <StockBadge state={entry.state} />
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>

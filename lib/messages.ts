@@ -34,6 +34,13 @@ export const MESSAGES = {
   "item.barcodeInvalid": "Це не схоже на штрихкод (потрібно 6–14 цифр).",
   "item.nameRequired": "Вкажіть назву товару.",
   "item.locationNotFound": "Такого місця зберігання немає.",
+  // Feature 26 — sets of interchangeable items.
+  "group.notFound": "Набір не знайдено.",
+  "group.nameRequired": "Вкажіть назву набору.",
+  "group.nameTaken": "Набір із такою назвою вже є.",
+  "group.unitMismatch":
+    "У наборі всі товари мають бути в однакових одиницях виміру.",
+  "group.hasItems": "Спочатку приберіть товари з набору.",
   "item.notFound": "Товар не знайдено.",
   "item.archived": "Товар в архіві — спочатку поверніть його з архіву.",
 
