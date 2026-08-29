@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowDownUp, Boxes, Plus, Search } from "lucide-react";
@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ExpiryBadge, StockBadge } from "@/components/state-badges";
 import { useItemSort } from "@/hooks/use-item-sort";
+import {
+  itemListSearch,
+  parseFilter,
+  type ItemFilter,
+} from "@/lib/item-list-params";
 import { ITEM_SORTS, ITEM_SORT_LABELS, sortItems } from "@/lib/item-sort";
 import type { ExpiryState } from "@/lib/expiry";
 import type { StockState } from "@/lib/stock";
@@ -42,7 +47,13 @@ export type ItemRow = {
   createdAtMs: number;
 };
 
-type Filter = "all" | "attention" | StockState;
+/**
+ * Feature 27 — one definition, in lib, shared with the URL parser.
+ *
+ * This used to be `"all" | "attention" | StockState`, which admitted "OK" —
+ * a filter the chips never offer and the list would have shown nothing for.
+ */
+type Filter = ItemFilter;
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Усі" },
@@ -55,12 +66,21 @@ export function ItemsList({
   items,
   categories,
   todayIso,
+  initialQuery = "",
+  initialFilter,
+  initialCategory,
+  initialSort,
 }: {
   items: ItemRow[];
   categories: string[];
   todayIso: string;
+  /** Feature 27 — restored from the URL, so Back brings the list back. */
+  initialQuery?: string;
+  initialFilter?: string;
+  initialCategory?: string;
+  initialSort?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   /**
    * Feature 21 — the outcome of the last scan. Deliberately NOT folded into
    * `query`: the text filter matches names, so a barcode there would empty
@@ -72,11 +92,32 @@ export function ItemsList({
     | null
   >(null);
   const router = useRouter();
-  const [filter, setFilter] = useState<Filter>("all");
-  const [category, setCategory] = useState<string>("all");
+  const [filter, setFilter] = useState<Filter>(parseFilter(initialFilter));
+  const [category, setCategory] = useState<string>(initialCategory ?? "all");
   // Feature 12.2 — per-person, per-device, like the group collapse state.
-  const [sort, setSort] = useItemSort();
+  const [sort, setSort] = useItemSort(initialSort);
   const today = useMemo(() => new Date(todayIso), [todayIso]);
+
+  /**
+   * Feature 27 — keep the URL describing what is on screen.
+   *
+   * `history.replaceState`, deliberately, not `router.replace`: the latter is
+   * a navigation, so every keystroke in the search box would refetch the page
+   * from the server and re-query the database. All that is needed here is for
+   * the address bar to describe the current view, so that the history entry
+   * this page occupies still describes it when the user comes Back to it.
+   *
+   * Defaults are left out of the URL, so an untouched list stays at plain
+   * /items instead of carrying four parameters that say "nothing is set".
+   */
+  useEffect(() => {
+    const search = itemListSearch({ query, filter, category, sort });
+    window.history.replaceState(
+      null,
+      "",
+      search ? `${window.location.pathname}?${search}` : window.location.pathname,
+    );
+  }, [query, filter, category, sort]);
 
   /**
    * A hit navigates straight to the item — the scan already said exactly which

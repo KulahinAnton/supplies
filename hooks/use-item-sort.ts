@@ -42,8 +42,20 @@ function getSnapshot(): ItemSort {
 
 const getServerSnapshot = (): ItemSort => DEFAULT;
 
-export function useItemSort(): [ItemSort, (sort: ItemSort) => void] {
-  const sort = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+/**
+ * Feature 27 — `initial` comes from the URL and wins for this render.
+ *
+ * The two are not in conflict: localStorage is "how I like lists ordered",
+ * the URL is "how this particular list was ordered when I left it". Coming
+ * Back must restore what was on screen, not a preference set weeks ago; but
+ * opening /items fresh, with no sort in the URL, should still honour the
+ * preference. So the URL takes precedence only when it says something.
+ */
+export function useItemSort(
+  initial?: string,
+): [ItemSort, (sort: ItemSort) => void] {
+  const stored = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const sort = isItemSort(initial) ? initial : stored;
 
   const setSort = useCallback((next: ItemSort) => {
     try {

@@ -758,3 +758,37 @@ state, and the members, and is where members are added and removed.
 sets button — only once at least one set exists, since a permanent button for
 an unused feature is clutter and an absent one for a used feature is a dead
 end. Not added to the bottom nav: five labelled items crowd a narrow phone.
+
+### Feature 27 — the items list keeps its state across Back
+
+**Reported:** filter and sorting reset after opening an item and pressing Back.
+
+Search text, filter chip and category were plain component state, so the
+component remounting rebuilt the list from scratch. Sorting was already
+persisted in localStorage and did survive — but with the other three gone the
+list looked reset, which is the same thing from the user's side.
+
+**The state now travels in the URL.** `/items?q=…&filter=…&cat=…&sort=…`, read
+on the server and used to seed the client state. Back restores exactly what was
+on screen because the browser already remembers URLs — no restore logic, no
+sessionStorage, and the view is now linkable.
+
+**Written with `history.replaceState`, not `router.replace`.** The latter is a
+navigation: every keystroke in the search box would refetch the page and
+re-query the database. Only the address bar needs to change, so that the
+history entry this page occupies still describes it when the user returns.
+
+**Defaults are never written**, so an untouched list stays at plain `/items`
+rather than carrying four parameters that all say "nothing is set".
+`lib/item-list-params.ts` holds that rule and the parsers, tested — a
+hand-edited value falls back instead of producing an empty list.
+
+**localStorage and the URL do not conflict.** localStorage is "how I like lists
+ordered"; the URL is "how this list was ordered when I left it". The URL wins
+when it says something, so Back restores the view; opening `/items` fresh with
+no `sort` still honours the remembered preference.
+
+Also removed a latent discrepancy: the filter type was `"all" | "attention" |
+StockState`, which admitted `"OK"` — a filter the chips never offer and the
+list would have shown nothing for. There is now one definition, in lib, shared
+with the URL parser.

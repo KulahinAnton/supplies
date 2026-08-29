@@ -7,8 +7,27 @@ import { todayUTC } from "@/lib/period";
 import { Button } from "@/components/ui/button";
 import { ItemsList, type ItemRow } from "@/components/items-list";
 
-export default async function ItemsPage() {
+/**
+ * Feature 27 — the list's own state travels in the URL.
+ *
+ * Search text, filter chip and category used to be plain component state, so
+ * opening an item and pressing Back rebuilt the list from scratch: the person
+ * lost the filtering they had just done and had to redo it to carry on where
+ * they were. Reading them from the URL makes Back restore exactly what was on
+ * screen, because the browser already remembers URLs.
+ */
+export default async function ItemsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string;
+    filter?: string;
+    cat?: string;
+    sort?: string;
+  }>;
+}) {
   const session = await requireSession();
+  const params = await searchParams;
   const items = await getItemViews(session.householdId);
   const archivedCount = (await getArchivedItems(session.householdId)).length;
   // Feature 26.2 — the entry point to the sets view, offered only once there
@@ -86,6 +105,10 @@ export default async function ItemsPage() {
             items={rows}
             categories={categories}
             todayIso={today.toISOString()}
+            initialQuery={params.q ?? ""}
+            initialFilter={params.filter}
+            initialCategory={params.cat}
+            initialSort={params.sort}
           />
           {archivedCount > 0 ? (
             <div className="pt-1 text-center">
