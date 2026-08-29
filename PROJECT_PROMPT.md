@@ -802,3 +802,17 @@ Also removed a latent discrepancy: the filter type was `"all" | "attention" |
 StockState`, which admitted `"OK"` — a filter the chips never offer and the
 list would have shown nothing for. There is now one definition, in lib, shared
 with the URL parser.
+
+### Feature 27.1 — the item page returns to the view you left
+
+Browser Back restored the list, but the item page’s own «Запаси» link went to
+a bare `/items` and threw the filtering away. The page cannot know which view
+it was opened from, so the list tells it: item links carry the current query
+string as a `from` parameter, and the back link rebuilds `/items?…` from it.
+
+Carrying it on the link rather than reading history also means the back link
+still works after a refresh, and when the URL is shared.
+
+`from` arrives inside a URL, so it is **re-parsed and re-serialised**, never
+pasted through: only `q`, `filter`, `cat` and `sort` survive, and the filter and
+sort are validated. The result can only ever describe a list this app renders.

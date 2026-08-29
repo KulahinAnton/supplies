@@ -47,3 +47,24 @@ export function itemListSearch(state: ItemListState): string {
 
   return params.toString();
 }
+
+/**
+ * Feature 27.1 — rebuild a list query string from an untrusted one.
+ *
+ * The item page receives the list's state as a `from` parameter so its back
+ * link can return to the exact view the user left. That value arrives in a
+ * URL, so it is re-parsed and re-serialised rather than pasted through: only
+ * the four known keys survive, and the filter and sort are validated. The
+ * result can only ever describe a list this app can render.
+ */
+export function sanitizeListSearch(raw: string | undefined): string {
+  if (!raw) return "";
+
+  const incoming = new URLSearchParams(raw);
+  return itemListSearch({
+    query: incoming.get("q") ?? "",
+    filter: parseFilter(incoming.get("filter")),
+    category: incoming.get("cat") ?? "all",
+    sort: parseSort(incoming.get("sort"), "name"),
+  });
+}

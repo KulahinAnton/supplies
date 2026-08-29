@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getCategoriesAndLocations, getItemDetail } from "@/lib/queries";
 import { batchExpiryState } from "@/lib/expiry";
+import { sanitizeListSearch } from "@/lib/item-list-params";
 import { todayUTC } from "@/lib/period";
 import { formatDate, formatDateTime, formatQuantityWithUnit } from "@/lib/format";
 import { fefoOrder } from "@/lib/stock";
@@ -22,11 +23,17 @@ const REASON_LABEL = {
 
 export default async function ItemDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  /** Feature 27.1 — the list view this item was opened from. */
+  searchParams: Promise<{ from?: string }>;
 }) {
   const session = await requireSession();
-  const { id } = await params;
+  const [{ id }, { from }] = await Promise.all([params, searchParams]);
+  // Re-parsed, never pasted through: it arrived in a URL.
+  const backSearch = sanitizeListSearch(from);
+  const backHref = backSearch ? `/items?${backSearch}` : "/items";
   const [detail, { locations }] = await Promise.all([
     getItemDetail(session.householdId, id),
     getCategoriesAndLocations(session.householdId),
@@ -52,7 +59,7 @@ export default async function ItemDetailPage({
   return (
     <div className="space-y-5">
       <Link
-        href="/items"
+        href={backHref}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" />

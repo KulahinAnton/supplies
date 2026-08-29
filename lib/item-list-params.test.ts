@@ -3,6 +3,7 @@ import {
   itemListSearch,
   parseFilter,
   parseSort,
+  sanitizeListSearch,
   type ItemListState,
 } from "@/lib/item-list-params";
 
@@ -59,5 +60,36 @@ describe("parseFilter / parseSort", () => {
     expect(parseFilter(undefined)).toBe("all");
     expect(parseSort("by-price", "name")).toBe("name");
     expect(parseSort(undefined, "oldest")).toBe("oldest");
+  });
+});
+
+describe("sanitizeListSearch", () => {
+  it("round-trips a real list query", () => {
+    const search = itemListSearch(
+      state({ query: "кава", filter: "LOW", category: "Напої", sort: "expiring" }),
+    );
+    expect(sanitizeListSearch(search)).toBe(search);
+  });
+
+  it("is empty for nothing, so the back link stays plain /items", () => {
+    expect(sanitizeListSearch(undefined)).toBe("");
+    expect(sanitizeListSearch("")).toBe("");
+  });
+
+  /**
+   * The value arrives inside a URL, so it is re-parsed rather than pasted
+   * through. Anything the list cannot render is dropped.
+   */
+  it("drops unknown keys and invalid values", () => {
+    expect(sanitizeListSearch("q=сік&evil=1&filter=nonsense&sort=by-price")).toBe(
+      "q=%D1%81%D1%96%D0%BA",
+    );
+  });
+
+  it("cannot be made to describe anything but a list", () => {
+    // No amount of input turns this into a path, a host or a scheme.
+    const nasty = sanitizeListSearch("q=../../etc&cat=//evil.example.com");
+    const params = new URLSearchParams(nasty);
+    expect([...params.keys()].every((k) => ["q", "filter", "cat", "sort"].includes(k))).toBe(true);
   });
 });

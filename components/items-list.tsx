@@ -111,15 +111,25 @@ export function ItemsList({
    * keystroke. The equality check makes the mount pass a no-op: on arrival the
    * URL already describes the state it seeded.
    */
+  const search = itemListSearch({ query, filter, category, sort });
+
+  /**
+   * Feature 27.1 — the item page's back link needs to know which view it was
+   * opened from; it cannot work that out for itself. Carrying it on the link
+   * also means the back link still works after a refresh, which a history
+   * based approach would not.
+   */
+  const itemHref = (id: string) =>
+    search ? `/items/${id}?from=${encodeURIComponent(search)}` : `/items/${id}`;
+
   useEffect(() => {
-    const search = itemListSearch({ query, filter, category, sort });
     const next = search ? `/items?${search}` : "/items";
     const current = `${window.location.pathname}${window.location.search}`;
     if (next === current) return;
 
     const timer = setTimeout(() => router.replace(next, { scroll: false }), 350);
     return () => clearTimeout(timer);
-  }, [query, filter, category, sort, router]);
+  }, [search, router]);
 
   /**
    * A hit navigates straight to the item — the scan already said exactly which
@@ -335,7 +345,7 @@ export function ItemsList({
           {visible.map((item) => (
             <li key={item.id}>
               <Link
-                href={`/items/${item.id}`}
+                href={itemHref(item.id)}
                 className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-accent"
               >
                 <div className="min-w-0 space-y-1">
