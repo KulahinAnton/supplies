@@ -1,20 +1,29 @@
 import Link from "next/link";
 import { Boxes, Plus } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getArchivedItems, getItemGroups, getItemViews } from "@/lib/queries";
+import {
+  getArchivedItems,
+  getItemGroups,
+  getItemsPage,
+} from "@/lib/queries";
 import { formatQuantityWithUnit } from "@/lib/format";
 import { todayUTC } from "@/lib/period";
 import { Button } from "@/components/ui/button";
 import { ItemsList, type ItemRow } from "@/components/items-list";
+import {
+  parseFilter,
+  parsePage,
+  parsePerPage,
+  parseSort,
+} from "@/lib/item-list-params";
 
 /**
- * Feature 27 — the list's own state travels in the URL.
+ * Feature 27 + 28 — the list's whole view state travels in the URL: what is
+ * being searched for, filtered and sorted, and which page of it.
  *
- * Search text, filter chip and category used to be plain component state, so
- * opening an item and pressing Back rebuilt the list from scratch: the person
- * lost the filtering they had just done and had to redo it to carry on where
- * they were. Reading them from the URL makes Back restore exactly what was on
- * screen, because the browser already remembers URLs.
+ * Reading it here rather than in the browser is what lets the server send one
+ * page instead of the entire cupboard, and it means Back restores exactly what
+ * was on screen.
  */
 export default async function ItemsPage({
   searchParams,
@@ -24,20 +33,32 @@ export default async function ItemsPage({
     filter?: string;
     cat?: string;
     sort?: string;
+    page?: string;
+    per?: string;
   }>;
 }) {
   const session = await requireSession();
   const params = await searchParams;
-  const items = await getItemViews(session.householdId);
-  const archivedCount = (await getArchivedItems(session.householdId)).length;
-  // Feature 26.2 — the entry point to the sets view, offered only once there
-  // is something to look at. A permanent button for an unused feature is
-  // clutter; an absent one for a used feature is a dead end.
-  const groupCount = (await getItemGroups(session.householdId)).length;
+
+  const view = {
+    query: params.q ?? "",
+    filter: parseFilter(params.filter),
+    category: params.cat ?? "all",
+    sort: parseSort(params.sort, "name"),
+    page: parsePage(params.page),
+    perPage: parsePerPage(params.per),
+  };
+
+  const [page, archived, groups] = await Promise.all([
+    getItemsPage(session.householdId, view),
+    getArchivedItems(session.householdId),
+    getItemGroups(session.householdId),
+  ]);
+
   const today = todayUTC();
 
   // Decimal cannot cross the server/client boundary — format here.
-  const rows: ItemRow[] = items.map((item) => ({
+  const rows: ItemRow[] = page.rows.map((item) => ({
     id: item.id,
     name: item.name,
     quantityLabel: formatQuantityWithUnit(item.quantity, item.unit),
@@ -46,16 +67,19 @@ export default async function ItemsPage({
       : null,
     stock: item.stock,
     expiry: item.expiry,
-    nextExpiryIso: item.nextExpiry ? item.nextExpiry.toISOString() : null,
+    nextExpiryIso: item.nextExpiryIso,
     categoryName: item.categoryName,
     locationName: item.locationName,
     groupName: item.groupName,
-    createdAtMs: item.createdAt.getTime(),
+    createdAtMs: item.createdAtMs,
   }));
 
-  const categories = [...new Set(items.map((item) => item.categoryName))].sort(
-    (a, b) => a.localeCompare(b, "uk-UA"),
-  );
+  /**
+   * "Nothing here" and "nothing matches" are different facts. The empty state
+   * below is for a household with no items at all; a search that matches
+   * nothing is the list's own business, since it still needs its search box.
+   */
+  const householdIsEmpty = page.total === 0 && !view.query && view.filter === "all" && view.category === "all";
 
   return (
     <div className="space-y-5">
@@ -63,11 +87,11 @@ export default async function ItemsPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Запаси</h1>
           <p className="text-sm text-muted-foreground">
-            {items.length > 0 ? `${items.length} позицій` : "Поки порожньо"}
+            {page.total > 0 ? `${page.total} позицій` : "Поки порожньо"}
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          {groupCount > 0 ? (
+          {groups.length > 0 ? (
             <Button
               variant="outline"
               size="icon"
@@ -85,7 +109,7 @@ export default async function ItemsPage({
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {householdIsEmpty ? (
         <div className="rounded-lg border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">
             Ще нічого немає. Додайте перший товар — наприклад, воду.
@@ -103,20 +127,26 @@ export default async function ItemsPage({
         <>
           <ItemsList
             items={rows}
-            categories={categories}
+            categories={page.categories}
             todayIso={today.toISOString()}
-            initialQuery={params.q ?? ""}
-            initialFilter={params.filter}
-            initialCategory={params.cat}
-            initialSort={params.sort}
+            initialQuery={view.query}
+            initialFilter={view.filter}
+            initialCategory={view.category}
+            initialSort={view.sort}
+            page={page.page}
+            pageCount={page.pageCount}
+            perPage={view.perPage}
+            total={page.total}
+            from={page.from}
+            to={page.to}
           />
-          {archivedCount > 0 ? (
+          {archived.length > 0 ? (
             <div className="pt-1 text-center">
               <Link
                 href="/items/archive"
                 className="text-sm text-muted-foreground hover:text-foreground hover:underline"
               >
-                Архів ({archivedCount})
+                Архів ({archived.length})
               </Link>
             </div>
           ) : null}

@@ -3,6 +3,9 @@ import {
   itemListSearch,
   parseFilter,
   parseSort,
+  DEFAULT_PER_PAGE,
+  parsePage,
+  parsePerPage,
   sanitizeListSearch,
   type ItemListState,
 } from "@/lib/item-list-params";
@@ -12,6 +15,8 @@ const state = (over: Partial<ItemListState> = {}): ItemListState => ({
   filter: "all",
   category: "all",
   sort: "name",
+  page: 1,
+  perPage: DEFAULT_PER_PAGE,
   ...over,
 });
 
@@ -91,5 +96,34 @@ describe("sanitizeListSearch", () => {
     const nasty = sanitizeListSearch("q=../../etc&cat=//evil.example.com");
     const params = new URLSearchParams(nasty);
     expect([...params.keys()].every((k) => ["q", "filter", "cat", "sort"].includes(k))).toBe(true);
+  });
+});
+
+describe("paging parameters", () => {
+  it("leaves page 1 and the default size out of the URL", () => {
+    expect(itemListSearch(state({ page: 1, perPage: DEFAULT_PER_PAGE }))).toBe("");
+  });
+
+  it("carries a real page and size", () => {
+    expect(itemListSearch(state({ page: 3, perPage: 50 }))).toBe("per=50&page=3");
+    expect(itemListSearch(state({ perPage: "all" }))).toBe("per=all");
+  });
+
+  it("accepts only the sizes actually offered", () => {
+    expect(parsePerPage("10")).toBe(10);
+    expect(parsePerPage("all")).toBe("all");
+    // 37 is not on the menu; a hand-edited URL falls back rather than
+    // producing a page size nothing in the UI can undo.
+    expect(parsePerPage("37")).toBe(DEFAULT_PER_PAGE);
+    expect(parsePerPage(null)).toBe(DEFAULT_PER_PAGE);
+  });
+
+  it("refuses page numbers that are not positive whole numbers", () => {
+    expect(parsePage("4")).toBe(4);
+    expect(parsePage("0")).toBe(1);
+    expect(parsePage("-2")).toBe(1);
+    expect(parsePage("1.5")).toBe(1);
+    expect(parsePage("тест")).toBe(1);
+    expect(parsePage(undefined)).toBe(1);
   });
 });

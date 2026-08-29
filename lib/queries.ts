@@ -4,6 +4,10 @@
 // digest (`pnpm digest:run`). Client-safety is enforced by the Prisma import
 // below instead: pulling this into a browser bundle fails the build loudly.
 
+import { selectItems } from "@/lib/item-filter";
+import { paginate } from "@/lib/pagination";
+import type { ItemFilter, PerPage } from "@/lib/item-list-params";
+import type { ItemSort } from "@/lib/item-sort";
 import { buildGroupView, groupNeedsRestock } from "@/lib/item-group";
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { Unit } from "@/lib/generated/prisma/enums";
@@ -516,4 +520,59 @@ export async function getItemGroupDetail(householdId: string, groupId: string) {
     }));
 
   return { group, view, members, candidates };
+}
+
+/**
+ * Feature 28 — one page of the items list.
+ *
+ * The whole household is loaded and the engine computes every state, then the
+ * selection is applied and only the requested page is returned. That is not
+ * laziness: `stock` and `expiry` are derived from batches and never stored, so
+ * the server cannot know which items belong on page 1 without considering all
+ * of them. Expressing those rules in SQL would be a second implementation of
+ * §3.4 and §3.5, free to disagree with the first.
+ *
+ * What the page buys is the wire and the DOM: the browser receives 25 rows
+ * instead of every item the family owns, which is what actually costs on a
+ * phone.
+ *
+ * `categories` come from the whole household, not the page — a chip list that
+ * changed as you paged would be unusable.
+ */
+export async function getItemsPage(
+  householdId: string,
+  view: {
+    query: string;
+    filter: ItemFilter;
+    category: string;
+    sort: ItemSort;
+    page: number;
+    perPage: PerPage;
+  },
+) {
+  const items = await getItemViews(householdId);
+
+  /**
+   * The sort helpers take the client-safe forms (epoch ms, ISO string) because
+   * a Date does not survive the server/client boundary. Adding them here beats
+   * teaching the pure sorter about Prisma dates, or reshaping ItemView for one
+   * caller's convenience.
+   */
+  const sortable = items.map((item) => ({
+    ...item,
+    createdAtMs: item.createdAt.getTime(),
+    nextExpiryIso: item.nextExpiry ? item.nextExpiry.toISOString() : null,
+  }));
+
+  const selected = selectItems(
+    sortable,
+    { query: view.query, filter: view.filter, category: view.category },
+    view.sort,
+  );
+
+  const categories = [...new Set(items.map((item) => item.categoryName))].sort(
+    (a, b) => a.localeCompare(b, "uk-UA"),
+  );
+
+  return { ...paginate(selected, view.page, view.perPage), categories };
 }

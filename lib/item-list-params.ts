@@ -11,11 +11,38 @@ import { isItemSort, type ItemSort } from "@/lib/item-sort";
 export const ITEM_FILTERS = ["all", "attention", "OUT", "LOW"] as const;
 export type ItemFilter = (typeof ITEM_FILTERS)[number];
 
+/** Feature 28 — page sizes offered in the list. */
+export const PAGE_SIZES = [10, 25, 50, 100] as const;
+export type PerPage = (typeof PAGE_SIZES)[number] | "all";
+
+/**
+ * Enough to fill a phone screen twice without asking for more, and small
+ * enough that the page is cheap. "all" stays available for the person who
+ * wants to scroll the whole cupboard.
+ */
+export const DEFAULT_PER_PAGE: PerPage = 25;
+
+export function parsePerPage(value: unknown): PerPage {
+  if (value === "all") return "all";
+  const size = Number(value);
+  return (PAGE_SIZES as readonly number[]).includes(size)
+    ? (size as PerPage)
+    : DEFAULT_PER_PAGE;
+}
+
+/** Page 1 for anything that is not a positive whole number. */
+export function parsePage(value: unknown): number {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
 export type ItemListState = {
   query: string;
   filter: ItemFilter;
   category: string;
   sort: ItemSort;
+  page: number;
+  perPage: PerPage;
 };
 
 /** A stale or hand-edited value falls back rather than breaking the list. */
@@ -44,6 +71,9 @@ export function itemListSearch(state: ItemListState): string {
   if (state.filter !== "all") params.set("filter", state.filter);
   if (state.category !== "all") params.set("cat", state.category);
   if (state.sort !== "name") params.set("sort", state.sort);
+  if (state.perPage !== DEFAULT_PER_PAGE) params.set("per", String(state.perPage));
+  // Page 1 is the default for every other change, so it never needs saying.
+  if (state.page > 1) params.set("page", String(state.page));
 
   return params.toString();
 }
@@ -66,5 +96,7 @@ export function sanitizeListSearch(raw: string | undefined): string {
     filter: parseFilter(incoming.get("filter")),
     category: incoming.get("cat") ?? "all",
     sort: parseSort(incoming.get("sort"), "name"),
+    page: parsePage(incoming.get("page")),
+    perPage: parsePerPage(incoming.get("per")),
   });
 }

@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowDownUp, Boxes, Plus, Search } from "lucide-react";
+import {
+  ArrowDownUp,
+  Boxes,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Search,
+} from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@/components/ui/button";
@@ -20,9 +27,12 @@ import { useItemSort } from "@/hooks/use-item-sort";
 import {
   itemListSearch,
   parseFilter,
+  PAGE_SIZES,
   type ItemFilter,
+  type ItemListState,
+  type PerPage,
 } from "@/lib/item-list-params";
-import { ITEM_SORTS, ITEM_SORT_LABELS, sortItems } from "@/lib/item-sort";
+import { ITEM_SORTS, ITEM_SORT_LABELS } from "@/lib/item-sort";
 import type { ExpiryState } from "@/lib/expiry";
 import type { StockState } from "@/lib/stock";
 import { cn } from "@/lib/utils";
@@ -70,6 +80,12 @@ export function ItemsList({
   initialFilter,
   initialCategory,
   initialSort,
+  page,
+  pageCount,
+  perPage,
+  total,
+  from,
+  to,
 }: {
   items: ItemRow[];
   categories: string[];
@@ -79,6 +95,13 @@ export function ItemsList({
   initialFilter?: string;
   initialCategory?: string;
   initialSort?: string;
+  /** Feature 28 — the server paginates; these describe the slice it sent. */
+  page: number;
+  pageCount: number;
+  perPage: PerPage;
+  total: number;
+  from: number;
+  to: number;
 }) {
   const [query, setQuery] = useState(initialQuery);
   /**
@@ -99,26 +122,41 @@ export function ItemsList({
   const today = useMemo(() => new Date(todayIso), [todayIso]);
 
   /**
-   * Feature 27 — keep the URL describing what is on screen.
+   * Feature 27 + 28 — every control states where it wants to go.
    *
-   * `router.replace`, not `history.replaceState`. replaceState is cheaper —
-   * no server round trip — but it never tells Next's router, so Back was
-   * answered from the cached payload for a bare /items and the restored
-   * parameters were promptly overwritten by this effect. A real navigation
-   * keeps the router cache keyed by the URL the user actually sees.
+   * An effect that watched all the state and rewrote the URL could not tell a
+   * filter change (go to page 1) from a pager click (go to page 4), and would
+   * bounce the user back to page 1 the moment they paged. Each control says
+   * what it means instead.
    *
-   * Debounced, because the search box would otherwise navigate on every
-   * keystroke. The equality check makes the mount pass a no-op: on arrival the
-   * URL already describes the state it seeded.
+   * `router.replace`, not `history.replaceState`: the latter never tells
+   * Next's router, so Back would be answered from a stale cached payload.
    */
-  const search = itemListSearch({ query, filter, category, sort });
+  const current: ItemListState = { query, filter, category, sort, page, perPage };
+
+  const go = useCallback(
+    (next: Partial<ItemListState>) => {
+      const search = itemListSearch({ ...current, ...next });
+      router.replace(search ? `/items?${search}` : "/items", { scroll: false });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [router, query, filter, category, sort, page, perPage],
+  );
 
   /**
-   * Feature 27.1 — the item page's back link needs to know which view it was
-   * opened from; it cannot work that out for itself. Carrying it on the link
-   * also means the back link still works after a refresh, which a history
-   * based approach would not.
+   * The search box keeps typing local and navigates once the user pauses, so
+   * the field stays responsive while the server still does the filtering —
+   * it has to, since it is the one holding every item.
    */
+  useEffect(() => {
+    if (query === initialQuery) return;
+    const timer = setTimeout(() => go({ query, page: 1 }), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  const search = itemListSearch(current);
+
   const itemHref = (id: string) =>
     search ? `/items/${id}?from=${encodeURIComponent(search)}` : `/items/${id}`;
 
@@ -159,23 +197,12 @@ export function ItemsList({
   }
 
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const matched = items.filter((item) => {
-      if (needle && !item.name.toLowerCase().includes(needle)) return false;
-      if (category !== "all" && item.categoryName !== category) return false;
-      if (filter === "OUT" || filter === "LOW") return item.stock === filter;
-      if (filter === "attention") {
-        return (
-          item.stock !== "OK" ||
-          item.expiry === "EXPIRED" ||
-          item.expiry === "SOON"
-        );
-      }
-      return true;
-    });
-    return sortItems(matched, sort);
-  }, [items, query, filter, category, sort]);
+  /**
+   * Feature 28 — `items` IS the result: the server filtered, sorted and sliced
+   * it. Filtering again here would filter one page rather than the household,
+   * and would look right while being wrong.
+   */
+  const visible = items;
 
   return (
     <div className="space-y-4">
@@ -213,7 +240,10 @@ export function ItemsList({
             {ITEM_SORTS.map((option) => (
               <DropdownMenuItem
                 key={option}
-                onClick={() => setSort(option)}
+                onClick={() => {
+                  setSort(option);
+                  go({ sort: option, page: 1 });
+                }}
                 className={option === sort ? "font-semibold" : undefined}
               >
                 {ITEM_SORT_LABELS[option]}
@@ -228,7 +258,10 @@ export function ItemsList({
           <button
             key={option.value}
             type="button"
-            onClick={() => setFilter(option.value)}
+            onClick={() => {
+              setFilter(option.value);
+              go({ filter: option.value, page: 1 });
+            }}
             className={cn(
               "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
               filter === option.value
@@ -242,7 +275,10 @@ export function ItemsList({
         <span className="w-px shrink-0 bg-border" />
         <button
           type="button"
-          onClick={() => setCategory("all")}
+          onClick={() => {
+            setCategory("all");
+            go({ category: "all", page: 1 });
+          }}
           className={cn(
             "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
             category === "all"
@@ -256,7 +292,10 @@ export function ItemsList({
           <button
             key={name}
             type="button"
-            onClick={() => setCategory(name)}
+            onClick={() => {
+              setCategory(name);
+              go({ category: name, page: 1 });
+            }}
             className={cn(
               "rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
               category === name
@@ -384,6 +423,72 @@ export function ItemsList({
           ))}
         </ul>
       )}
+
+      {/*
+        Feature 28 — the pager. Rendered whenever there is anything at all, not
+        only when there are several pages: the page-size control is how you get
+        back to seeing everything, so hiding it on short lists would strand
+        anyone who had chosen 10 and then filtered down to 8.
+      */}
+      {total > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {from}–{to} з {total}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              На сторінці
+              <select
+                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                value={String(perPage)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  // Back to page 1: page 7 of a 10-per-page list is nowhere in
+                  // a 100-per-page one.
+                  go({
+                    perPage: value === "all" ? "all" : (Number(value) as PerPage),
+                    page: 1,
+                  });
+                }}
+              >
+                {PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+                <option value="all">усі</option>
+              </select>
+            </label>
+
+            {pageCount > 1 ? (
+              <div className="flex items-center gap-1">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  aria-label="Попередня сторінка"
+                  disabled={page <= 1}
+                  onClick={() => go({ page: page - 1 })}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <span className="min-w-16 text-center text-xs text-muted-foreground tabular-nums">
+                  {page} / {pageCount}
+                </span>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  aria-label="Наступна сторінка"
+                  disabled={page >= pageCount}
+                  onClick={() => go({ page: page + 1 })}
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

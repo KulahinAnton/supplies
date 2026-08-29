@@ -1,5 +1,7 @@
 import "dotenv/config";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { todayUTC } from "@/lib/period";
 import { addStock, consume, consumeBatch } from "@/lib/stock-service";
 import { getDashboard, getItemViews, getShoppingView } from "@/lib/queries";
 import { itemQuantity } from "@/lib/stock";
@@ -91,31 +93,60 @@ async function main() {
   // Set up our own stock rather than relying on what the seed left behind —
   // otherwise a second run of this script finds the milk already drunk.
   const nextYear = new Date().getUTCFullYear() + 1;
-  await addStock(actor, milk.id, [{ quantity: "2", expiresAt: `${nextYear}-06-01` }]);
 
-  const milkBatches = await prisma.stockBatch.findMany({
-    where: { itemId: milk.id, quantity: { gt: 0 } },
-    orderBy: { expiresAt: "asc" },
+  /**
+   * Both batches are created here rather than found among the seed's.
+   *
+   * This used to take `milkBatches[0]` as the expired one, assuming the seed's
+   * expired carton was always the earliest surviving batch. Once that stopped
+   * being true the check drew from the batch it had labelled "expired" and
+   * reported that FEFO had not touched the good one — a real-looking failure
+   * with nothing wrong behind it.
+   */
+  const expiredBatch = await prisma.stockBatch.create({
+    data: {
+      itemId: milk.id,
+      quantity: "1.000",
+      expiresAt: new Date("2020-01-01"),
+      addedById: anton.id,
+    },
   });
-  const expiredBatch = milkBatches[0];
-  const goodBatch = milkBatches.find((b) => b.id !== expiredBatch.id)!;
+  const goodAdd = await addStock(actor, milk.id, [
+    { quantity: "2", expiresAt: `${nextYear}-06-01` },
+  ]);
+  if (!goodAdd.ok) throw new Error("could not set up the good batch");
+
+  /**
+   * Measured as a TOTAL over unexpired stock, not against one named batch.
+   *
+   * Naming a batch asserts which one FEFO picks, which is not the rule — the
+   * rule is that it draws a whole unit from something unexpired and leaves
+   * expired stock alone. The previous version named the batch it had just
+   * added, and failed the moment the seed happened to hold milk with an
+   * earlier date, which FEFO quite correctly preferred.
+   */
+  const liveUnexpired = async () => {
+    const batches = await prisma.stockBatch.findMany({
+      where: { itemId: milk.id, quantity: { gt: 0 }, expiresAt: { gte: todayUTC() } },
+    });
+    return batches.reduce((sum, b) => sum.plus(b.quantity), new Prisma.Decimal(0));
+  };
+  const unexpiredBefore = await liveUnexpired();
   const took = await consume(actor, milk.id, "1");
   check("consume ok", took.ok, took.ok ? "" : renderMessage(took.error));
   const expiredAfter = await prisma.stockBatch.findUniqueOrThrow({
     where: { id: expiredBatch.id },
   });
-  const goodAfter = await prisma.stockBatch.findUniqueOrThrow({
-    where: { id: goodBatch.id },
-  });
+  const unexpiredAfter = await liveUnexpired();
   check(
     "expired batch untouched",
     expiredAfter.quantity.toString() === expiredBatch.quantity.toString(),
     `${expiredBatch.quantity} → ${expiredAfter.quantity}`,
   );
   check(
-    "drew from the good batch",
-    goodAfter.quantity.lessThan(goodBatch.quantity),
-    `${goodBatch.quantity} → ${goodAfter.quantity}`,
+    "drew exactly 1 from unexpired stock",
+    unexpiredBefore.minus(unexpiredAfter).equals(1),
+    `${unexpiredBefore} → ${unexpiredAfter}`,
   );
 
   console.log("\n4. Shortfall is rejected whole, naming the gap");
