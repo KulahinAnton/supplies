@@ -8,12 +8,14 @@ import { botConsume, botAddStock } from "@/bot/actions";
 import { clearPending, getPending, setPending } from "@/bot/state";
 import { resolveChat, type BotUser } from "@/bot/auth";
 import {
+  BUTTONS,
   CB,
-  HOME_BUTTON,
   backHome,
   expiringView,
   homeView,
   lowView,
+  shortcutFor,
+  type Shortcut,
   type View,
 } from "@/bot/menu";
 import {
@@ -30,12 +32,27 @@ import {
  * through lib/stock-service.ts or the same rules the web UI uses.
  *
  * Navigation lives on inline keyboards (Feature 17.5): the home screen holds
- * every action, and every screen leads back to it. The reply keyboard is a
- * single «Головна» — a permanent row duplicating the menu would be two places
- * to keep in step.
+ * every action, and every screen leads back to it. The reply keyboard repeats
+ * the three most-used screens as shortcuts (Feature 30.1) — every label is an
+ * alias for one of those inline screens, never a second path through the
+ * logic.
  */
 
-const replyKeyboard = new Keyboard().text(HOME_BUTTON).resized().persistent();
+/**
+ * Feature 30.1 — the shortcuts row is back, and every label is handled.
+ *
+ * The row matches what chats linked before Feature 17.5 are still being shown
+ * by Telegram, so one layout answers for old and new chats alike. See
+ * `BUTTONS` for why evicting the old keyboard was the wrong fix.
+ */
+const replyKeyboard = new Keyboard()
+  .text(BUTTONS.home)
+  .text(BUTTONS.shopping)
+  .row()
+  .text(BUTTONS.low)
+  .text(BUTTONS.expiring)
+  .resized()
+  .persistent();
 
 export const BOT_COMMANDS = [
   { command: "menu", description: "Головне меню" },
@@ -107,6 +124,23 @@ export function createBot(token: string) {
 
   const send = (ctx: Context, view: View) =>
     ctx.reply(view.text, { reply_markup: view.keyboard });
+
+  /**
+   * Feature 30.1 — what a reply-keyboard label opens. Every arm is the same
+   * view the inline menu reaches, so the two routes cannot answer differently.
+   */
+  async function shortcutView(user: BotUser, shortcut: Shortcut): Promise<View> {
+    switch (shortcut) {
+      case "low":
+        return lowView(user.householdId);
+      case "expiring":
+        return expiringView(user.householdId);
+      case "shopping":
+        return groupListView(user.householdId);
+      case "home":
+        return homeView(user.name);
+    }
+  }
 
   bot.command("menu", (ctx) =>
     withUser(ctx, (user) => send(ctx, homeView(user.name)).then(() => {})),
@@ -245,8 +279,17 @@ export function createBot(token: string) {
     withUser(ctx, async (user) => {
       const text = ctx.message.text.trim();
 
-      if (text === HOME_BUTTON) {
-        await send(ctx, homeView(user.name));
+      /**
+       * Feature 30.1 — a reply-keyboard tap arrives as ordinary text, so it
+       * has to be recognised before anything else reads the message. It also
+       * ENDS whatever flow was in progress: the tap is a navigation, and
+       * leaving `pending` set would make the next thing typed disappear into
+       * a half-finished /add nobody remembers starting.
+       */
+      const shortcut = shortcutFor(text);
+      if (shortcut) {
+        await clearPending(user.chatId);
+        await send(ctx, await shortcutView(user, shortcut));
         return;
       }
 

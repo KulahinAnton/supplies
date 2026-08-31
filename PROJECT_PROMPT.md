@@ -1003,3 +1003,37 @@ urgency sort survives the split.
 
 `pnpm test:db` asserts the split in the real digest text: every expired item
 under the expired heading and none of them under the other.
+
+#### 30.1 — the bottom buttons answered with the menu
+
+**Reported:** the two buttons above the text field — «Що закінчується» and
+«Що псується» — showed the main menu's five buttons instead of a list.
+
+They are a keyboard **Telegram was still showing from an older version of this
+bot**. A custom reply keyboard lives in the client until a message replaces it,
+and Feature 17.5 cut the row down to a single «Головна» while only ever sending
+that replacement to chats linked *after* it. Chats linked before kept the old
+row for good.
+
+So the taps arrived as ordinary text that nothing matched, and an unmatched
+message with no conversation in progress opens the menu — the bot answering a
+question it had not been asked. Nothing was broken on the server; the client
+was sending a vocabulary the server had forgotten.
+
+**The fix keeps the buttons.** They are what the household reaches for, and
+evicting a keyboard someone is using to replace it with one fewer shortcut is
+not a fix. `BUTTONS` in `bot/menu.ts` is now the single list of labels: the
+reply keyboard is built from it, `shortcutFor` matches an incoming message
+against it, and each label routes to the same view the inline menu opens. A
+label is one more way in, never a second implementation — which is what
+Feature 17.5 was guarding against.
+
+A tap also **ends any flow in progress**. It is a navigation, and leaving
+`pending` set would feed whatever was typed next into a half-finished `/add`
+nobody remembers starting.
+
+**The labels are a wire format.** Old clients keep sending the old text
+forever, so renaming one silently breaks a button in someone's chat.
+`bot/menu.test.ts` pins every label, including the three shipped in `5fd1e8c`,
+so a rename fails in CI instead. It is also why `vitest.config.mts` now looks
+in `bot/` as well as `lib/`.

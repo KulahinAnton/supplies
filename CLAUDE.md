@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–30 implemented and running in production on Vercel + Neon. 12 migrations, seed idempotent, `pnpm test` (307 across 19 files), `pnpm test:db` (49 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–30 implemented and running in production on Vercel + Neon. 12 migrations, seed idempotent, `pnpm test` (311 across 20 files), `pnpm test:db` (49 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 
@@ -25,7 +25,7 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 
 - `pnpm dev` — dev server (Turbopack)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
-- `pnpm test` / `pnpm test:watch` — vitest over pure `lib/` rules, colocated `lib/*.test.ts`, no DB (`@` alias in `vitest.config.mts`)
+- `pnpm test` / `pnpm test:watch` — vitest over pure `lib/` rules, colocated `lib/*.test.ts` and `bot/*.test.ts`, no DB (`@` alias in `vitest.config.mts`)
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
 - `pnpm db:up` — start Postgres (docker compose, port 5434)
 - `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:studio` → [prisma/CLAUDE.md](prisma/CLAUDE.md)

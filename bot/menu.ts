@@ -10,8 +10,8 @@ import { MESSAGES } from "@/lib/messages";
  * Feature 17.5 — the bot's home screen.
  *
  * Every action is a button here, and every screen can get back to it. The
- * reply keyboard is reduced to a single «Головна», because a permanent row of
- * shortcuts duplicating this menu would be two places to keep in step.
+ * reply keyboard repeats the three most-used screens as shortcuts — see
+ * BUTTONS, and Feature 30.1 for why they came back.
  *
  * All navigation is **stateless**: each button carries what it needs in its
  * callback data, which Telegram caps at 64 bytes — a short prefix plus one
@@ -31,18 +31,52 @@ export const CB = {
   newGroup: "sng",
 } as const;
 
-/** The label of the one reply-keyboard button, so the handler can match it. */
-export const HOME_BUTTON = "🏠 Головна";
+/**
+ * Feature 30.1 — the reply keyboard's labels, and what each one opens.
+ *
+ * Reported: the two buttons above the text field answered with the main menu
+ * instead of a list. They are a keyboard Telegram is still SHOWING from an
+ * earlier version of this bot — a custom reply keyboard lives in the client
+ * until a message replaces it, and Feature 17.5 cut the row down to a single
+ * «Головна» without ever sending that replacement to chats linked before it.
+ * So the taps arrived as plain text nobody matched, and an unmatched message
+ * with no conversation in progress opens the menu. The bot was answering a
+ * question it had not been asked.
+ *
+ * Rather than evict a keyboard people are visibly using, the labels are now
+ * matched by name and the keyboard offers them again. A label is only an
+ * alias for a screen the inline menu already has, so this is one more way in,
+ * not a second implementation — which is what Feature 17.5 was guarding
+ * against when it removed the row.
+ *
+ * Never rename these. Old clients keep sending the old text forever; the
+ * entries are what those taps land on.
+ */
+export const BUTTONS = {
+  home: "🏠 Головна",
+  shopping: "🛒 Список покупок",
+  low: "📉 Що закінчується",
+  expiring: "⏳ Що псується",
+} as const;
+
+export type Shortcut = keyof typeof BUTTONS;
+
+/** The screen a reply-keyboard tap asks for, or null for ordinary text. */
+export function shortcutFor(text: string): Shortcut | null {
+  const needle = text.trim();
+  const match = Object.entries(BUTTONS).find(([, label]) => label === needle);
+  return match ? (match[0] as Shortcut) : null;
+}
 
 export type View = { text: string; keyboard: InlineKeyboard };
 
 export function homeView(name: string): View {
   const keyboard = new InlineKeyboard()
-    .text("🛒 Список покупок", CB.groups)
+    .text(BUTTONS.shopping, CB.groups)
     .row()
-    .text("📉 Що закінчується", CB.low)
+    .text(BUTTONS.low, CB.low)
     .row()
-    .text("⏳ Що псується", CB.expiring)
+    .text(BUTTONS.expiring, CB.expiring)
     .row()
     .text("➕ Додати запас", CB.addStock)
     .row()
@@ -56,7 +90,7 @@ export function homeView(name: string): View {
 
 /** Every leaf screen ends with a way back, or the menu is a one-way trip. */
 export function backHome(): InlineKeyboard {
-  return new InlineKeyboard().text("🏠 Головна", CB.home);
+  return new InlineKeyboard().text(BUTTONS.home, CB.home);
 }
 
 export async function lowView(householdId: string): Promise<View> {

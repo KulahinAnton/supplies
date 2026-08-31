@@ -50,6 +50,14 @@ The target comes from **`TELEGRAM_WEBHOOK_URL`**, deliberately separate from `AP
 
 Both paths publish the command list (`registerCommands`), so Telegram's / menu matches whichever bot is answering.
 
+## The reply keyboard is a wire format
+
+`BUTTONS` in `bot/menu.ts` is the single list of reply-keyboard labels: the keyboard is built from it and `shortcutFor` matches incoming text against it. Each label routes to the same view the inline menu opens — one more way in, not a second implementation.
+
+**Never rename a label.** Telegram keeps a custom keyboard in the client until a message replaces it, so chats linked long ago keep sending the text they were given; Feature 17.5 shrank the row without sending a replacement and those taps became unmatched text, which opened the main menu instead of the list someone asked for. `bot/menu.test.ts` pins every label, the pre-17.5 ones included, so a rename fails in CI rather than in a chat.
+
+A tap clears any pending flow: it is a navigation, and a stale `pending` would swallow the next thing typed.
+
 ## Conversation state
 
 `bot/state.ts` stores the chat's half-finished flow in **`TelegramLink.pending`**, not in memory.
