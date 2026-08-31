@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { CalendarClock, PackageX, ShoppingCart } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getDashboard } from "@/lib/queries";
+import { getDashboard, type ItemView } from "@/lib/queries";
 import { todayUTC } from "@/lib/period";
+import { splitExpiring } from "@/lib/expiry";
+import { cn } from "@/lib/utils";
 import { formatDateTime, formatQuantityWithUnit } from "@/lib/format";
 import { ExpiryBadge, StockBadge } from "@/components/state-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +21,9 @@ export default async function DashboardPage() {
   const { expiring, restock, recent, expiryWarnDays, hasCategoryOverrides } =
     await getDashboard(session.householdId);
   const today = todayUTC();
+  // Feature 30 — `expiring` arrives sorted by urgency; the split keeps that
+  // order inside each half.
+  const { expired, soon } = splitExpiring(expiring);
 
   return (
     <div className="space-y-6">
@@ -46,34 +51,31 @@ export default async function DashboardPage() {
               {hasCategoryOverrides ? " (деякі категорії — інакше)" : ""}
             </span>
           </CardHeader>
-          <CardContent className="pt-0">
+          <CardContent className="space-y-4 pt-0">
             {expiring.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Нічого не псується найближчим часом.
               </p>
             ) : (
-              <ul className="divide-y">
-                {expiring.map((item) => (
-                  <li key={item.id}>
-                    <Link
-                      href={`/items/${item.id}`}
-                      className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-accent"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{item.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatQuantityWithUnit(item.quantity, item.unit)}
-                        </div>
-                      </div>
-                      <ExpiryBadge
-                        state={item.expiry}
-                        date={item.nextExpiry}
-                        today={today}
-                      />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <>
+                {/*
+                  Feature 30 — two sections, because the two halves call for
+                  opposite actions: bin the first, eat the second. Expired
+                  goes on top; it is the half with nothing left to decide.
+                */}
+                <ExpirySection
+                  title="Прострочено"
+                  tone="destructive"
+                  items={expired}
+                  today={today}
+                />
+                <ExpirySection
+                  title="Спожити найближчим часом"
+                  tone="warning"
+                  items={soon}
+                  today={today}
+                />
+              </>
             )}
           </CardContent>
         </Card>
@@ -192,6 +194,65 @@ export default async function DashboardPage() {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * Feature 30 — one half of the «Псується» card.
+ *
+ * Renders nothing when its half is empty, so a household with only expired
+ * items sees one heading rather than an empty section explaining what it does
+ * not have.
+ */
+function ExpirySection({
+  title,
+  tone,
+  items,
+  today,
+}: {
+  title: string;
+  tone: "destructive" | "warning";
+  items: ItemView[];
+  today: Date;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "mb-0.5 flex items-center gap-1.5 text-xs font-semibold",
+          tone === "destructive"
+            ? "text-destructive"
+            : "text-warning-foreground dark:text-warning",
+        )}
+      >
+        {title}
+        <span className="font-normal text-muted-foreground">· {items.length}</span>
+      </div>
+      <ul className="divide-y">
+        {items.map((item) => (
+          <li key={item.id}>
+            <Link
+              href={`/items/${item.id}`}
+              className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-accent"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{item.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {formatQuantityWithUnit(item.quantity, item.unit)}
+                </div>
+              </div>
+              <ExpiryBadge
+                state={item.expiry}
+                date={item.nextExpiry}
+                today={today}
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

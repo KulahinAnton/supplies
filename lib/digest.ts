@@ -1,7 +1,7 @@
 import { Bot } from "grammy";
 import { prisma } from "@/lib/prisma";
 import { getItemViews, getRestockEntries } from "@/lib/queries";
-import { needsAttention } from "@/lib/expiry";
+import { needsAttention, splitExpiring } from "@/lib/expiry";
 
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { formatDateKey, todayUTC } from "@/lib/period";
@@ -162,20 +162,20 @@ export async function digestText(
 
   const parts: string[] = [];
 
-  if (expiring.length > 0) {
-    parts.push(
-      "⏳ Псується:\n" +
-        expiring
-          .map(
-            (item) =>
-              `• ${item.name} — ${
-                item.nextExpiry
-                  ? formatExpiryLabel(item.nextExpiry, today)
-                  : "—"
-              }`,
-          )
-          .join("\n"),
-    );
+  /**
+   * Feature 30 — two blocks, not one. In a chat there is no badge to read: the
+   * only thing separating "throw this out" from "eat this first" was the tail
+   * of each line, and a dozen lines of that is a wall to scan. The heading now
+   * says which half you are looking at.
+   */
+  const { expired, soon } = splitExpiring(expiring);
+
+  if (expired.length > 0) {
+    parts.push("❌ Прострочено:\n" + expiryLines(expired, today));
+  }
+
+  if (soon.length > 0) {
+    parts.push("⏳ Спожити найближчим часом:\n" + expiryLines(soon, today));
   }
 
   if (restock.length > 0) {
@@ -195,4 +195,23 @@ export async function digestText(
   }
 
   return parts.join("\n\n");
+}
+
+/**
+ * Feature 30 — one bullet per item, shared by both halves of the expiry
+ * section. The label carries its own verb («прострочено 3 дні тому» /
+ * «спливає завтра»), so the same line works under either heading.
+ */
+function expiryLines(
+  items: readonly { name: string; nextExpiry: Date | null }[],
+  today: Date,
+): string {
+  return items
+    .map(
+      (item) =>
+        `• ${item.name} — ${
+          item.nextExpiry ? formatExpiryLabel(item.nextExpiry, today) : "—"
+        }`,
+    )
+    .join("\n");
 }

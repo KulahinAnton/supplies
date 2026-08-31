@@ -3,6 +3,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import {
   batchExpiryState,
   byUrgency,
+  splitExpiring,
   daysUntil,
   itemExpiryState,
   needsAttention,
@@ -160,5 +161,34 @@ describe("byUrgency", () => {
       4,
       null,
     ]);
+  });
+});
+
+describe("splitExpiring", () => {
+  const row = (name: string, expiry: "EXPIRED" | "SOON") => ({ name, expiry });
+
+  it("separates what is gone from what still has time", () => {
+    const { expired, soon } = splitExpiring([
+      row("Молоко", "EXPIRED"),
+      row("Йогурт", "SOON"),
+      row("Сир", "EXPIRED"),
+    ]);
+    expect(expired.map((r) => r.name)).toEqual(["Молоко", "Сир"]);
+    expect(soon.map((r) => r.name)).toEqual(["Йогурт"]);
+  });
+
+  it("keeps the caller's order inside each half", () => {
+    // The dashboard sorts by urgency before splitting; the split must not
+    // shuffle that back.
+    const { expired } = splitExpiring([
+      row("давніше", "EXPIRED"),
+      row("свіжіше", "EXPIRED"),
+    ]);
+    expect(expired.map((r) => r.name)).toEqual(["давніше", "свіжіше"]);
+  });
+
+  it("gives empty halves rather than nothing to render", () => {
+    expect(splitExpiring([])).toEqual({ expired: [], soon: [] });
+    expect(splitExpiring([row("Хліб", "SOON")]).expired).toEqual([]);
   });
 });

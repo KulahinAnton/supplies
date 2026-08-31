@@ -2,7 +2,7 @@ import { InlineKeyboard } from "grammy";
 import { todayUTC } from "@/lib/period";
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { getRestockEntries, getItemViews } from "@/lib/queries";
-import { needsAttention } from "@/lib/expiry";
+import { needsAttention, splitExpiring } from "@/lib/expiry";
 
 import { MESSAGES } from "@/lib/messages";
 
@@ -93,15 +93,26 @@ export async function expiringView(householdId: string): Promise<View> {
     return { text: MESSAGES["bot.nothingExpiring"], keyboard: backHome() };
   }
 
-  const lines = items.map(
-    (item) =>
-      `• ${item.name} — ${
-        item.nextExpiry ? formatExpiryLabel(item.nextExpiry, today) : "—"
-      }`,
-  );
+  // Feature 30 — the same two blocks the digest and the dashboard show. One
+  // list mixed "bin this" with "eat this first", and in a chat there is no
+  // badge to tell them apart at a glance.
+  const { expired, soon } = splitExpiring(items);
+  const blocks: string[] = [];
 
-  return {
-    text: `⏳ Псується:\n${lines.join("\n")}`,
-    keyboard: backHome(),
-  };
+  const lines = (rows: typeof items) =>
+    rows
+      .map(
+        (item) =>
+          `• ${item.name} — ${
+            item.nextExpiry ? formatExpiryLabel(item.nextExpiry, today) : "—"
+          }`,
+      )
+      .join("\n");
+
+  if (expired.length > 0) blocks.push(`❌ Прострочено:\n${lines(expired)}`);
+  if (soon.length > 0) {
+    blocks.push(`⏳ Спожити найближчим часом:\n${lines(soon)}`);
+  }
+
+  return { text: blocks.join("\n\n"), keyboard: backHome() };
 }

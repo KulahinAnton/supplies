@@ -27,7 +27,7 @@ Stateless on purpose: no table, no cleanup job, and it cannot be replayed once e
 | Command | Does |
 |---|---|
 | `/low` | items that are OUT or LOW |
-| `/expiring` | items EXPIRED or SOON |
+| `/expiring` | items EXPIRED or SOON, in two blocks (Feature 30) |
 | `/list` | the unchecked shopping list |
 | `/add` | guided: item → quantity → expiry |
 | `/took` | guided: item → quantity (FEFO consume) |

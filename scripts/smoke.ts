@@ -11,6 +11,8 @@ import {
 } from "@/lib/queries";
 import { itemQuantity } from "@/lib/stock";
 import { renderMessage } from "@/lib/messages";
+import { digestText } from "@/lib/digest";
+import { needsAttention, splitExpiring } from "@/lib/expiry";
 import { formatQuantityWithUnit } from "@/lib/format";
 
 /**
@@ -391,7 +393,43 @@ async function main() {
   await prisma.itemGroup.delete({ where: { id: set.id } });
   check("set removed", (await prisma.itemGroup.count({ where: { id: set.id } })) === 0);
 
-  console.log("\n12. Cleanup");
+  console.log("\n12. The digest splits expired from expiring");
+  // Feature 30 — the web app can badge each row; a chat message cannot, so the
+  // two halves have to be two blocks. Asserted against the real text because
+  // the split only matters once it survives into what is actually sent.
+  const digestBody = await digestText(household.id, todayUTC());
+  const expiryStates = (await getItemViews(household.id)).filter((item) =>
+    needsAttention(item.expiry),
+  );
+  const { expired: goneOff, soon: useSoon } = splitExpiring(expiryStates);
+
+  if (!digestBody) {
+    check("digest had something to say", false, "no news in the seed");
+  } else {
+    const [, afterExpired = ""] = digestBody.split("❌ Прострочено:\n");
+    const expiredBlock = afterExpired.split("\n\n")[0];
+    const [, afterSoon = ""] = digestBody.split("⏳ Спожити найближчим часом:\n");
+    const soonBlock = afterSoon.split("\n\n")[0];
+
+    check("expired items get their own heading", goneOff.length === 0 || digestBody.includes("❌ Прострочено:"));
+    check("expiring items get theirs", useSoon.length === 0 || digestBody.includes("⏳ Спожити найближчим часом:"));
+    check(
+      "every expired item is under the expired heading",
+      goneOff.every((item) => expiredBlock.includes(item.name)),
+      goneOff.map((i) => i.name).join(", "),
+    );
+    check(
+      "and none of them under the other one",
+      goneOff.every((item) => !soonBlock.includes(item.name)),
+    );
+    check(
+      "every expiring item is under the expiring heading",
+      useSoon.every((item) => soonBlock.includes(item.name)),
+      useSoon.map((i) => i.name).join(", "),
+    );
+  }
+
+  console.log("\n13. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

@@ -104,3 +104,29 @@ export function byUrgency(a: ExpiryBatch, b: ExpiryBatch): number {
   if (b.expiresAt) return 1;
   return 0;
 }
+
+/**
+ * Feature 30 — the attention list, split into what is already gone and what
+ * still has time.
+ *
+ * Reported: one list mixing the two "makes it hard to see what I need to use
+ * faster and what is already expired". Both halves were there — sorted, and
+ * each row badged — but a badge has to be read one row at a time, and the two
+ * halves call for opposite actions: bin the first, eat the second.
+ *
+ * A splitter rather than three filters at three call sites: the dashboard, the
+ * digest and the bot's /expiring all show this list, and they must agree about
+ * which half a thing is in. `needsAttention` decides what enters the list at
+ * all, and this decides which half — one rule each, no third opinion.
+ *
+ * Order is preserved inside each half, so a caller that sorted by urgency
+ * still gets its order.
+ */
+export function splitExpiring<T extends { expiry: ExpiryState }>(
+  items: readonly T[],
+): { expired: T[]; soon: T[] } {
+  return {
+    expired: items.filter((item) => item.expiry === "EXPIRED"),
+    soon: items.filter((item) => item.expiry === "SOON"),
+  };
+}

@@ -973,3 +973,33 @@ the start of the string for OFF's "1.5 l", and METRO writes the size at the end
 reads the field, which is why that went unnoticed. The size still reaches the
 user inside the name.
 
+
+### Feature 30 — expired and expiring are two lists, not one
+
+**Reported:** «it's hard to see what I need to use faster and what is already
+expired» — in the web app and in Telegram alike.
+
+Both halves were always there, sorted with expired first and each row badged.
+But a badge is read one row at a time, and the two halves ask for opposite
+actions: bin the first, cook the second. In Telegram there was not even a
+badge — the only thing separating them was the tail of each line.
+
+**One rule, three surfaces.** `splitExpiring` in `lib/expiry.ts` divides the
+attention list into `expired` and `soon`; the dashboard card, the daily digest
+and the bot's `/expiring` all use it. `needsAttention` still decides what
+enters the list at all — one rule each, and no third opinion about which half
+a thing belongs in. Order is preserved inside each half, so the dashboard's
+urgency sort survives the split.
+
+- **Dashboard:** the «Псується» card grows two headed sections —
+  «Прострочено» in destructive red, «Спожити найближчим часом» in warning
+  amber, each with its count. A section with nothing in it renders nothing at
+  all, so a household with only expired items sees one heading rather than an
+  empty section explaining what it does not have.
+- **Digest and bot:** two blocks, «❌ Прострочено:» and «⏳ Спожити найближчим
+  часом:». The line itself is unchanged, because `formatExpiryLabel` already
+  carries its own verb — «прострочено 3 дні тому» / «спливає завтра» — and so
+  reads correctly under either heading.
+
+`pnpm test:db` asserts the split in the real digest text: every expired item
+under the expired heading and none of them under the other.
