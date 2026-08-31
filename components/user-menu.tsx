@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "next-auth/react";
+import { clearOfflineCaches } from "@/components/service-worker";
 import { LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +38,14 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
             <div className="text-xs text-muted-foreground">{email}</div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+          {/* Feature 31 — the cached pages are this household's data; they
+              must not outlive the session on a shared device. */}
+          <DropdownMenuItem
+            onClick={async () => {
+              await clearOfflineCaches();
+              await signOut({ callbackUrl: "/login" });
+            }}
+          >
             <LogOut className="size-4" />
             Вийти
           </DropdownMenuItem>

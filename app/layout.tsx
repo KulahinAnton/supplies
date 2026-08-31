@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ServiceWorker } from "@/components/service-worker";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,6 +38,8 @@ export default function RootLayout({
     <html lang="uk" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider>
+          {/* Feature 31 — registers the offline service worker (production only). */}
+          <ServiceWorker />
           {children}
           <Toaster position="top-center" richColors />
         </ThemeProvider>

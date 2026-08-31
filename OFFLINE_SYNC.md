@@ -1,6 +1,6 @@
 # Offline use with sync on reconnect — design and cost
 
-Assessment and plan. Nothing implemented yet.
+Design, plus stage 0 as built. Stages 1–4 are not implemented.
 
 **Wanted:** add stock and take stock with no connection, and have those changes
 reach the database once there is one.
@@ -68,26 +68,55 @@ came back.
 
 ## What has to be built
 
-There is no service worker in this repo at all today — the app opens to
-Chrome's dinosaur with no connection, installed or not. So this starts at zero.
+There was no service worker in this repo at all — the app opened to Chrome's
+dinosaur with no connection, installed or not. Stage 0 fixes that; the rest is
+still to build.
 
 | Stage | Work | Estimate |
 |---|---|---|
-| 0 | Service worker + app shell (Serwist), so the app *opens* offline | 1–2 days |
+| 0 | Service worker + app shell, so the app *opens* offline | **done** |
 | 1 | Mirror the item list into IndexedDB; render from it when offline | 3–5 days |
 | 2 | Outbox + optimistic UI on the add and take flows | ~1 week |
 | 3 | `clientOpId` migration, sync endpoint, replay through `stock-service` | 3–5 days |
 | 4 | Surfacing failures: what did not apply, retry or discard | 2–3 days |
 
-**~3–4 weeks part-time.** Stage 0 alone is worth doing on its own: it turns a
-dead app into one that opens and shows the last thing it knew.
+**~3–4 weeks part-time** for the rest.
+
+### Stage 0, as built
+
+`public/sw.js`, hand-written. The usual plugin (`@serwist/next`) injects
+through a webpack plugin and this app builds with Turbopack; sixty lines that
+plainly run beat a build-time dependency that may not.
+
+- **Hashed build assets** (`/_next/static/`) are cache-first — the name changes
+  when the content does, so the network never needs consulting.
+- **Pages are network-first**, falling back to cache. A connected phone is
+  never shown yesterday's stock: the whole app is a claim about what is in the
+  house right now, and a fast wrong answer is worse than a slow right one.
+- **Never GET-only, never `/api/`, never `/login`.** A cache must not answer a
+  server action, and a cached login redirect would lock someone out of their
+  own app.
+- **The RSC payload and the HTML document are cached under different keys.**
+  Next serves both for the same URL, and handing a client-side navigation the
+  wrong one breaks the router in a way that looks nothing like a caching bug.
+- **Signing out empties the caches**, because those pages are one household's
+  data rendered on the server.
+- Registration is production-only: Turbopack rewrites chunk URLs on every edit,
+  so cache-first in dev would serve yesterday's module.
+
+Verified with the server actually stopped (`ECONNREFUSED`, not throttled): a
+visited `/dashboard` rendered in full from cache, and an unvisited `/shopping`
+fell through to «Немає з'єднання».
+
+**Known gap, and the first thing stage 1 owes:** a page served from cache looks
+exactly like a live one. Nothing on screen says the numbers are from the last
+time there was signal.
 
 ## Decisions to make before starting
 
-- **"Remove" means what?** Taking stock (`consume`) is designed for above.
-  *Deleting an item* offline is a different thing — rarer, and genuinely
-  last-writer-wins against someone adding stock to that item meanwhile. Worth
-  deciding whether it is queued at all.
+- ~~**"Remove" means what?**~~ **Settled: taking stock.** Deleting an item
+  offline is out of scope — it is rarer, and genuinely last-writer-wins against
+  someone adding stock to that item meanwhile.
 - **The 8-hour JWT.** If the session expires while offline, the queue must
   survive re-login rather than being cleared with the session. Key it by user,
   and never drop it on logout without asking.

@@ -1111,3 +1111,40 @@ needs neither.
 `bot/menu.test.ts` pins the two properties that matter: the keyboard never
 carries `is_persistent`, and every key on it is a label `shortcutFor` answers —
 a key the handler does not recognise is exactly the 30.1 symptom.
+
+### Feature 31 — offline (stage 0: the app opens without a connection)
+
+**Wanted:** add and take stock with no signal, syncing when it comes back. The
+design for the whole of it is in [OFFLINE_SYNC.md](OFFLINE_SYNC.md); this is
+the first stage, which makes the app *open* offline. Offline writes are stages
+2–3 and are not built.
+
+There was no service worker in this repo at all, so an installed app with no
+signal showed the browser's error page. `public/sw.js` is hand-written: the
+usual plugin injects through a webpack plugin and this app builds with
+Turbopack, and a build-time dependency that may or may not run is a worse
+foundation than sixty lines that plainly do.
+
+- **Pages are network-first, cache second.** The whole app is a claim about
+  what is in the house *right now*; a fast wrong answer is worse than a slow
+  right one. Hashed build assets under `/_next/static/` are the exception —
+  their name changes when their content does, so they are cache-first.
+- **GET only, never `/api/`, never `/login`.** A cache must not answer a server
+  action, and a cached login redirect would lock someone out of their own app
+  until they cleared site data.
+- **The RSC payload and the HTML document are cached under different keys.**
+  Next serves both for the same URL, and handing a client-side navigation the
+  wrong one breaks the router in a way that looks nothing like a caching bug.
+- **Signing out empties the caches** — those pages are one household's data
+  rendered on the server, and on a shared device they must not outlive the
+  session.
+- **Registration is production-only.** Turbopack rewrites chunk URLs on every
+  edit, so a cache-first rule in dev would serve yesterday's module and produce
+  hydration errors that look like application bugs.
+
+Verified with the server actually stopped rather than throttled
+(`ECONNREFUSED`): a previously visited `/dashboard` rendered in full from
+cache, and a never-visited `/shopping` fell through to «Немає з'єднання».
+
+**Known gap.** A page served from cache is indistinguishable from a live one.
+Saying so on screen is the first thing stage 1 owes.
