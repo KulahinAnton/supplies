@@ -104,8 +104,10 @@ Three specific frictions:
 
 ## Worth asking before starting
 
-You already ship an installable PWA (`app/manifest.ts`, icons, offline-capable
-shell). The honest question is what native buys that it does not have:
+You already ship an installable PWA — `app/manifest.ts` with `standalone`,
+icons, HTTPS. **Not offline-capable, though: there is no service worker in this
+repo at all.** Every screen needs the network exactly as it does in a browser
+tab. The honest question is what native buys that installing does not:
 
 - **Barcode scanning** already works on iOS — `BarcodeDetector` on
   Chrome/Android, `@zxing/browser` over `getUserMedia` everywhere else. Native
@@ -117,3 +119,37 @@ shell). The honest question is what native buys that it does not have:
 If the driver is "scanning on my phone is clumsy", a week improving the
 existing scanner is a tenth of the cost. If the driver is wanting a real app in
 the stores, the estimate above holds.
+
+## The Android shortcut, today
+
+An **Android app package is available now from what already exists**, without
+React Native and without touching the app.
+
+- **Installing it needs no work at all.** Chrome on Android will already offer
+  «Встановити» / Add to Home screen: manifest, `standalone`, HTTPS and an icon
+  are the criteria and all four are met. It gets a launcher icon and runs with
+  no browser chrome. This works this minute.
+- **A real `.aab` for Google Play** is a Trusted Web Activity — Chrome rendering
+  your site inside a signed Android package, which is Google's sanctioned way
+  to ship a PWA to the store. `bubblewrap init` or PWABuilder generates it from
+  the manifest URL.
+
+What that needs first, and it is short:
+
+1. **PNG icons at 192 and 512 px.** The manifest currently offers SVG only.
+   Chrome accepts that for installing; Bubblewrap needs raster to generate
+   launcher icons and the Play listing.
+2. **`/.well-known/assetlinks.json`** served from the deployment, carrying the
+   signing key's SHA-256 fingerprint. Without it the TWA shows a URL bar across
+   the top and looks like a browser, which is the usual reason these feel
+   cheap.
+3. A signing key, a Play Console account ($25, once), and a listing.
+
+Half a day, most of it the store paperwork. What it does **not** give you: any
+offline behaviour (no service worker), push notifications (a TWA cannot send
+them without one), or anything the web app cannot already do. It is
+distribution, not capability.
+
+The order that wastes nothing: ship the TWA if what you want is an app icon
+from the Play Store, and keep the React Native estimate for when you want
+something the web genuinely cannot do.
