@@ -2,7 +2,7 @@ import { requireSession } from "@/lib/auth-guard";
 import { findDuplicateGroups } from "@/lib/duplicates";
 import {
   getCategoriesAndLocations,
-  getItemGroups,
+  getItemGroupViews,
   getHousehold,
   getMembers,
   hasTelegramLink,
@@ -25,7 +25,7 @@ export default async function SettingsPage() {
     await Promise.all([
       getHousehold(session.householdId),
       getCategoriesAndLocations(session.householdId),
-      getItemGroups(session.householdId),
+      getItemGroupViews(session.householdId),
       getMembers(session.householdId),
       hasTelegramLink(session.userId),
     ]);
@@ -76,11 +76,13 @@ export default async function SettingsPage() {
         rows={itemGroups.map((group) => ({
           id: group.id,
           name: group.name,
-          itemCount: group.itemCount,
+          itemCount: group.memberCount,
           // A set has no "default" — the star is hidden for this panel.
           isDefault: false,
           minQty: group.minQty.toString(),
           unit: group.unit,
+          // Feature 26.4 — a Decimal cannot cross into a client component.
+          quantity: group.quantity.toString(),
         }))}
       />
 

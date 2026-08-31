@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–29 implemented and running in production on Vercel + Neon. 12 migrations, seed idempotent, `pnpm test` (304 across 19 files), `pnpm test:db` (39 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–29 implemented and running in production on Vercel + Neon. 12 migrations, seed idempotent, `pnpm test` (304 across 19 files), `pnpm test:db` (44 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 
@@ -64,7 +64,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `lib/stock-service.ts` — **the single stock write path**, called by both the server actions and the bot. Takes an `Actor` instead of reading a session, which is what makes "one implementation, two front ends" real
 - `lib/shopping-groups.ts` — pure grouping (Feature 11): `null` groupId means «Загальна група»
 - `lib/actions/` — server actions (session guard + validation + `revalidatePath`); `lib/validation/` — zod schemas shared client/server
-- `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves
+- `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves. Sets have two readers: `getItemGroups` (cheap — name, unit, count) for the pickers, `getItemGroupViews` (loads members' batches) for the two views that show a combined total
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
 - `lib/messages.ts` — Ukrainian strings for everything produced outside React
 - `bot/` → [bot/CLAUDE.md](bot/CLAUDE.md) · `prisma/` → [prisma/CLAUDE.md](prisma/CLAUDE.md) · `components/` → [components/CLAUDE.md](components/CLAUDE.md)

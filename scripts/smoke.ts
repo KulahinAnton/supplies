@@ -3,7 +3,12 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { todayUTC } from "@/lib/period";
 import { addStock, consume, consumeBatch } from "@/lib/stock-service";
-import { getDashboard, getItemViews, getShoppingView } from "@/lib/queries";
+import {
+  getDashboard,
+  getItemGroupViews,
+  getItemViews,
+  getShoppingView,
+} from "@/lib/queries";
 import { itemQuantity } from "@/lib/stock";
 import { renderMessage } from "@/lib/messages";
 import { formatQuantityWithUnit } from "@/lib/format";
@@ -335,7 +340,58 @@ async function main() {
   await prisma.stockMovement.deleteMany({ where: { batchId: takeBatch.id } });
   await prisma.stockBatch.delete({ where: { id: takeBatch.id } });
 
-  console.log("\n11. Cleanup");
+  console.log("\n11. Set totals count live stock, not members");
+  // Feature 26.4 — the settings panel and the sets list read this. A set's
+  // combined quantity is derived from its members' live batches, so it cannot
+  // be asserted from a column; and archived members must not reach it.
+  const setName = `Смоук набір ${Date.now()}`;
+  const set = await prisma.itemGroup.create({
+    data: { householdId: household.id, name: setName, minQty: "0", sortOrder: 999 },
+  });
+  const spare = await prisma.item.create({
+    data: {
+      householdId: household.id,
+      name: `Смоук товар ${Date.now()}`,
+      unit: water.unit,
+      minQty: "0",
+      groupId: set.id,
+      categoryId: water.categoryId,
+    },
+  });
+  await prisma.item.update({ where: { id: water.id }, data: { groupId: set.id } });
+  await prisma.stockBatch.create({
+    data: { itemId: spare.id, quantity: "4", expiresAt: null, addedById: anton.id },
+  });
+
+  const waterNow = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: water.id } }),
+  );
+  const bothIn = (await getItemGroupViews(household.id)).find((g) => g.id === set.id)!;
+  check("counts both members", bothIn.memberCount === 2, `${bothIn.memberCount}`);
+  check(
+    "sums their live stock",
+    bothIn.quantity.equals(waterNow.plus(4)),
+    `${bothIn.quantity} vs ${waterNow.plus(4)}`,
+  );
+
+  await prisma.item.update({ where: { id: spare.id }, data: { isArchived: true } });
+  const archivedOut = (await getItemGroupViews(household.id)).find((g) => g.id === set.id)!;
+  // The set page has always ignored archived members; the settings count did
+  // not, so a set could report two products and then show one.
+  check("an archived member leaves the count", archivedOut.memberCount === 1);
+  check(
+    "and leaves the total",
+    archivedOut.quantity.equals(waterNow),
+    `${archivedOut.quantity} vs ${waterNow}`,
+  );
+
+  await prisma.item.update({ where: { id: water.id }, data: { groupId: null } });
+  await prisma.stockBatch.deleteMany({ where: { itemId: spare.id } });
+  await prisma.item.delete({ where: { id: spare.id } });
+  await prisma.itemGroup.delete({ where: { id: set.id } });
+  check("set removed", (await prisma.itemGroup.count({ where: { id: set.id } })) === 0);
+
+  console.log("\n12. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

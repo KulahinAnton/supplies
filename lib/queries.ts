@@ -453,18 +453,23 @@ export async function getItemNames(householdId: string) {
 }
 
 /**
- * Feature 26 — the sets, for the settings panel.
+ * Feature 26 — the sets, named and counted. For the pickers: the item form's
+ * set selector, and the /items header deciding whether to offer the sets link.
  *
  * The unit comes from the members rather than a stored column, so it is always
  * the unit the set is actually counted in.
+ *
+ * Deliberately does NOT compute the combined stock — see `getItemGroupViews`,
+ * which loads every member's batches to get it. This one runs on the items
+ * list, where Feature 28 went to some trouble to keep the query small.
  */
 export async function getItemGroups(householdId: string) {
   const groups = await prisma.itemGroup.findMany({
     where: { householdId },
     orderBy: { sortOrder: "asc" },
     include: {
-      items: { select: { unit: true }, take: 1 },
-      _count: { select: { items: true } },
+      items: { where: { isArchived: false }, select: { unit: true }, take: 1 },
+      _count: { select: { items: { where: { isArchived: false } } } },
     },
   });
 
@@ -475,6 +480,51 @@ export async function getItemGroups(householdId: string) {
     itemCount: group._count.items,
     unit: group.items[0]?.unit ?? null,
   }));
+}
+
+/**
+ * Feature 26.4 — the sets WITH their combined stock, for the settings panel
+ * and the sets list.
+ *
+ * A minimum is a number you choose by comparing it against what the household
+ * actually has, and the panel where you type that minimum showed only how MANY
+ * products were in the set, never how much of them. This goes through
+ * `buildGroupView`, the same engine the set page uses, so the total under the
+ * name and the total on the set's own page cannot disagree.
+ *
+ * Loading every member's batches is the only way to it: quantity is derived
+ * from live batches at read time and never stored, so there is no column to
+ * sum in SQL (`getItemsPage` argues the same trade-off at length). That cost
+ * is why this is separate from `getItemGroups` — the two pages that show a
+ * total are not the two pages that need to be fast.
+ *
+ * Archived members are excluded, from the count as well. That was already true
+ * of the set page and NOT of the settings count, so a set could report four
+ * products and then show three.
+ */
+export async function getItemGroupViews(householdId: string) {
+  const groups = await prisma.itemGroup.findMany({
+    where: { householdId },
+    orderBy: { sortOrder: "asc" },
+    include: {
+      items: {
+        where: { isArchived: false },
+        select: { id: true, name: true, unit: true, batches: true },
+      },
+    },
+  });
+
+  return groups.map((group) =>
+    buildGroupView(
+      group,
+      group.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        quantity: itemQuantity(item.batches),
+      })),
+    ),
+  );
 }
 
 /**

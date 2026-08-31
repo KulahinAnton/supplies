@@ -17,7 +17,7 @@ import {
 } from "@/lib/actions/settings";
 import Link from "next/link";
 import { renderMessage } from "@/lib/messages";
-import { UNIT_SHORT } from "@/lib/format";
+import { formatQuantityWithUnit, UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
 export type ItemGroupRow = SettingsRow & {
@@ -25,6 +25,9 @@ export type ItemGroupRow = SettingsRow & {
   minQty: string;
   /** Derived from the members, so it is absent until the set has one. */
   unit: Unit | null;
+  /** Feature 26.4 — the combined stock of the members, as a string: a
+   *  `Decimal` cannot cross into a client component. */
+  quantity: string;
 };
 
 /**
@@ -64,7 +67,19 @@ export function ItemGroupPanel({ rows }: { rows: ItemGroupRow[] }) {
     <SettingsListPanel
       title="Набори товарів"
       dndId="settings-item-groups"
-      rows={rows}
+      /**
+       * Feature 26.4 — the combined stock sits under the name, next to the
+       * member count. The minimum being typed two fields away is chosen by
+       * comparing it against this number, and until now the panel showed only
+       * how many products were in the set, never how much of them there was.
+       */
+      rows={rows.map((row) => ({
+        ...row,
+        subtitle:
+          row.unit === null
+            ? undefined
+            : `товарів: ${row.itemCount} · разом ${formatQuantityWithUnit(row.quantity, row.unit)}`,
+      }))}
       addPlaceholder="Новий набір"
       defaultHint="Один мінімум на кілька взаємозамінних товарів — наприклад, молоко різних марок. Перетягніть, щоб змінити порядок."
       onReorder={reorderItemGroupsAction}

@@ -759,6 +759,33 @@ sets button — only once at least one set exists, since a permanent button for
 an unused feature is clutter and an absent one for a used feature is a dead
 end. Not added to the bottom nav: five labelled items crowd a narrow phone.
 
+### Feature 26.4 — a set says how much it holds, not only how many
+
+**Reported:** the settings panel shows the number of products in a set but not
+their combined stock, which makes choosing the set's minimum uncomfortable —
+the minimum is a number you pick by comparing it against what is actually in
+the house, and that number was on another page.
+
+The member count and the total now sit together under the set's name, in both
+places that list sets: «товарів: 2 · разом 38 л» in Settings, and the same in
+`/groups` ahead of the existing «мінімум 6 л». Nothing was moved; the line that
+already said how many products now also says how much.
+
+The total comes from `buildGroupView`, the engine the set's own page uses, so
+the number under the name and the number on the set page cannot drift apart.
+
+**Two queries, not one.** `getItemGroups` stays cheap — id, name, unit, count —
+and still serves the item form's set selector and the /items header. The new
+`getItemGroupViews` loads every member's batches, because quantity is derived
+from live batches at read time and never stored, so there is no column to sum
+in SQL. Feature 28 worked to keep the items list's query small; making all five
+callers pay for the batches would have undone part of that.
+
+**Archived members no longer count.** The settings count included them while
+the set page did not, so a set could report four products and then show three.
+Both now read the live members, and `pnpm test:db` asserts it: archiving a
+member drops it from the count and its stock from the total.
+
 ### Feature 27 — the items list keeps its state across Back
 
 **Reported:** filter and sorting reset after opening an item and pressing Back.

@@ -32,6 +32,12 @@ export type SettingsRow = {
   name: string;
   itemCount: number;
   isDefault: boolean;
+  /**
+   * Replaces the "товарів: N" line. Feature 26.4 — a set says how much it
+   * holds as well as how many products it holds, which categories and
+   * locations have no equivalent of.
+   */
+  subtitle?: string;
 };
 
 type Result = { ok: boolean; error?: RuleMessage };
@@ -223,7 +229,8 @@ function SortableSettingsRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{row.name}</div>
         <div className="text-xs text-muted-foreground">
-          {row.itemCount > 0 ? `товарів: ${row.itemCount}` : "порожньо"}
+          {row.subtitle ??
+            (row.itemCount > 0 ? `товарів: ${row.itemCount}` : "порожньо")}
         </div>
       </div>
 
