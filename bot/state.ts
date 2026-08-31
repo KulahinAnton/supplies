@@ -68,3 +68,41 @@ export async function clearPending(chatId: number): Promise<void> {
     data: { pending: null },
   });
 }
+
+/**
+ * Feature 30.3 — which keyboard this chat has actually been sent.
+ *
+ * A reply keyboard reaches a Telegram client only on a message, so changing
+ * the keyboard in code changes nothing for anyone already linked. Twice now
+ * that has shipped as a bug: Feature 17.5 left old chats with labels the bot
+ * had stopped answering, and Feature 30.2's `is_persistent` left them with a
+ * keyboard that swallows the Android back button. Both needed a message
+ * nobody was going to send.
+ *
+ * So the chat records what it was sent, and anything the bot sends can settle
+ * the debt — the next interaction, or the daily digest, whichever comes first.
+ * Nobody has to type `/start`, and no broadcast is needed: a chat that never
+ * comes back is a chat that never sees the keyboard anyway.
+ */
+export async function keyboardVersionOf(chatId: number): Promise<number> {
+  const link = await prisma.telegramLink.findUnique({
+    where: { chatId: BigInt(chatId) },
+    select: { keyboardVersion: true },
+  });
+  return link?.keyboardVersion ?? 0;
+}
+
+/**
+ * Records that this chat now HAS the given keyboard. Call it only after the
+ * message carrying that keyboard was accepted by Telegram — marking it first
+ * would let one failed send silence the debt for good.
+ */
+export async function markKeyboardSent(
+  chatId: bigint,
+  version: number,
+): Promise<void> {
+  await prisma.telegramLink.updateMany({
+    where: { chatId, keyboardVersion: { lt: version } },
+    data: { keyboardVersion: version },
+  });
+}

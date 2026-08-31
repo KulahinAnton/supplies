@@ -1,4 +1,4 @@
-import { InlineKeyboard } from "grammy";
+import { InlineKeyboard, Keyboard } from "grammy";
 import { todayUTC } from "@/lib/period";
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { getRestockEntries, getItemViews } from "@/lib/queries";
@@ -150,3 +150,34 @@ export async function expiringView(householdId: string): Promise<View> {
 
   return { text: blocks.join("\n\n"), keyboard: backHome() };
 }
+
+/**
+ * Feature 30.2 / 30.3 — the reply keyboard itself, defined once because two
+ * senders now carry it: the bot when a chat is behind, and the daily digest.
+ *
+ * Deliberately NOT `.persistent()`. That flag keeps the custom keyboard up and
+ * removes the control that hides it, and on Android the back button is then
+ * spent trying to dismiss a keyboard that will not dismiss — the chat cannot
+ * be left at all. A row of shortcuts is not worth trapping someone in a chat.
+ */
+export function replyKeyboard(): Keyboard {
+  return new Keyboard()
+    .text(BUTTONS.home)
+    .text(BUTTONS.shopping)
+    .row()
+    .text(BUTTONS.low)
+    .text(BUTTONS.expiring)
+    .resized();
+}
+
+/**
+ * Feature 30.3 — bump this whenever the keyboard above changes.
+ *
+ * A chat's `keyboardVersion` records what it was last SENT, not what it was
+ * built with, because a keyboard only reaches a client on a message. Chats
+ * still on a lower number are owed the new one; see `oweKeyboard`.
+ *
+ * 1 — the first version anyone is owed: the shortcuts, without `is_persistent`
+ *     (Feature 30.2). Everything linked before this counts as 0.
+ */
+export const KEYBOARD_VERSION = 1;

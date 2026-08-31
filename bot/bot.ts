@@ -1,19 +1,26 @@
-import { Bot, Keyboard, type Context } from "grammy";
+import { Bot, type Context } from "grammy";
 import { prisma } from "@/lib/prisma";
 import { MESSAGES, renderMessage } from "@/lib/messages";
 import { verifyLinkToken } from "@/lib/telegram-link";
 import { UNIT_SHORT } from "@/lib/format";
 import { getItemViews } from "@/lib/queries";
 import { botConsume, botAddStock } from "@/bot/actions";
-import { clearPending, getPending, setPending } from "@/bot/state";
+import {
+  clearPending,
+  getPending,
+  keyboardVersionOf,
+  markKeyboardSent,
+  setPending,
+} from "@/bot/state";
 import { resolveChat, type BotUser } from "@/bot/auth";
 import {
-  BUTTONS,
   CB,
+  KEYBOARD_VERSION,
   backHome,
   expiringView,
   homeView,
   lowView,
+  replyKeyboard,
   shortcutFor,
   type Shortcut,
   type View,
@@ -37,29 +44,6 @@ import {
  * alias for one of those inline screens, never a second path through the
  * logic.
  */
-
-/**
- * Feature 30.1 — the shortcuts row is back, and every label is handled.
- *
- * The row matches what chats linked before Feature 17.5 are still being shown
- * by Telegram, so one layout answers for old and new chats alike. See
- * `BUTTONS` for why evicting the old keyboard was the wrong fix.
- *
- * Feature 30.2 — NOT `.persistent()`, and that is the whole point of this
- * line. `is_persistent` asks the client to keep the custom keyboard up and
- * removes the control that hides it; on Android the back button (and the
- * gesture that replaces it) is then swallowed trying to close a keyboard that
- * refuses to close, so the chat cannot be left at all. A keyboard of shortcuts
- * is not worth trapping someone in the chat — without the flag it collapses
- * like any other and comes back from the keyboard icon.
- */
-const replyKeyboard = new Keyboard()
-  .text(BUTTONS.home)
-  .text(BUTTONS.shopping)
-  .row()
-  .text(BUTTONS.low)
-  .text(BUTTONS.expiring)
-  .resized();
 
 export const BOT_COMMANDS = [
   { command: "menu", description: "Головне меню" },
@@ -102,8 +86,9 @@ export function createBot(token: string) {
         return;
       }
       await ctx.reply(MESSAGES["bot.keyboardRefreshed"], {
-        reply_markup: replyKeyboard,
+        reply_markup: replyKeyboard(),
       });
+      await markKeyboardSent(BigInt(linked.chatId), KEYBOARD_VERSION);
       await send(ctx, homeView(linked.name));
       return;
     }
@@ -129,12 +114,16 @@ export function createBot(token: string) {
       await tx.telegramLink.deleteMany({
         where: { OR: [{ userId: user.id }, { chatId }] },
       });
-      await tx.telegramLink.create({ data: { userId: user.id, chatId } });
+      // The reply below carries the keyboard, so this chat starts current and
+      // is never told its buttons were refreshed one message later.
+      await tx.telegramLink.create({
+        data: { userId: user.id, chatId, keyboardVersion: KEYBOARD_VERSION },
+      });
     });
 
     await ctx.reply(
       renderMessage({ key: "bot.linked", params: { name: user.name } }),
-      { reply_markup: replyKeyboard },
+      { reply_markup: replyKeyboard() },
     );
     const home = homeView(user.name);
     await ctx.reply(home.text, { reply_markup: home.keyboard });
@@ -147,7 +136,38 @@ export function createBot(token: string) {
       await ctx.reply(MESSAGES["bot.notLinked"]);
       return;
     }
+    await settleKeyboardDebt(ctx, user);
     await work(user);
+  }
+
+  /**
+   * Feature 30.3 — hand over the current keyboard if this chat is behind.
+   *
+   * Every update goes through here, so whichever way someone next touches the
+   * bot — a command, a shortcut, an inline button — is the moment they get it.
+   * Nobody has to type `/start`, and there is no broadcast: a chat that never
+   * comes back is a chat that would never have seen the keyboard anyway.
+   *
+   * It costs one extra message, once per chat per keyboard version, and it has
+   * to be its own message: Telegram allows a single `reply_markup` per message
+   * and almost everything the bot sends carries an inline menu instead.
+   *
+   * Failure is deliberately quiet, and the version is only recorded once the
+   * send has been accepted — marking it first would let one bad moment silence
+   * the debt permanently, which is exactly the bug this exists to prevent.
+   */
+  async function settleKeyboardDebt(ctx: Context, user: BotUser) {
+    try {
+      if ((await keyboardVersionOf(user.chatId)) >= KEYBOARD_VERSION) return;
+      await ctx.reply(MESSAGES["bot.keyboardRefreshed"], {
+        reply_markup: replyKeyboard(),
+      });
+      await markKeyboardSent(BigInt(user.chatId), KEYBOARD_VERSION);
+    } catch (error) {
+      // Never let the keyboard get in the way of what the user actually asked
+      // for; the debt simply stands until the next update.
+      console.error("[bot] keyboard refresh failed:", error);
+    }
   }
 
   const send = (ctx: Context, view: View) =>

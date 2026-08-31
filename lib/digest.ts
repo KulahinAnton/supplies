@@ -2,6 +2,10 @@ import { Bot } from "grammy";
 import { prisma } from "@/lib/prisma";
 import { getItemViews, getRestockEntries } from "@/lib/queries";
 import { needsAttention, splitExpiring } from "@/lib/expiry";
+// Feature 30.3 — the digest is the one message that reaches a chat without
+// anyone opening the bot, so it doubles as the keyboard's delivery route.
+import { KEYBOARD_VERSION, replyKeyboard } from "@/bot/menu";
+import { markKeyboardSent } from "@/bot/state";
 
 import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
 import { formatDateKey, todayUTC } from "@/lib/period";
@@ -135,9 +139,28 @@ export async function sendDigestToHousehold(
   let messages = 0;
   let failures = 0;
   for (const user of linked) {
+    const chatId = user.telegramLink!.chatId;
+    /**
+     * Feature 30.3 — the digest carries the keyboard to chats that are behind.
+     *
+     * This is the message that reaches every linked chat whether or not anyone
+     * opens the bot, so it is the one that fixes a keyboard for people who
+     * simply use the app and read the daily note. Attaching it costs nothing:
+     * the digest is plain text and had no `reply_markup` to give up.
+     *
+     * Chats already current get no keyboard at all rather than the same one
+     * again — resending it is harmless but pointless traffic, and it would
+     * reopen a keyboard someone had deliberately collapsed.
+     */
+    const owed = user.telegramLink!.keyboardVersion < KEYBOARD_VERSION;
+
     try {
-      await bot.api.sendMessage(Number(user.telegramLink!.chatId), text);
+      await bot.api.sendMessage(Number(chatId), text, {
+        reply_markup: owed ? replyKeyboard() : undefined,
+      });
       messages += 1;
+      // Only after Telegram accepted it — see `markKeyboardSent`.
+      if (owed) await markKeyboardSent(chatId, KEYBOARD_VERSION);
     } catch (error) {
       // One blocked chat must not stop the rest of the household.
       failures += 1;

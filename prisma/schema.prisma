@@ -290,6 +290,13 @@ model TelegramLink {
   /// fresh serverless instance, which loses a module-level Map between one
   /// message and the next.
   pending  String?
+  /// Feature 30.3 — which version of the reply keyboard this chat was last
+  /// SENT. A custom keyboard lives in the Telegram client until a message
+  /// carries a new one, so changing the keyboard in code changes nothing for
+  /// anyone already linked; this is how the bot knows whom it still owes one.
+  /// 0 means "linked before the versioning existed", which is exactly the
+  /// population that needs it.
+  keyboardVersion Int @default(0)
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

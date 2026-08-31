@@ -60,7 +60,18 @@ A tap clears any pending flow: it is a navigation, and a stale `pending` would s
 
 **Never send it with `is_persistent`.** The flag removes the control that hides the keyboard, and on Android the back button is then spent trying to dismiss something that will not dismiss — the chat cannot be left. That is [expected behaviour of the flag](https://bugs.telegram.org/c/18400), not a client bug.
 
-A bare `/start` on a linked chat re-sends the keyboard and opens the menu. That is the only way to replace a keyboard already installed in a client, so it is how a bad one gets fixed for chats linked before the fix.
+## Delivering a keyboard change (Feature 30.3)
+
+A reply keyboard only reaches a client on a message, so changing it in code changes nothing for anyone already linked. `TelegramLink.keyboardVersion` records what a chat was last **sent**; `KEYBOARD_VERSION` in `bot/menu.ts` is the current one. **Bump it whenever the keyboard changes** — otherwise the change silently never ships.
+
+Two paths pay the debt, so nobody has to type anything:
+
+- `withUser` runs on every update — the next command, shortcut or tap sends one short message carrying the keyboard, then the reply. Once per chat per version.
+- The daily digest attaches it to chats that are behind. It is plain text with no `reply_markup` of its own, so this costs no extra message and reaches people who never open the bot.
+
+The version is written only after Telegram accepts the send. A bare `/start` on a linked chat also re-sends it, as the manual escape hatch.
+
+No broadcast: bots are capped near 30 messages/second overall and ~1/second per chat, and 429s block the bot for a `retry_after` window. Fixing on next contact needs none of that.
 
 ## Conversation state
 

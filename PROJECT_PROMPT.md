@@ -1062,3 +1062,52 @@ already-linked chat now re-sends the keyboard and opens the menu. `/start` is
 what Telegram itself offers for a bot behaving oddly, so it is where someone
 will look; it also stops that command telling a linked user they are not
 linked.
+
+#### 30.3 — how a keyboard change actually reaches people
+
+**Asked:** what does a real bot do when a keyboard fix is waiting and thousands
+of users are never going to type `/start`?
+
+It does not broadcast. A reply keyboard is replaced by *any* message carrying
+one, so the fix rides along with the next message that user was going to get
+anyway. `/start` stays as the manual escape hatch — it is what someone reaches
+for when a bot misbehaves — but it is not how a fix is delivered.
+
+The wrinkle is that **one message carries one `reply_markup`**, and inline and
+reply keyboards are mutually exclusive. Nearly everything this bot sends is an
+inline menu, so its replies cannot double as the carrier. Hence a version.
+
+**`TelegramLink.keyboardVersion` records what a chat was last SENT** — not what
+the code builds, because those are different things and confusing them is what
+shipped 30.1 and 30.2 as bugs. `KEYBOARD_VERSION` in `bot/menu.ts` is bumped
+whenever the keyboard changes; anything below it is a debt, and two paths pay
+it:
+
+- **The next interaction.** `withUser` runs on every update, so any command,
+  shortcut or inline tap settles it: one short message carrying the keyboard,
+  then the thing the user actually asked for. One extra message per chat per
+  version, and never again.
+- **The daily digest.** The one message that reaches a linked chat whether or
+  not anyone opens the bot. It was plain text with no `reply_markup` to give
+  up, so the keyboard attaches for free and costs no extra message at all —
+  everyone who reads the noon note is fixed by tomorrow without touching
+  anything.
+
+A chat that is already current gets no keyboard: resending is pointless
+traffic, and it would reopen a keyboard someone had deliberately collapsed.
+The version is written only after Telegram accepts the send, so one bad moment
+cannot mark a debt paid that never was. A newly linked chat is created at the
+current version, because the link reply already carries the keyboard.
+
+**Why not a broadcast.** Bots are capped at roughly 30 messages/second overall
+and about one per second per chat, and going over returns `429` with a
+`retry_after` that blocks the bot for the duration
+([Bots FAQ](https://core.telegram.org/bots/faq),
+[grammY on flood limits](https://grammy.dev/advanced/flood)). At this app's
+scale a loop would finish instantly; at a hundred thousand chats it is a
+throttled job, and a message every dormant user ignores. Fixing on next contact
+needs neither.
+
+`bot/menu.test.ts` pins the two properties that matter: the keyboard never
+carries `is_persistent`, and every key on it is a label `shortcutFor` answers —
+a key the handler does not recognise is exactly the 30.1 symptom.

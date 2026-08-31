@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { BUTTONS, shortcutFor } from "@/bot/menu";
+import {
+  BUTTONS,
+  KEYBOARD_VERSION,
+  replyKeyboard,
+  shortcutFor,
+} from "@/bot/menu";
 
 /**
  * Feature 30.1 — the reply keyboard's labels are a wire format.
@@ -31,5 +36,34 @@ describe("shortcutFor", () => {
     expect(shortcutFor("Молоко")).toBeNull();
     expect(shortcutFor("Що закінчується")).toBeNull();
     expect(shortcutFor("")).toBeNull();
+  });
+});
+
+describe("replyKeyboard", () => {
+  it("never asks to be persistent", () => {
+    // Feature 30.2 — `is_persistent` removes the control that hides the
+    // keyboard, and the Android back button is then spent trying to dismiss
+    // it, so the chat cannot be left. This assertion is the guard rail.
+    const built = replyKeyboard();
+    expect(built.is_persistent).not.toBe(true);
+  });
+
+  it("offers only labels the bot can answer", () => {
+    // A key the handler does not recognise falls through to "unmatched text",
+    // which opens the main menu — the exact symptom of Feature 30.1.
+    // grammy types a key as `string | KeyboardButton`; both carry a label.
+    const labels = replyKeyboard()
+      .keyboard.flat()
+      .map((key) => (typeof key === "string" ? key : key.text));
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      expect(shortcutFor(label)).not.toBeNull();
+    }
+  });
+
+  it("has a version to compare a chat against", () => {
+    // 0 is the "linked before versioning" sentinel, so the current version
+    // must be above it or nobody is ever owed a keyboard.
+    expect(KEYBOARD_VERSION).toBeGreaterThan(0);
   });
 });
