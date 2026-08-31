@@ -51,11 +51,21 @@ async function householdLocationIds(householdId: string): Promise<Set<string>> {
   return new Set(rows.map((row) => row.id));
 }
 
+/**
+ * Feature 31 — `occurredAt` lets a caller say WHEN, instead of accepting now().
+ *
+ * Only the offline replay passes it: a queue flushed when the signal returns
+ * would otherwise stamp an afternoon of shopping and cooking with one instant,
+ * and the movement log is the audit trail — "who used the last of it, and
+ * when" is the question it exists to answer. Omitted everywhere else, where
+ * now() is the truth.
+ */
 export async function addStock(
   actor: Actor,
   itemId: string,
   rows: BatchRow[],
   note?: string,
+  occurredAt?: Date,
 ): Promise<ActionResult<{ batchIds: string[] }>> {
   const item = await loadItem(itemId, actor.householdId);
   if (!item) return actionError(ruleMessage("item.notFound"));
@@ -146,6 +156,7 @@ export async function addStock(
           reason: "PURCHASE",
           userId: actor.userId,
           note: note ?? null,
+          ...(occurredAt ? { occurredAt } : {}),
         },
       });
       created.push(batch.id);
@@ -161,6 +172,7 @@ export async function consume(
   itemId: string,
   quantity: string,
   note?: string,
+  occurredAt?: Date,
 ): Promise<ActionResult> {
   const item = await loadItem(itemId, actor.householdId);
   if (!item) return actionError(ruleMessage("item.notFound"));
@@ -192,6 +204,7 @@ export async function consume(
           reason: "CONSUME",
           userId: actor.userId,
           note: note ?? null,
+          ...(occurredAt ? { occurredAt } : {}),
         },
       });
     }
@@ -217,6 +230,7 @@ export async function consumeBatch(
   batchId: string,
   quantity: string,
   note?: string,
+  occurredAt?: Date,
 ): Promise<ActionResult<{ itemId: string }>> {
   const batch = await prisma.stockBatch.findFirst({
     where: { id: batchId, item: { householdId: actor.householdId } },
@@ -249,6 +263,7 @@ export async function consumeBatch(
         reason: "CONSUME",
         userId: actor.userId,
         note: note ?? null,
+        ...(occurredAt ? { occurredAt } : {}),
       },
     });
   });

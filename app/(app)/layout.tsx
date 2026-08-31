@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OfflineBanner } from "@/components/offline-banner";
 import { Package } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getAttentionCounts } from "@/lib/queries";
@@ -40,6 +41,12 @@ export default async function AppLayout({
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-24 sm:pb-8">
+        {/* Feature 31 — above the page, because it is about whether what is
+            below it can be trusted, and about work the user is owed an
+            answer on. It renders nothing when online with an empty queue. */}
+        <div className="mb-4 empty:mb-0">
+          <OfflineBanner />
+        </div>
         {children}
       </main>
     </div>

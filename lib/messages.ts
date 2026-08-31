@@ -88,6 +88,7 @@ export const MESSAGES = {
     "Цей чат не прив'язано. Відкрийте налаштування у застосунку та скористайтеся кнопкою «Прив'язати Telegram».",
   "bot.linkInvalid": "Посилання недійсне або вже використане.",
   "bot.linked": "Готово! Чат прив'язано до акаунта {name}.",
+  "offline.unknownFailure": "Не вдалося застосувати зміну.",
   "bot.keyboardRefreshed": "Кнопки оновлено.",
   "bot.nothingLow": "Усе на місці — нічого не закінчується.",
   "bot.nothingExpiring": "Нічого не псується найближчим часом.",
@@ -131,4 +132,38 @@ export function renderMessage(message: RuleMessage): string {
   return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
     name in params ? String(params[name]) : whole,
   );
+}
+
+/**
+ * Feature 31 — render a key that came back from storage rather than from code.
+ *
+ * The offline outbox persists the rule key of a refused operation in
+ * IndexedDB, where it can outlive the release that produced it: a key renamed
+ * or removed in a later version is still sitting on someone's phone. Passing
+ * that to `renderMessage` looks up `undefined` and throws inside `.replace`,
+ * turning a stale string into a blank screen.
+ *
+ * So keys from outside the build are checked, and an unrecognised one falls
+ * back to saying that plainly. Never use this for keys written in code —
+ * `renderMessage` keeps those honest at compile time.
+ */
+export function isMessageKey(key: string): key is MessageKey {
+  return key in MESSAGES;
+}
+
+/**
+ * A message whose key and params came back from storage rather than from code.
+ * The shape is deliberately loose: it crossed a network and sat in IndexedDB,
+ * possibly written by an older release.
+ */
+export type StoredMessage = {
+  key: string;
+  params?: Record<string, string | number>;
+};
+
+export function renderStoredMessage(message: StoredMessage | undefined): string {
+  if (!message || !isMessageKey(message.key)) {
+    return MESSAGES["offline.unknownFailure"];
+  }
+  return renderMessage({ key: message.key, params: message.params });
 }

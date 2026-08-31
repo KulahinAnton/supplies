@@ -22,6 +22,7 @@ import {
   discardBatchAction,
 } from "@/lib/actions/stock";
 import { renderMessage } from "@/lib/messages";
+import { submitOrQueue } from "@/lib/offline/sync-client";
 import { UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
 
@@ -49,10 +50,32 @@ export function ItemActions({
   async function take() {
     setError(null);
     setPending(true);
-    const result = await consumeAction({ itemId, quantity });
+
+    /**
+     * Feature 31 — the server first, the outbox only if it never answered.
+     * A shortfall comes back as a REFUSAL, not a throw, so it lands in the
+     * branch below and is shown; only a phone with no signal queues.
+     */
+    const { applied, result } = await submitOrQueue(
+      {
+        clientOpId: crypto.randomUUID(),
+        occurredAt: new Date().toISOString(),
+        kind: "consume",
+        itemId,
+        quantity,
+      },
+      () => consumeAction({ itemId, quantity }),
+    );
     setPending(false);
 
-    if (!result.ok) {
+    if (!applied) {
+      toast.success("Збережено на пристрої — надішлемо, коли буде зв'язок");
+      setQuantity("");
+      setTakeOpen(false);
+      return;
+    }
+
+    if (result && !result.ok) {
       // The shortfall message names exactly how much is missing (§3.3).
       setError(renderMessage(result.error));
       return;
@@ -155,9 +178,27 @@ export function BatchActions({
   async function take() {
     setError(null);
     setPending(true);
-    const result = await consumeBatchAction({ batchId, quantity: takeValue });
+
+    // Feature 31 — queued if the request never reached the server.
+    const { applied, result } = await submitOrQueue(
+      {
+        clientOpId: crypto.randomUUID(),
+        occurredAt: new Date().toISOString(),
+        kind: "consumeBatch",
+        batchId,
+        quantity: takeValue,
+      },
+      () => consumeBatchAction({ batchId, quantity: takeValue }),
+    );
     setPending(false);
-    if (!result.ok) {
+
+    if (!applied) {
+      toast.success("Збережено на пристрої — надішлемо, коли буде зв'язок");
+      setTakeOpen(false);
+      setTakeValue("");
+      return;
+    }
+    if (result && !result.ok) {
       setError(renderMessage(result.error));
       return;
     }

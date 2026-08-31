@@ -338,3 +338,37 @@ model BarcodeFact {
   @@id([barcode, source])
 }
 
+
+/// Feature 31 — one queued offline operation, already applied.
+///
+/// Exists purely for idempotency. A phone that loses signal mid-flush will
+/// send the same queue again, and without a record of what has been applied
+/// the household silently loses the same stock twice. The row is written in
+/// the SAME transaction as the stock change it describes, so "applied" and
+/// "recorded as applied" cannot come apart.
+///
+/// The outcome is stored, not just the fact: replaying an operation that
+/// failed the first time must return the same failure rather than trying
+/// again against different stock and quietly succeeding.
+///
+/// Not scoped by a foreign key to the household on purpose — `clientOpId` is
+/// a uuid made on a device and is unique on its own.
+model ClientOperation {
+  clientOpId  String   @id
+  householdId String
+  userId      String
+  /// "addStock" | "consume" | "consumeBatch".
+  kind        String
+  ok          Boolean
+  /// The rule message key when `ok` is false — e.g. "stock.shortfall".
+  errorKey    String?
+  /// Its `{placeholder}` values. Stored because a shortfall message without
+  /// them reads "Не вистачає {missing}" — the numbers ARE the message, and a
+  /// re-sent duplicate has to be told the same thing as the first attempt.
+  errorParams Json?
+  /// When the device says it happened, not when it reached us.
+  occurredAt  DateTime
+  appliedAt   DateTime @default(now())
+
+  @@index([householdId, appliedAt])
+}

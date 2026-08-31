@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addStockAction } from "@/lib/actions/stock";
+import { submitOrQueue } from "@/lib/offline/sync-client";
 import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
 import type { Unit } from "@/lib/generated/prisma/enums";
@@ -84,8 +85,26 @@ export function AddStockForm({
       return;
     }
 
-    const result = await addStockAction({ itemId, rows });
-    if (!result.ok) {
+    // Feature 31 — adding stock never conflicts: it appends a batch, and two
+    // people adding milk means the household has more milk. So this is the
+    // safest of the queued operations, whenever it has to be queued.
+    const { applied, result } = await submitOrQueue(
+      {
+        clientOpId: crypto.randomUUID(),
+        occurredAt: new Date().toISOString(),
+        kind: "addStock",
+        itemId,
+        rows,
+      },
+      () => addStockAction({ itemId, rows }),
+    );
+
+    if (!applied) {
+      toast.success("Збережено на пристрої — надішлемо, коли буде зв'язок");
+      onDone?.();
+      return;
+    }
+    if (result && !result.ok) {
       setFormError(renderMessage(result.error));
       return;
     }

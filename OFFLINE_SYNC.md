@@ -1,6 +1,7 @@
 # Offline use with sync on reconnect — design and cost
 
-Design, plus stage 0 as built. Stages 1–4 are not implemented.
+Design, and what was built against it. All of it is implemented; see the
+stage table for what each part turned out to be.
 
 **Wanted:** add stock and take stock with no connection, and have those changes
 reach the database once there is one.
@@ -69,18 +70,18 @@ came back.
 ## What has to be built
 
 There was no service worker in this repo at all — the app opened to Chrome's
-dinosaur with no connection, installed or not. Stage 0 fixes that; the rest is
-still to build.
+dinosaur with no connection, installed or not. That was stage 0; the rest
+followed.
 
 | Stage | Work | Estimate |
 |---|---|---|
 | 0 | Service worker + app shell, so the app *opens* offline | **done** |
-| 1 | Mirror the item list into IndexedDB; render from it when offline | 3–5 days |
-| 2 | Outbox + optimistic UI on the add and take flows | ~1 week |
-| 3 | `clientOpId` migration, sync endpoint, replay through `stock-service` | 3–5 days |
-| 4 | Surfacing failures: what did not apply, retry or discard | 2–3 days |
+| 1 | Offline reads | **done — differently, see below** |
+| 2 | Outbox on the add and take flows | **done** |
+| 3 | Idempotency, sync endpoint, replay through `stock-service` | **done** |
+| 4 | Surfacing failures: what did not apply, retry or discard | **done** |
 
-**~3–4 weeks part-time** for the rest.
+
 
 ### Stage 0, as built
 
@@ -125,3 +126,85 @@ time there was signal.
 - **Scope of the offline read cache.** The whole item list is small (a
   household, not a warehouse), so mirroring all of it is simpler and better
   than paging.
+
+### Stage 1 turned out to be nothing
+
+The plan was to mirror the item list into IndexedDB and render from it offline.
+Building stage 0 first made that unnecessary: the service worker already caches
+the *rendered pages*, so an offline phone shows the item list, the dashboard and
+every item page it has visited. A second copy of the same data in IndexedDB
+would have been a mirror to keep in step with the pages beside it, for no
+behaviour the user could see.
+
+What the plan was really reaching for was **saying the data is stale**, and
+that is one line in the banner, not a local database.
+
+IndexedDB is still used — for the outbox, which is the one thing the cached
+pages genuinely cannot hold.
+
+### Stages 2–4, as built
+
+**`lib/offline/operations.ts`** is the contract, validated by both ends: the
+client before queueing, so a malformed op never poisons every flush, and the
+server on arrival, because a queue that crossed a network is input like any
+other.
+
+**`submitOrQueue` tries the server first, always.** Queueing on
+`navigator.onLine === false` would be wrong twice over: the flag reports the
+network adapter rather than the internet, and skipping the request skips the
+only answer that knows whether there is enough milk. A *rejected* write is
+never queued either — a shortfall is a real answer, and putting it in the
+outbox would turn a clear refusal into a change the user believes happened.
+
+**`/api/sync` replays through `lib/stock-service.ts`** — a new caller, not a
+new implementation. FEFO is re-planned against current stock at apply time,
+which is the whole reason a queued take is safe to hold for an hour.
+
+**Failures stay visible.** A refused op keeps its place in the outbox with the
+reason, and the banner offers retry or discard. It is not retried automatically:
+a shortfall does not become truer for being asked again, and silently applying
+it later against restocked shelves would take milk the household has since
+decided is someone else's.
+
+**`occurredAt` comes from the device**, threaded through `stock-service` as an
+optional argument. Without it the movement log claims an afternoon of shopping
+happened in the instant the signal returned.
+
+### Two bugs the testing caught
+
+**Sending only the message key.** The banner rendered
+«Не вистачає {missing} — доступно лише {available}» — placeholders and all —
+because the sync response carried `errorKey` without its params, and the
+numbers *are* that message. Fixed by carrying the whole `RuleMessage`, and by
+storing the params on `ClientOperation` so a re-sent duplicate is told the same
+thing as the first attempt.
+
+**A stored key can outlive its release.** `renderMessage` looks up
+`MESSAGES[key]` and calls `.replace` on the result, so a key renamed in a later
+version turns a stale outbox entry into a crash. `renderStoredMessage` checks
+first and falls back. This was verified by accident and then on purpose: an
+entry written by the previous build rendered the fallback correctly after the
+schema changed under it.
+
+### What was actually verified
+
+- **Idempotency, against a real database** (`pnpm test:db`): the same op
+  applied once, re-sent, reported as a duplicate, and stock unchanged. This is
+  the check that matters most — a flush interrupted mid-way is the normal case,
+  not the edge case.
+- **An honest failure**: a queued take of more than exists is refused with
+  `stock.shortfall` and its numbers, and a retry returns the same refusal
+  rather than quietly succeeding later.
+- **The whole round trip in a browser**, with the client's POSTs made to fail
+  so the app saw exactly what a phone with no signal sees: the take queued to
+  IndexedDB, the banner counted it, «Надіслати» flushed it, stock went 264 →
+  262, and the movement carried the device's timestamp rather than the flush's.
+- **The refusal on screen**: «Не вистачає 4 728 штук — доступно (не
+  прострочено) лише 272 штуки», with retry and discard beside it.
+
+### Not verified
+
+The service worker's registration could not be exercised in the harness
+browser, which refuses to fetch worker scripts. Stage 0's caching *was* proven
+there earlier by hand-registering it; the automatic path is code review only.
+Offline behaviour on a real phone — the actual target — is untested by me.

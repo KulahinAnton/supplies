@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–30 implemented and running in production on Vercel + Neon. 13 migrations, seed idempotent, `pnpm test` (314 across 20 files), `pnpm test:db` (49 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–30 implemented and running in production on Vercel + Neon; **Feature 31 (offline) is on `feature/offline-sync`, not yet deployed**. 15 migrations, seed idempotent, `pnpm test` (324 across 21 files), `pnpm test:db` (58 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 
@@ -66,7 +66,8 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `lib/actions/` — server actions (session guard + validation + `revalidatePath`); `lib/validation/` — zod schemas shared client/server
 - `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves. Sets have two readers: `getItemGroups` (cheap — name, unit, count) for the pickers, `getItemGroupViews` (loads members' batches) for the two views that show a combined total
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
-- `lib/messages.ts` — Ukrainian strings for everything produced outside React
+- `lib/messages.ts` — Ukrainian strings for everything produced outside React; `renderStoredMessage` for keys that came back from IndexedDB and may predate the build
+- `lib/offline/` — Feature 31: `operations.ts` (the queued-op contract, validated both ends), `outbox.ts` (IndexedDB queue), `sync-client.ts` (try the server, queue only on a network failure), `replay.ts` (server-side replay through `stock-service`). `app/api/sync` is the endpoint
 - `bot/` → [bot/CLAUDE.md](bot/CLAUDE.md) · `prisma/` → [prisma/CLAUDE.md](prisma/CLAUDE.md) · `components/` → [components/CLAUDE.md](components/CLAUDE.md)
 - `scripts/set-telegram-webhook.ts` — register/remove the production webhook; refuses a non-HTTPS `APP_URL` or a missing `TELEGRAM_WEBHOOK_SECRET`
 - `scripts/smoke.ts` — `pnpm test:db`, the live-database integration test

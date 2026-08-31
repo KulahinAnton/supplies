@@ -1148,3 +1148,45 @@ cache, and a never-visited `/shopping` fell through to «Немає з'єдна�
 
 **Known gap.** A page served from cache is indistinguishable from a live one.
 Saying so on screen is the first thing stage 1 owes.
+
+### Feature 31.1 — taking and adding stock without a connection
+
+Stage 0 made the app open offline. This makes it usable offline: a take or a
+top-up done with no signal is kept on the device and applied when there is one.
+The full design and what testing found is in [OFFLINE_SYNC.md](OFFLINE_SYNC.md).
+
+**The phone queues an intent, never a result.** It records «взяв 2 л молока»,
+not which batch that came out of. FEFO depends on what is in the fridge at
+apply time, which is the server's to know — possibly an hour later — and
+`planConsume` is pure precisely so it can be re-run then. `/api/sync` replays
+each operation through `lib/stock-service.ts`, the same write path the web UI
+and the bot use: a new caller, not a new implementation.
+
+**`clientOpId` is the idempotency key.** A flush interrupted mid-way is re-sent
+whole, and without a record of what has been applied the household silently
+loses the same stock twice. `ClientOperation` stores the outcome, not just the
+fact — including failures, so a refused operation returns the same refusal
+rather than trying again against different stock and quietly succeeding hours
+later.
+
+**The server is tried first, always.** Queueing on `navigator.onLine` would be
+wrong twice: the flag reports the network adapter rather than the internet, and
+skipping the request skips the only answer that knows whether there is enough
+milk. A *rejected* write is never queued — a shortfall is a real answer, and
+queueing it would turn a clear refusal into a change the user believes
+happened.
+
+**A queued take can fail honestly**, and that is shown rather than swallowed:
+someone else finished the milk while you were offline. The operation keeps its
+place in the outbox with the reason and the numbers, and offers retry or
+discard. It is never retried automatically.
+
+**`occurredAt` comes from the device.** The movement log answers "who used the
+last of it, and when"; stamping a whole afternoon with the instant the signal
+returned would make it lie.
+
+**Stage 1 was dropped as unnecessary.** The plan called for mirroring the item
+list into IndexedDB to render offline, but the service worker already caches
+the rendered pages — a second copy would have been a mirror to keep in step for
+no visible behaviour. What the plan was reaching for was *saying the data is
+stale*, which is one line in the banner.

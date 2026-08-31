@@ -11,7 +11,9 @@ import {
 } from "@/lib/queries";
 import { itemQuantity } from "@/lib/stock";
 import { renderMessage } from "@/lib/messages";
+import { randomUUID } from "node:crypto";
 import { digestText } from "@/lib/digest";
+import { replayOperations } from "@/lib/offline/replay";
 import { needsAttention, splitExpiring } from "@/lib/expiry";
 import { formatQuantityWithUnit } from "@/lib/format";
 
@@ -429,7 +431,95 @@ async function main() {
     );
   }
 
-  console.log("\n13. Cleanup");
+  console.log("\n13. Offline replay is idempotent");
+  // Feature 31 — a phone that loses signal mid-flush re-sends the same queue.
+  // Without the ClientOperation guard the household silently loses the same
+  // stock twice, which is the failure this whole table exists to prevent.
+  // Its own item, so the movement this test looks up is unambiguously the one
+  // it created. Reusing a seeded item made the first version of this check
+  // read section 1's movement instead and fail on a timestamp it never wrote.
+  const replayItem = await prisma.item.create({
+    data: {
+      householdId: household.id,
+      name: `Смоук офлайн ${Date.now()}`,
+      unit: "PIECE",
+      minQty: "0",
+      categoryId: water.categoryId,
+    },
+  });
+  const before31 = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: replayItem.id } }),
+  );
+  const opId = randomUUID();
+  const opTime = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  const addOp = {
+    clientOpId: opId,
+    occurredAt: opTime,
+    kind: "addStock" as const,
+    itemId: replayItem.id,
+    rows: [{ quantity: "4" }],
+  };
+
+  const first = await replayOperations(actor, [addOp]);
+  check("applies the first time", first[0].ok && !first[0].duplicate);
+
+  const afterFirst = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: replayItem.id } }),
+  );
+  check("stock went up by 4", afterFirst.equals(before31.plus(4)), `${before31} → ${afterFirst}`);
+
+  const second = await replayOperations(actor, [addOp]);
+  check("the re-send is reported as a duplicate", second[0].duplicate === true);
+  const afterSecond = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: replayItem.id } }),
+  );
+  check(
+    "and changes nothing",
+    afterSecond.equals(afterFirst),
+    `${afterFirst} → ${afterSecond}`,
+  );
+
+  // The movement must say when the person did it, not when their signal came
+  // back, or the log claims a whole afternoon happened in one instant.
+  const replayed = await prisma.stockMovement.findFirst({
+    where: { itemId: replayItem.id, reason: "PURCHASE" },
+    orderBy: { occurredAt: "desc" },
+  });
+  const drift = Math.abs(
+    (replayed?.occurredAt.getTime() ?? 0) - new Date(opTime).getTime(),
+  );
+  check("the movement carries the device's time", drift < 1000, `${drift}ms off`);
+
+  console.log("\n14. A queued take that cannot apply fails honestly");
+  const doomed = {
+    clientOpId: randomUUID(),
+    occurredAt: new Date().toISOString(),
+    kind: "consume" as const,
+    itemId: replayItem.id,
+    quantity: "999999",
+  };
+  const refusedReplay = await replayOperations(actor, [doomed]);
+  check("refused rather than applied", refusedReplay[0].ok === false);
+  check(
+    "and says why, in a key the phone can render",
+    refusedReplay[0].error?.key === "stock.shortfall",
+    JSON.stringify(refusedReplay[0].error ?? "(none)"),
+  );
+
+  // Retrying it must not quietly succeed later against restocked shelves: the
+  // user was already told it did not apply.
+  const retried = await replayOperations(actor, [doomed]);
+  check("a retry returns the same refusal", retried[0].ok === false && retried[0].duplicate === true);
+
+  await prisma.clientOperation.deleteMany({
+    where: { clientOpId: { in: [opId, doomed.clientOpId] } },
+  });
+  await prisma.stockMovement.deleteMany({ where: { itemId: replayItem.id } });
+  await prisma.stockBatch.deleteMany({ where: { itemId: replayItem.id } });
+  await prisma.item.delete({ where: { id: replayItem.id } });
+  check("operation log and test item cleaned up", true);
+
+  console.log("\n15. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 
