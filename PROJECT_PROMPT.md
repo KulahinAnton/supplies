@@ -1037,3 +1037,28 @@ forever, so renaming one silently breaks a button in someone's chat.
 `bot/menu.test.ts` pins every label, including the three shipped in `5fd1e8c`,
 so a rename fails in CI instead. It is also why `vitest.config.mts` now looks
 in `bot/` as well as `lib/`.
+
+#### 30.2 — the Android back button was trapped in the chat
+
+**Reported:** in the bot's chat the Android back button does nothing, and
+neither does the swipe that replaces it. It should leave the chat.
+
+The keyboard was sent with **`is_persistent`**. That flag asks the client to
+keep the custom keyboard up and takes away the control that hides it, so on
+Android the back press is spent trying to dismiss a keyboard that will not
+dismiss — and the chat cannot be left at all. Telegram's own tracker carries
+this as expected behaviour of the flag rather than a client bug
+([bugs.telegram.org/c/18400](https://bugs.telegram.org/c/18400)).
+
+The flag is gone. The shortcuts collapse like any other keyboard and come back
+from the keyboard icon; a row of shortcuts is not worth trapping someone in the
+chat.
+
+**Removing the flag does not reach chats that already have that keyboard.** A
+custom keyboard lives in the client until a message carries a new one, and the
+only message that ever carried one was the reply to the link — the same
+mechanism behind 30.1, biting a second time. So a bare `/start` on an
+already-linked chat now re-sends the keyboard and opens the menu. `/start` is
+what Telegram itself offers for a bot behaving oddly, so it is where someone
+will look; it also stops that command telling a linked user they are not
+linked.

@@ -44,6 +44,14 @@ import {
  * The row matches what chats linked before Feature 17.5 are still being shown
  * by Telegram, so one layout answers for old and new chats alike. See
  * `BUTTONS` for why evicting the old keyboard was the wrong fix.
+ *
+ * Feature 30.2 — NOT `.persistent()`, and that is the whole point of this
+ * line. `is_persistent` asks the client to keep the custom keyboard up and
+ * removes the control that hides it; on Android the back button (and the
+ * gesture that replaces it) is then swallowed trying to close a keyboard that
+ * refuses to close, so the chat cannot be left at all. A keyboard of shortcuts
+ * is not worth trapping someone in the chat — without the flag it collapses
+ * like any other and comes back from the keyboard icon.
  */
 const replyKeyboard = new Keyboard()
   .text(BUTTONS.home)
@@ -51,8 +59,7 @@ const replyKeyboard = new Keyboard()
   .row()
   .text(BUTTONS.low)
   .text(BUTTONS.expiring)
-  .resized()
-  .persistent();
+  .resized();
 
 export const BOT_COMMANDS = [
   { command: "menu", description: "Головне меню" },
@@ -76,7 +83,28 @@ export function createBot(token: string) {
     const secret = process.env.AUTH_SECRET;
 
     if (!payload || !secret) {
-      await ctx.reply(MESSAGES["bot.notLinked"]);
+      /**
+       * Feature 30.2 — a bare `/start` on a linked chat re-sends the keyboard.
+       *
+       * The fix for the trapped back button is to stop asking for a persistent
+       * keyboard, but a keyboard already installed in a client stays until a
+       * message carries a new one — and the only message that ever carried one
+       * was the reply to the link. Without this, every chat linked before the
+       * fix keeps the keyboard that swallows Back, forever.
+       *
+       * `/start` is the gesture Telegram itself offers for a bot that is
+       * misbehaving, so this is where someone will look. It also stops the
+       * command telling an already-linked user they are not linked.
+       */
+      const linked = await resolveChat(ctx.chat?.id);
+      if (!linked) {
+        await ctx.reply(MESSAGES["bot.notLinked"]);
+        return;
+      }
+      await ctx.reply(MESSAGES["bot.keyboardRefreshed"], {
+        reply_markup: replyKeyboard,
+      });
+      await send(ctx, homeView(linked.name));
       return;
     }
 

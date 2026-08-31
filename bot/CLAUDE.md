@@ -58,6 +58,10 @@ Both paths publish the command list (`registerCommands`), so Telegram's / menu m
 
 A tap clears any pending flow: it is a navigation, and a stale `pending` would swallow the next thing typed.
 
+**Never send it with `is_persistent`.** The flag removes the control that hides the keyboard, and on Android the back button is then spent trying to dismiss something that will not dismiss — the chat cannot be left. That is [expected behaviour of the flag](https://bugs.telegram.org/c/18400), not a client bug.
+
+A bare `/start` on a linked chat re-sends the keyboard and opens the menu. That is the only way to replace a keyboard already installed in a client, so it is how a bad one gets fixed for chats linked before the fix.
+
 ## Conversation state
 
 `bot/state.ts` stores the chat's half-finished flow in **`TelegramLink.pending`**, not in memory.
