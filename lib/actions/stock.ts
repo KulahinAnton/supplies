@@ -8,6 +8,7 @@ import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { planCorrection, planDiscard } from "@/lib/stock";
 import { addStock, consume, consumeBatch } from "@/lib/stock-service";
+import { applyOnce } from "@/lib/offline/idempotency";
 import {
   addStockSchema,
   consumeBatchSchema,
@@ -38,12 +39,31 @@ export async function addStockAction(
   const parsed = addStockSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const result = await addStock(
-    session,
-    parsed.data.itemId,
-    parsed.data.rows,
-    parsed.data.note,
-  );
+  const run = () =>
+    addStock(session, parsed.data.itemId, parsed.data.rows, parsed.data.note);
+
+  /**
+   * Feature 31 — when the browser sent an operation id, this write goes
+   * through the same at-most-once guard the offline replay uses. The client
+   * gives up on a slow request and queues it; without this, the server
+   * finishing that request a moment later would add the stock twice.
+   */
+  const result = parsed.data.clientOpId
+    ? (
+        await applyOnce(
+          session,
+          {
+            clientOpId: parsed.data.clientOpId,
+            kind: "addStock",
+            occurredAt: new Date(),
+          },
+          run,
+          // A duplicate created no batches on THIS call, and saying so beats
+          // inventing ids that belong to the first attempt.
+          { batchIds: [] },
+        )
+      ).result
+    : await run();
 
   if (result.ok) refresh(parsed.data.itemId);
   return result;
@@ -55,12 +75,23 @@ export async function consumeAction(input: unknown): Promise<ActionResult> {
   const parsed = consumeSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const result = await consume(
-    session,
-    parsed.data.itemId,
-    parsed.data.quantity,
-    parsed.data.note,
-  );
+  const run = () =>
+    consume(session, parsed.data.itemId, parsed.data.quantity, parsed.data.note);
+
+  const result = parsed.data.clientOpId
+    ? (
+        await applyOnce(
+          session,
+          {
+            clientOpId: parsed.data.clientOpId,
+            kind: "consume",
+            occurredAt: new Date(),
+          },
+          run,
+          undefined,
+        )
+      ).result
+    : await run();
 
   if (result.ok) refresh(parsed.data.itemId);
   return result;
@@ -83,11 +114,27 @@ export async function consumeBatchAction(input: unknown): Promise<ActionResult> 
   const parsed = consumeBatchSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const result = await consumeBatch(
+  const run = () =>
+    consumeBatch(session, parsed.data.batchId, parsed.data.quantity, parsed.data.note);
+
+  if (!parsed.data.clientOpId) {
+    const direct = await run();
+    if (!direct.ok) return direct;
+    refresh(direct.data.itemId);
+    return actionOk();
+  }
+
+  const { result } = await applyOnce(
     session,
-    parsed.data.batchId,
-    parsed.data.quantity,
-    parsed.data.note,
+    {
+      clientOpId: parsed.data.clientOpId,
+      kind: "consumeBatch",
+      occurredAt: new Date(),
+    },
+    run,
+    // A duplicate touched no batch now; the page it would refresh is the one
+    // the caller is already looking at.
+    { itemId: parsed.data.batchId },
   );
   if (!result.ok) return result;
   refresh(result.data.itemId);

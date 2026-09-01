@@ -23,13 +23,22 @@ export const batchRowSchema = z.object({
   locationId: z.string().optional(),
 });
 
+/**
+ * Feature 31 — the id the browser made for this write, so the same operation
+ * cannot be applied twice however it arrives. Optional: the Telegram bot and
+ * anything predating the feature simply do not send one.
+ */
+const clientOpId = z.string().uuid().optional();
+
 export const addStockSchema = z.object({
+  clientOpId,
   itemId: z.string().min(1, key("item.notFound")),
   rows: z.array(batchRowSchema).min(1, key("batch.rowsRequired")),
   note: z.string().trim().max(300).optional(),
 });
 
 export const consumeSchema = z.object({
+  clientOpId,
   itemId: z.string().min(1, key("item.notFound")),
   quantity: quantityString,
   note: z.string().trim().max(300).optional(),
@@ -37,6 +46,7 @@ export const consumeSchema = z.object({
 
 /** Feature 24 — take from one named batch, expiry notwithstanding. */
 export const consumeBatchSchema = z.object({
+  clientOpId,
   batchId: z.string().min(1, key("stock.batchNotFound")),
   quantity: quantityString,
   note: z.string().trim().max(300).optional(),

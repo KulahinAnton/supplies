@@ -88,15 +88,16 @@ export function AddStockForm({
     // Feature 31 — adding stock never conflicts: it appends a batch, and two
     // people adding milk means the household has more milk. So this is the
     // safest of the queued operations, whenever it has to be queued.
+    const clientOpId = crypto.randomUUID();
     const { applied, result } = await submitOrQueue(
       {
-        clientOpId: crypto.randomUUID(),
+        clientOpId,
         occurredAt: new Date().toISOString(),
         kind: "addStock",
         itemId,
         rows,
       },
-      () => addStockAction({ itemId, rows }),
+      () => addStockAction({ clientOpId, itemId, rows }),
     );
 
     if (!applied) {

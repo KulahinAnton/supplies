@@ -1190,3 +1190,38 @@ list into IndexedDB to render offline, but the service worker already caches
 the rendered pages — a second copy would have been a mirror to keep in step for
 no visible behaviour. What the plan was reaching for was *saying the data is
 stale*, which is one line in the banner.
+
+#### 31.2 — a take with no signal hung instead of queueing
+
+**Reported from a phone in airplane mode:** taking one yoghurt "stuck" and the
+quantity never changed.
+
+The write went through `submitOrQueue`, which called the server action and
+waited for it to reject. With no connection that call does not reliably
+reject — the request can sit unresolved — so the wait never ended, the button
+stayed spinning, and the operation was never queued at all. The one case the
+whole feature exists for was the one case it did not cover.
+
+Two changes:
+
+- **`navigator.onLine === false` now queues without asking.** That direction of
+  the flag is worth trusting: false means there is no interface, so there is
+  nothing to ask. True still means only that an adapter exists, which is why a
+  connection that reports online and goes nowhere is handled by a timeout
+  rather than by believing the flag.
+- **Every attempt is bounded**, at twelve seconds — longer than any of these
+  writes takes, shorter than anyone will watch a spinner.
+
+**The timeout created a second problem, and closing it improved the design.**
+Giving up on a request the server may yet apply, then queueing it, would apply
+it twice. So the operation id now travels on the SERVER ACTION as well as in
+the queue, and `lib/offline/idempotency.ts` guards both routes with one
+implementation. Whichever copy arrives second is recognised and ignored.
+
+That is worth having for its own sake: it also covers a double-tapped button
+and a retried request on a flaky mobile connection, neither of which had
+anything to do with being offline.
+
+`pnpm test:db` asserts the cross-route case directly: apply through the online
+guard, replay the same id through the queue, and watch the second one take
+nothing.

@@ -14,6 +14,7 @@ import { renderMessage } from "@/lib/messages";
 import { randomUUID } from "node:crypto";
 import { digestText } from "@/lib/digest";
 import { replayOperations } from "@/lib/offline/replay";
+import { applyOnce } from "@/lib/offline/idempotency";
 import { needsAttention, splitExpiring } from "@/lib/expiry";
 import { formatQuantityWithUnit } from "@/lib/format";
 
@@ -519,7 +520,69 @@ async function main() {
   await prisma.item.delete({ where: { id: replayItem.id } });
   check("operation log and test item cleaned up", true);
 
-  console.log("\n15. Cleanup");
+  console.log("\n15. The online write path is idempotent too");
+  // Feature 31.1 — the client gives up on a slow request and queues it, so the
+  // same operation can reach the server twice by two different routes. Guarding
+  // only the replay left the client's own timeout free to double-count.
+  const onlineItem = await prisma.item.create({
+    data: {
+      householdId: household.id,
+      name: `Смоук онлайн ${Date.now()}`,
+      unit: "PIECE",
+      minQty: "0",
+      categoryId: water.categoryId,
+    },
+  });
+  await addStock(actor, onlineItem.id, [{ quantity: "10" }]);
+
+  const sharedOpId = randomUUID();
+  // `consumeAction` itself cannot run here — a server action needs a request
+  // scope for `headers()`. This exercises the guard the action wraps around
+  // `consume`, which is the part that makes the two routes agree.
+  const takeOnce = await applyOnce(
+    actor,
+    { clientOpId: sharedOpId, kind: "consume", occurredAt: new Date() },
+    () => consume(actor, onlineItem.id, "3"),
+    undefined,
+  );
+  check(
+    "the online route applies",
+    takeOnce.result.ok,
+    takeOnce.result.ok ? "" : renderMessage(takeOnce.result.error),
+  );
+
+  const afterOnce = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: onlineItem.id } }),
+  );
+  check("10 - 3 = 7", afterOnce.equals(7), afterOnce.toString());
+
+  // The retry the timeout provokes: same id, through the queue this time.
+  const viaQueue = await replayOperations(actor, [
+    {
+      clientOpId: sharedOpId,
+      occurredAt: new Date().toISOString(),
+      kind: "consume" as const,
+      itemId: onlineItem.id,
+      quantity: "3",
+    },
+  ]);
+  check("the queued copy is recognised", viaQueue[0].duplicate === true);
+
+  const afterTwice = itemQuantity(
+    await prisma.stockBatch.findMany({ where: { itemId: onlineItem.id } }),
+  );
+  check(
+    "and takes nothing more",
+    afterTwice.equals(7),
+    `${afterOnce} → ${afterTwice}`,
+  );
+
+  await prisma.clientOperation.deleteMany({ where: { clientOpId: sharedOpId } });
+  await prisma.stockMovement.deleteMany({ where: { itemId: onlineItem.id } });
+  await prisma.stockBatch.deleteMany({ where: { itemId: onlineItem.id } });
+  await prisma.item.delete({ where: { id: onlineItem.id } });
+
+  console.log("\n16. Cleanup");
   await prisma.household.delete({ where: { id: other.id } });
   check("intruder household removed", true);
 

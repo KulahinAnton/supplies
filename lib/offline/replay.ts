@@ -1,7 +1,8 @@
-import { prisma } from "@/lib/prisma";
+import { actionOk, type ActionResult } from "@/lib/action-result";
 import { addStock, consume, consumeBatch, type Actor } from "@/lib/stock-service";
-import type { QueuedOp, SyncError, SyncOutcome } from "@/lib/offline/operations";
+import type { QueuedOp, SyncOutcome } from "@/lib/offline/operations";
 import { inSendOrder } from "@/lib/offline/operations";
+import { applyOnce } from "@/lib/offline/idempotency";
 
 /**
  * Feature 31 — apply a phone's queued work.
@@ -15,6 +16,9 @@ import { inSendOrder } from "@/lib/offline/operations";
  * Operations apply **in the order they happened on the device**, and one
  * failure does not stop the rest: taking milk that has since run out must not
  * strand a bread purchase queued after it. Each op reports its own outcome.
+ *
+ * Applying at most once is `applyOnce`'s job, shared with the server actions —
+ * see there for why both routes need it.
  */
 export async function replayOperations(
   actor: Actor,
@@ -23,71 +27,44 @@ export async function replayOperations(
   const results: SyncOutcome[] = [];
 
   for (const op of inSendOrder(ops)) {
-    results.push(await replayOne(actor, op));
+    const occurredAt = new Date(op.occurredAt);
+    const outcome = await applyOnce(
+      actor,
+      { clientOpId: op.clientOpId, kind: op.kind, occurredAt },
+      () => apply(actor, op, occurredAt),
+      undefined,
+    );
+
+    results.push({
+      clientOpId: op.clientOpId,
+      ok: outcome.result.ok,
+      error: outcome.error,
+      ...(outcome.duplicate ? { duplicate: true } : {}),
+    });
   }
 
   return results;
 }
 
-async function replayOne(actor: Actor, op: QueuedOp): Promise<SyncOutcome> {
-  /**
-   * The stored outcome of an earlier attempt wins outright, and that includes
-   * failures. Retrying a failed op against different stock could quietly
-   * succeed hours later, taking milk the household has since decided is
-   * someone else's — the user was already told it did not apply.
-   */
-  const seen = await prisma.clientOperation.findUnique({
-    where: { clientOpId: op.clientOpId },
-  });
-  if (seen) {
-    return {
-      clientOpId: op.clientOpId,
-      ok: seen.ok,
-      error: seen.errorKey
-        ? { key: seen.errorKey, params: (seen.errorParams ?? undefined) as SyncError["params"] }
-        : undefined,
-      duplicate: true,
-    };
-  }
-
-  const occurredAt = new Date(op.occurredAt);
-  const result = await apply(actor, op, occurredAt);
-  const error = result.ok ? undefined : result.error;
-
-  /**
-   * Recorded AFTER the write and outside its transaction, which is the one
-   * place this is not airtight: a crash in the gap leaves the stock changed
-   * and the operation unrecorded, so a re-flush would apply it twice.
-   *
-   * Closing that needs the marker written inside `stock-service`'s own
-   * transaction, which means threading an idempotency key through the shared
-   * write path for the sake of one caller. The window is milliseconds wide and
-   * the failure is visible in the movement log; widening the shared contract
-   * to shave it is the worse trade. Revisit if it ever actually bites.
-   */
-  await prisma.clientOperation.create({
-    data: {
-      clientOpId: op.clientOpId,
-      householdId: actor.householdId,
-      userId: actor.userId,
-      kind: op.kind,
-      ok: result.ok,
-      errorKey: error?.key ?? null,
-      errorParams: error?.params ?? undefined,
-      occurredAt,
-    },
-  });
-
-  return { clientOpId: op.clientOpId, ok: result.ok, error };
-}
-
-function apply(actor: Actor, op: QueuedOp, occurredAt: Date) {
+function apply(
+  actor: Actor,
+  op: QueuedOp,
+  occurredAt: Date,
+): Promise<ActionResult<undefined>> {
   switch (op.kind) {
     case "addStock":
-      return addStock(actor, op.itemId, op.rows, undefined, occurredAt);
+      // The batch ids are not reported back; nothing on the phone waits for
+      // them, and dropping them keeps every arm of this switch one shape.
+      return addStock(actor, op.itemId, op.rows, undefined, occurredAt).then(
+        (result) => (result.ok ? actionOk(undefined) : result),
+      );
     case "consume":
       return consume(actor, op.itemId, op.quantity, undefined, occurredAt);
     case "consumeBatch":
-      return consumeBatch(actor, op.batchId, op.quantity, undefined, occurredAt);
+      // Same again: consumeBatch reports the item it touched, which only the
+      // web UI needs so it can refresh that page.
+      return consumeBatch(actor, op.batchId, op.quantity, undefined, occurredAt).then(
+        (result) => (result.ok ? actionOk(undefined) : result),
+      );
   }
 }

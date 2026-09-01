@@ -56,15 +56,16 @@ export function ItemActions({
      * A shortfall comes back as a REFUSAL, not a throw, so it lands in the
      * branch below and is shown; only a phone with no signal queues.
      */
+    const clientOpId = crypto.randomUUID();
     const { applied, result } = await submitOrQueue(
       {
-        clientOpId: crypto.randomUUID(),
+        clientOpId,
         occurredAt: new Date().toISOString(),
         kind: "consume",
         itemId,
         quantity,
       },
-      () => consumeAction({ itemId, quantity }),
+      () => consumeAction({ clientOpId, itemId, quantity }),
     );
     setPending(false);
 
@@ -180,15 +181,16 @@ export function BatchActions({
     setPending(true);
 
     // Feature 31 — queued if the request never reached the server.
+    const clientOpId = crypto.randomUUID();
     const { applied, result } = await submitOrQueue(
       {
-        clientOpId: crypto.randomUUID(),
+        clientOpId,
         occurredAt: new Date().toISOString(),
         kind: "consumeBatch",
         batchId,
         quantity: takeValue,
       },
-      () => consumeBatchAction({ batchId, quantity: takeValue }),
+      () => consumeBatchAction({ clientOpId, batchId, quantity: takeValue }),
     );
     setPending(false);
 
