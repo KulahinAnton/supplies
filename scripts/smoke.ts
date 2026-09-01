@@ -148,12 +148,12 @@ async function main() {
   check(
     "expired batch untouched",
     expiredAfter.quantity.toString() === expiredBatch.quantity.toString(),
-    `${expiredBatch.quantity} → ${expiredAfter.quantity}`,
+    `${expiredBatch.quantity.toString()} → ${expiredAfter.quantity.toString()}`,
   );
   check(
     "drew exactly 1 from unexpired stock",
     unexpiredBefore.minus(unexpiredAfter).equals(1),
-    `${unexpiredBefore} → ${unexpiredAfter}`,
+    `${unexpiredBefore.toString()} → ${unexpiredAfter.toString()}`,
   );
 
   console.log("\n4. Shortfall is rejected whole, naming the gap");
@@ -199,7 +199,7 @@ async function main() {
   check(
     "water grew by exactly the 10 added",
     waterView.quantity.equals(waterBefore.plus(10)),
-    `${waterBefore} → ${formatQuantityWithUnit(waterView.quantity, waterView.unit)}`,
+    `${waterBefore.toString()} → ${formatQuantityWithUnit(waterView.quantity, waterView.unit)}`,
   );
   check("water is OK on stock", waterView.stock === "OK");
   const milkView = views.find((item) => item.id === milk.id)!;
@@ -373,7 +373,7 @@ async function main() {
   check(
     "sums their live stock",
     bothIn.quantity.equals(waterNow.plus(4)),
-    `${bothIn.quantity} vs ${waterNow.plus(4)}`,
+    `${bothIn.quantity.toString()} vs ${waterNow.plus(4).toString()}`,
   );
 
   await prisma.item.update({ where: { id: spare.id }, data: { isArchived: true } });
@@ -384,7 +384,7 @@ async function main() {
   check(
     "and leaves the total",
     archivedOut.quantity.equals(waterNow),
-    `${archivedOut.quantity} vs ${waterNow}`,
+    `${archivedOut.quantity.toString()} vs ${waterNow.toString()}`,
   );
 
   await prisma.item.update({ where: { id: water.id }, data: { groupId: null } });

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { changePasswordAction, createInviteAction } from "@/lib/actions/auth";
 import {
@@ -33,13 +34,20 @@ export function HouseholdPanel({
   name,
   expiryWarnDays,
   digestHour,
+  aiEnabled,
 }: {
   name: string;
   expiryWarnDays: number;
   digestHour: number;
+  aiEnabled: boolean;
 }) {
   const router = useRouter();
-  const [values, setValues] = useState({ name, expiryWarnDays, digestHour });
+  const [values, setValues] = useState({
+    name,
+    expiryWarnDays,
+    digestHour,
+    aiEnabled,
+  });
   const [pending, setPending] = useState(false);
 
   return (
@@ -92,6 +100,26 @@ export function HouseholdPanel({
               На Vercel зведення приходить о 12:00 за київським часом.
             </p>
           </div>
+        </div>
+
+        {/* Feature 32.1 — off by default. Every press of the recipe button
+            spends money at an external provider, so a household that never
+            asked for that does not get a tab offering it. */}
+        <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label htmlFor="ai-enabled">Помічник зі стравами (AI)</Label>
+            <p className="text-xs text-muted-foreground">
+              Вмикає вкладку «Рецепти». Пропозиції готує Claude — це платні
+              запити до зовнішнього сервісу, по одному на кожне натискання.
+            </p>
+          </div>
+          <Switch
+            id="ai-enabled"
+            checked={values.aiEnabled}
+            onCheckedChange={(checked) =>
+              setValues({ ...values, aiEnabled: checked === true })
+            }
+          />
         </div>
 
         <Button

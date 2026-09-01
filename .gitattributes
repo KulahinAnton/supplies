@@ -1,0 +1,15 @@
+# Every commit in this repo printed a wall of "LF will be replaced by CRLF"
+# warnings. This settles it: the repository stores LF, and Git checks out
+# whatever the platform wants. Without it, two machines can produce diffs that
+# are nothing but line endings.
+* text=auto eol=lf
+
+# Binary-ish files Git should not touch.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
+# Generated: keep it out of diffs and reviews.
+pnpm-lock.yaml linguist-generated=true

@@ -1111,3 +1111,91 @@ needs neither.
 `bot/menu.test.ts` pins the two properties that matter: the keyboard never
 carries `is_persistent`, and every key on it is a label `shortcutFor` answers —
 a key the handler does not recognise is exactly the 30.1 symptom.
+
+### Feature 32 — «Рецепти»: what to cook from what is in the house
+
+A tab with one button. Pressing it asks Claude for a single dish made from the
+household's current stock, in Ukrainian.
+
+**The model is Claude Haiku 4.5**, because the cheapest was asked for: $1/$5 per
+million tokens, the least expensive available. The task is a short list in and a
+short recipe out and does not reward a larger model. `ANTHROPIC_MODEL` overrides
+it without a deploy if that judgement proves wrong. Haiku 4.5 predates adaptive
+thinking and effort levels, so neither is set — `effort` is rejected on it, and a
+thinking budget would buy deliberation this task does not need.
+
+**Nothing is spent on a page view.** The model is consulted only when someone
+presses the button; the page itself renders from the database and says how many
+items it would consider, so the answer is not a surprise. An almost-empty pantry
+is refused before any request is made.
+
+**What the model is told, and why it is short:**
+
+- One line per item — name, quantity, and a note only when it is about to
+  spoil. Sorted with the urgent first, and the model is told the list is sorted
+  that way. That ordering IS the recommendation: cheaper than restating a
+  priority on every line.
+- **Expired items are not sent at all.** Suggesting someone cook with food the
+  app itself flags as spoiled would be worse than suggesting nothing, and no
+  prompt wording is as reliable as not sending it.
+- Items at zero are not sent — a recipe is about what is in the house; the
+  shopping list is a different screen.
+- Capped at 60 lines. The household holds tens of items, so this is a guard
+  against a pathological list, not a routine trim.
+- `max_tokens` is 900. Output is billed at five times input here, so that
+  number matters more than the pantry does.
+
+**Non-food is handled in the prompt, not by filtering.** The list is the whole
+inventory — shampoo, paracetamol and cat food sit in it beside the eggs. A
+category filter would be sturdier, but categories are named by each household
+and cannot be matched reliably, so the model is told to ignore them. If that
+ever slips, the sturdy version is a per-category "це їжа" flag in Settings.
+
+**The answer is rendered as the text the model produced**, not parsed into
+fields. A recipe is prose with a shape, and every parser for that shape is one
+wording change away from showing nothing. The model is asked for a fixed layout
+and the layout is preserved.
+
+Nothing is stored. Pressing again asks again and replaces the suggestion —
+keeping a history would mean a table, a page, and a decision about whose
+suggestions those are, none of which was asked for. The token count of each
+answer is shown, so the cost of pressing the button is never a mystery.
+
+**Not verified against the live API.** There is no key on this machine, so the
+request was proven against a local stub that records what the SDK sends —
+correct model, `max_tokens`, and message shape, and the response parses. What a
+real Claude reply looks like, and whether the format instruction holds, is
+untested.
+
+#### 32.1 — a switch, a position, and a number that meant nothing
+
+Three things asked for after the first day of use.
+
+**The token line said nothing.** «Токени: 1628 → 218» is two bare numbers with
+no unit and no scale, and it invites exactly one question — is that a lot? So
+the line now answers it: «Надіслано 639 токенів (ваш список), отримано 229
+(рецепт) · приблизно 0,0018 USD». Input and output are priced separately
+because they are billed separately — output is five times dearer here, which is
+why `max_tokens` is the lever that matters and not the length of the pantry.
+Only models with a price on file get a figure; an `ANTHROPIC_MODEL` override
+that is not listed shows the counts alone, because a confidently wrong price is
+worse than none.
+
+**The tab moved after «Покупки»**, so Settings stays last.
+
+**The helper is off until a household turns it on.** `Household.aiEnabled`,
+default false. Every press spends money at an external provider, and a
+household that never asked for that should not be shown a tab offering it.
+
+The switch is checked in three places, and the two that matter are not the
+visible one:
+
+- The nav omits the tab — presentation.
+- `/recipes` redirects to Settings when it is off — because the URL is typeable
+  whether or not a link exists.
+- **`suggestRecipeAction` refuses** — a hidden link is not an access control,
+  and the action is the thing that actually spends the money.
+
+**Existing households get it switched off**, this one included: the column
+defaults to false, so the tab disappears until someone turns it back on. That
+is the intended reading of "by default disabled" and not an upgrade accident.

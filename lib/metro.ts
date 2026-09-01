@@ -61,7 +61,7 @@ export function parseVariantName(payload: unknown): string | null {
   return null;
 }
 
-async function getJson(url: string, signal: AbortSignal): Promise<unknown | null> {
+async function getJson(url: string, signal: AbortSignal): Promise<unknown> {
   const response = await fetch(url, {
     signal,
     headers: {
