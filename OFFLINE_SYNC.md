@@ -208,3 +208,44 @@ The service worker's registration could not be exercised in the harness
 browser, which refuses to fetch worker scripts. Stage 0's caching *was* proven
 there earlier by hand-registering it; the automatic path is code review only.
 Offline behaviour on a real phone — the actual target — is untested by me.
+
+## Where this was left
+
+Parked mid-testing on a real phone. The branch is complete and every check
+passes, but it has **not** been through a full pass on a device, and that is
+where the last bug came from — so assume there are more.
+
+### What a real phone showed
+
+- The service worker registers and cached pages open with no signal. Pages
+  never visited fall through to «Немає з'єднання», as intended.
+- **A take with no signal hung and never queued.** Fixed in the last commit —
+  `navigator.onLine === false` now queues without asking, and every attempt is
+  bounded — but **the fix has not been tried on the phone**. That is the first
+  thing to do on returning.
+
+### Known gaps, in the order they will bite
+
+1. **The quantity on screen does not move when a take is queued.** Deliberate:
+   the page is the server's last word and the server has not agreed yet. But it
+   reads as "nothing happened", which is exactly what was reported. Showing the
+   pending delta on the item page is the obvious next step, and the reason it
+   was left out is honesty about what is confirmed, not an oversight.
+2. **Testing over the LAN needs a Chrome flag.** Service workers demand a
+   secure context and `http://192.168.x.x` is not one; the flag
+   (`chrome://flags/#unsafely-treat-insecure-origin-as-secure`) works, an HTTPS
+   tunnel would be better, and a deployed branch better still.
+3. **The service worker's automatic registration is code review only.** The
+   harness browser refuses to fetch worker scripts, so it was proven by
+   hand-registering the same file.
+4. **One narrow crash window** between a stock write and its `ClientOperation`
+   row — documented in `lib/offline/idempotency.ts`, milliseconds wide, visible
+   in the movement log if it ever happens.
+
+### Picking it up
+
+`pnpm db:migrate` first — the branch adds three migrations
+(`keyboardVersion`, `ClientOperation`, `errorParams`). The service worker only
+registers in a production build, so `pnpm build && AUTH_TRUST_HOST=true pnpm
+start`, and delete `.next` afterwards or the dev server inherits it and rejects
+its own host.

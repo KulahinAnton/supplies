@@ -49,3 +49,7 @@ next-env.d.ts
 # Database dumps — contain password hashes, emails and Telegram chat ids
 backups/
 .env.backup
+
+# Local server logs from `pnpm start` during testing. One of these was
+# committed by a `git add -A`; it was empty, but the next one would not be.
+/*.log
