@@ -152,3 +152,19 @@ export function formatExpiryLabel(expiresAt: Date, today: Date): string {
 export function formatDays(days: number): string {
   return `${days} ${pluralUk(days, DAY_FORMS)}`;
 }
+
+/**
+ * Feature 32.1 — a price in dollars, at the scale these actually land on.
+ *
+ * Four decimals because a recipe suggestion costs a fraction of a cent, and
+ * rounding it to two would print "0,00 $" — which reads as free rather than as
+ * cheap, and loses the only information the number carries.
+ */
+export function formatUsd(amount: number): string {
+  return new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(amount);
+}

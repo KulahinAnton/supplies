@@ -1,5 +1,6 @@
+import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth-guard";
-import { getItemViews } from "@/lib/queries";
+import { getHousehold, getItemViews } from "@/lib/queries";
 import { pantryLines } from "@/lib/recipes";
 import { RecipePanel } from "@/components/recipe-panel";
 
@@ -15,6 +16,13 @@ import { RecipePanel } from "@/components/recipe-panel";
  */
 export default async function RecipesPage() {
   const session = await requireSession();
+
+  // Feature 32.1 — reachable by typing the URL even with the tab hidden.
+  // Redirect rather than 404: the page exists, this household just has the
+  // helper switched off, and Settings is where that is changed.
+  const household = await getHousehold(session.householdId);
+  if (!household.aiEnabled) redirect("/settings");
+
   const items = await getItemViews(session.householdId);
   const lines = pantryLines(items);
   const urgent = items.filter((item) => item.expiry === "SOON");

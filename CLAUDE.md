@@ -56,7 +56,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 
 - `app/login|register|join/[token]|forgot-password|reset-password` — public auth pages; each bounces a signed-in visitor via `validSessionOrNull()` (NOT the raw JWT)
 - `hooks/use-collapsed-groups.ts` — per-device collapse state for shopping groups (localStorage via `useSyncExternalStore`, so no setState-in-effect and no hydration mismatch)
-- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `recipes/`, `settings/`
+- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `recipes/` (Feature 32 — hidden unless `Household.aiEnabled`), `settings/`
 - `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified)
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
 - `auth.ts` (root) — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation

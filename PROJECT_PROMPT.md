@@ -1166,3 +1166,36 @@ request was proven against a local stub that records what the SDK sends —
 correct model, `max_tokens`, and message shape, and the response parses. What a
 real Claude reply looks like, and whether the format instruction holds, is
 untested.
+
+#### 32.1 — a switch, a position, and a number that meant nothing
+
+Three things asked for after the first day of use.
+
+**The token line said nothing.** «Токени: 1628 → 218» is two bare numbers with
+no unit and no scale, and it invites exactly one question — is that a lot? So
+the line now answers it: «Надіслано 639 токенів (ваш список), отримано 229
+(рецепт) · приблизно 0,0018 USD». Input and output are priced separately
+because they are billed separately — output is five times dearer here, which is
+why `max_tokens` is the lever that matters and not the length of the pantry.
+Only models with a price on file get a figure; an `ANTHROPIC_MODEL` override
+that is not listed shows the counts alone, because a confidently wrong price is
+worse than none.
+
+**The tab moved after «Покупки»**, so Settings stays last.
+
+**The helper is off until a household turns it on.** `Household.aiEnabled`,
+default false. Every press spends money at an external provider, and a
+household that never asked for that should not be shown a tab offering it.
+
+The switch is checked in three places, and the two that matter are not the
+visible one:
+
+- The nav omits the tab — presentation.
+- `/recipes` redirects to Settings when it is off — because the URL is typeable
+  whether or not a link exists.
+- **`suggestRecipeAction` refuses** — a hidden link is not an access control,
+  and the action is the thing that actually spends the money.
+
+**Existing households get it switched off**, this one included: the column
+defaults to false, so the tab disappears until someone turns it back on. That
+is the intended reading of "by default disabled" and not an upgrade accident.

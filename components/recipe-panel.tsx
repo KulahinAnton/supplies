@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChefHat, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatUsd } from "@/lib/format";
 import { renderMessage } from "@/lib/messages";
 import { suggestRecipeAction, type RecipeSuggestion } from "@/lib/actions/recipes";
 
@@ -68,9 +69,14 @@ export function RecipePanel() {
               {suggestion.text}
             </p>
 
-            {/* What that press cost, in the only unit anyone is billed in. */}
+            {/* Two bare numbers invited exactly one question — is that a
+                lot? — so the answer is on the line with them. */}
             <p className="text-xs text-muted-foreground">
-              Токени: {suggestion.usage.input} → {suggestion.usage.output}
+              Надіслано {suggestion.usage.input} токенів (ваш список),
+              отримано {suggestion.usage.output} (рецепт)
+              {suggestion.costUsd !== null
+                ? ` · приблизно ${formatUsd(suggestion.costUsd)}`
+                : null}
             </p>
           </CardContent>
         </Card>

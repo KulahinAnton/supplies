@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getAttentionCounts } from "@/lib/queries";
+import { getAttentionCounts, getHousehold } from "@/lib/queries";
 import { AppNav } from "@/components/app-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
@@ -17,7 +17,12 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await requireSession();
-  const counts = await getAttentionCounts(session.householdId);
+  // Feature 32.1 — the nav needs to know whether this household turned the
+  // recipe helper on; the tab is absent otherwise.
+  const [counts, household] = await Promise.all([
+    getAttentionCounts(session.householdId),
+    getHousehold(session.householdId),
+  ]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -36,7 +41,11 @@ export default async function AppLayout({
           </div>
         </div>
 
-        <AppNav expiring={counts.expiring} restock={counts.restock} />
+        <AppNav
+          expiring={counts.expiring}
+          restock={counts.restock}
+          aiEnabled={household.aiEnabled}
+        />
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-24 sm:pb-8">

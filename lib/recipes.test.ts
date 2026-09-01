@@ -5,6 +5,7 @@ import {
   MAX_PANTRY_LINES,
   RECIPE_SYSTEM_PROMPT,
   buildRecipePrompt,
+  estimateCostUsd,
   pantryLines,
 } from "@/lib/recipes";
 
@@ -127,5 +128,25 @@ describe("non-food in the pantry", () => {
     // matched reliably — so the model is told, which costs one line.
     expect(RECIPE_SYSTEM_PROMPT).toContain("НЕхарчові");
     expect(RECIPE_SYSTEM_PROMPT).toContain("Ігноруй їх повністю");
+  });
+});
+
+describe("estimateCostUsd", () => {
+  it("prices the two halves separately, because they are billed separately", () => {
+    // Haiku 4.5: $1 in, $5 out per million. A real press: 1628 in, 218 out.
+    const cost = estimateCostUsd("claude-haiku-4-5", { input: 1628, output: 218 });
+    expect(cost).toBeCloseTo(1628 / 1e6 + (218 * 5) / 1e6, 10);
+    // A quarter of a cent — the number the UI exists to make legible.
+    expect(cost!).toBeLessThan(0.005);
+  });
+
+  it("returns nothing for a model it has no price for", () => {
+    // ANTHROPIC_MODEL can name anything. A confidently wrong price would be
+    // worse than no price, so the UI shows tokens alone in that case.
+    expect(estimateCostUsd("some-future-model", { input: 100, output: 100 })).toBeNull();
+  });
+
+  it("charges nothing for nothing", () => {
+    expect(estimateCostUsd("claude-haiku-4-5", { input: 0, output: 0 })).toBe(0);
   });
 });

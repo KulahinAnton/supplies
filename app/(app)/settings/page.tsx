@@ -48,6 +48,7 @@ export default async function SettingsPage() {
         name={household.name}
         expiryWarnDays={household.expiryWarnDays}
         digestHour={household.digestHour}
+        aiEnabled={household.aiEnabled}
       />
 
       <div className="grid gap-5 sm:grid-cols-2">

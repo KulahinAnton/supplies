@@ -29,7 +29,13 @@ const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5";
 const MAX_TOKENS = 900;
 
 export type ClaudeText =
-  | { ok: true; text: string; usage: { input: number; output: number } }
+  | {
+      ok: true;
+      text: string;
+      /** Reported back so the UI can price it — see `estimateCostUsd`. */
+      model: string;
+      usage: { input: number; output: number };
+    }
   | { ok: false; error: RuleMessage };
 
 /**
@@ -71,6 +77,7 @@ export async function askClaude(
     return {
       ok: true,
       text,
+      model: MODEL,
       usage: {
         input: response.usage.input_tokens,
         output: response.usage.output_tokens,

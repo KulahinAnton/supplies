@@ -35,6 +35,12 @@ model Household {
   expiryWarnDays Int @default(7)
   /// Local hour (0-23) the Telegram digest is sent at (Feature 9).
   digestHour     Int @default(8)
+  /// Feature 32.1 — whether this household has turned the AI recipe helper on.
+  /// Default OFF: the feature spends money at an external provider on every
+  /// press, and a household that never asked for that should not have a tab
+  /// offering it. Hiding the tab is presentation; the page and the action
+  /// check this too, because a hidden link is not an access control.
+  aiEnabled      Boolean @default(false)
   /// Calendar day the digest last went out — makes `pnpm digest:run` safe to
   /// re-run: a second run on the same day is a no-op (Feature 9).
   lastDigestOn   DateTime? @db.Date

@@ -18,19 +18,23 @@ import { cn } from "@/lib/utils";
 export function AppNav({
   expiring,
   restock,
+  aiEnabled,
 }: {
   expiring: number;
   restock: number;
+  aiEnabled: boolean;
 }) {
   const pathname = usePathname();
 
   const links = [
     { href: "/dashboard", label: "Огляд", icon: LayoutDashboard, badge: expiring },
     { href: "/items", label: "Запаси", icon: Package, badge: 0 },
-    // Feature 32 — beside the stock it cooks from, not beside the shopping
-    // list: it answers "what do we have", never "what should we buy".
-    { href: "/recipes", label: "Рецепти", icon: ChefHat, badge: 0 },
     { href: "/shopping", label: "Покупки", icon: ShoppingCart, badge: restock },
+    // Feature 32.1 — only for households that turned the helper on, and last
+    // before Settings: it is the newest and least-used of the four.
+    ...(aiEnabled
+      ? [{ href: "/recipes", label: "Рецепти", icon: ChefHat, badge: 0 }]
+      : []),
     { href: "/settings", label: "Налаштування", icon: Settings, badge: 0 },
   ];
 

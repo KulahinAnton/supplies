@@ -127,3 +127,35 @@ export function buildRecipePrompt(lines: readonly PantryLine[], today: Date): st
     "Що приготувати?",
   ].join("\n");
 }
+
+/**
+ * Feature 32.1 — what a press actually cost, in money.
+ *
+ * "Токени: 1628 → 218" told nobody anything. Two numbers with no unit and no
+ * scale invite exactly one question — is that a lot? — and the answer is the
+ * point of showing them at all.
+ *
+ * Prices are per MILLION tokens, and input and output are billed differently:
+ * output is five times dearer here, which is why `max_tokens` is the lever that
+ * matters rather than the length of the pantry.
+ *
+ * Only models this table knows are priced. An `ANTHROPIC_MODEL` override that
+ * is not listed shows the token counts without a figure, because a confidently
+ * wrong price is worse than none.
+ */
+const PRICES_PER_MILLION: Record<string, { input: number; output: number }> = {
+  "claude-haiku-4-5": { input: 1, output: 5 },
+  "claude-sonnet-5": { input: 2, output: 10 },
+  "claude-opus-5": { input: 5, output: 25 },
+};
+
+export function estimateCostUsd(
+  model: string,
+  usage: { input: number; output: number },
+): number | null {
+  const price = PRICES_PER_MILLION[model];
+  if (!price) return null;
+  return (
+    (usage.input * price.input + usage.output * price.output) / 1_000_000
+  );
+}

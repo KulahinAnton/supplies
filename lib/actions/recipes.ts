@@ -3,12 +3,13 @@
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
-import { getItemViews } from "@/lib/queries";
+import { getHousehold, getItemViews } from "@/lib/queries";
 import { askClaude } from "@/lib/claude";
 import {
   MIN_PANTRY_LINES,
   RECIPE_SYSTEM_PROMPT,
   buildRecipePrompt,
+  estimateCostUsd,
   pantryLines,
 } from "@/lib/recipes";
 import { todayUTC } from "@/lib/period";
@@ -29,12 +30,22 @@ export type RecipeSuggestion = {
   text: string;
   /** Shown so the cost of pressing the button is never a mystery. */
   usage: { input: number; output: number };
+  /** Null when the configured model has no price on file — see `estimateCostUsd`. */
+  costUsd: number | null;
 };
 
 export async function suggestRecipeAction(): Promise<
   ActionResult<RecipeSuggestion>
 > {
   const session = await requireSession();
+
+  /**
+   * Feature 32.1 — the switch is checked HERE, not only in the navigation.
+   * A hidden link is not an access control: this action is reachable by anyone
+   * signed in to the household, and it is the thing that spends money.
+   */
+  const household = await getHousehold(session.householdId);
+  if (!household.aiEnabled) return actionError(ruleMessage("recipe.disabled"));
 
   const lines = pantryLines(await getItemViews(session.householdId));
 
@@ -52,5 +63,9 @@ export async function suggestRecipeAction(): Promise<
   );
   if (!result.ok) return actionError(result.error);
 
-  return actionOk({ text: result.text, usage: result.usage });
+  return actionOk({
+    text: result.text,
+    usage: result.usage,
+    costUsd: estimateCostUsd(result.model, result.usage),
+  });
 }

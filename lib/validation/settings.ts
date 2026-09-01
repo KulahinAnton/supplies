@@ -13,6 +13,8 @@ export const householdSettingsSchema = z.object({
     .int()
     .min(0, key("settings.digestHourRange"))
     .max(23, key("settings.digestHourRange")),
+  /** Feature 32.1 — the AI recipe helper, off until a household asks for it. */
+  aiEnabled: z.boolean(),
 });
 
 export const categorySchema = z.object({
