@@ -48,21 +48,29 @@ export function createIdSetStore(storageKey: string): IdSetStore {
 
   const getServerSnapshot = () => EMPTY;
 
+  /**
+   * Stored preferences are user-writable text: another tab, an older release,
+   * or a hand-edited value can all leave something that is not a list of
+   * strings. Both readers go through here so a corrupt value degrades to "no
+   * preference" everywhere, rather than only where somebody remembered.
+   */
+  const decode = (raw: string): Set<string> => {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set<string>();
+      return new Set(parsed.filter((id): id is string => typeof id === "string"));
+    } catch {
+      return new Set<string>();
+    }
+  };
+
   function useIdSet(): [ReadonlySet<string>, (id: string) => void] {
     const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-    const ids = useMemo<ReadonlySet<string>>(() => {
-      try {
-        const parsed: unknown = JSON.parse(raw);
-        return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
-      } catch {
-        // A corrupt preference is not worth an error.
-        return new Set<string>();
-      }
-    }, [raw]);
+    const ids = useMemo<ReadonlySet<string>>(() => decode(raw), [raw]);
 
     const toggle = useCallback((id: string) => {
-      const current = new Set<string>(JSON.parse(getSnapshot() || EMPTY));
+      const current = decode(getSnapshot() || EMPTY);
       if (current.has(id)) current.delete(id);
       else current.add(id);
 

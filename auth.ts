@@ -22,8 +22,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Пароль", type: "password" },
       },
       async authorize(credentials) {
-        const email = String(credentials?.email ?? "").trim().toLowerCase();
-        const password = String(credentials?.password ?? "");
+        /**
+         * These arrive as `unknown` — anything can be POSTed to the credentials
+         * endpoint, including an object. Coercing with `String()` turned that
+         * into "[object Object]" and looked it up as an email: harmless, since
+         * nothing matches, but it is a shape check written as a coercion.
+         * Reject anything that is not a string instead.
+         */
+        if (
+          typeof credentials?.email !== "string" ||
+          typeof credentials?.password !== "string"
+        ) {
+          return null;
+        }
+
+        const email = credentials.email.trim().toLowerCase();
+        const password = credentials.password;
         if (!email || !password) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
@@ -44,7 +58,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     jwt({ token, user }) {
       if (user) {
-        token.id = user.id as string;
+        token.id = user.id;
         token.householdId = user.householdId;
       }
       return token;

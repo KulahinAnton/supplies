@@ -30,7 +30,7 @@ export const categorySchema = z.object({
     .union([z.literal(""), z.coerce.number().int().min(0).max(365)])
     .optional()
     .transform((value) =>
-      value === "" || value === undefined ? null : (value as number),
+      value === "" || value === undefined ? null : value,
     ),
 });
 

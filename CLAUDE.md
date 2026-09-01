@@ -22,10 +22,16 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 | Language | **Ukrainian only — no i18n layer** (no next-intl, no catalogs, no switcher, no `User.locale`). Copy inline in components; `uk-UA` formatting via `lib/format.ts` |
 | Package manager | pnpm (build allowlist in `pnpm-workspace.yaml`) |
 
+## Working on it
+
+Branch → PR → CI → squash into `main`; `main` is what production runs. A pre-commit hook runs lint, typecheck and unit tests (~20s); CI runs those plus `test:db` against a real Postgres and a production build. Full flow and conventions: [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Commands
 
 - `pnpm dev` — dev server (Turbopack)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
+- `pnpm verify` — lint + typecheck + unit tests, the same gate the pre-commit hook runs
+- ESLint is **type-aware** (`typescript-eslint` `recommendedTypeChecked`), which is what catches unawaited promises and unsafe `any`. That is why a lint run takes ~15s
 - `pnpm test` / `pnpm test:watch` — vitest over pure `lib/` rules, colocated `lib/*.test.ts` and `bot/*.test.ts`, no DB (`@` alias in `vitest.config.mts`)
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
 - `pnpm db:up` — start Postgres (docker compose, port 5434)

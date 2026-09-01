@@ -1,0 +1,14 @@
+# The gate: nothing lands that does not lint, typecheck and pass its tests.
+#
+# `pnpm test:db` is deliberately NOT here. It needs a live seeded Postgres, and
+# a hook that fails because Docker is not running teaches people to reach for
+# --no-verify, which disables the whole gate. CI runs it instead, where the
+# database is guaranteed.
+#
+# eslint is type-aware, so it is the slow one (~15s). Together this is around
+# half a minute per commit.
+set -e
+
+pnpm exec lint-staged
+pnpm typecheck
+pnpm test

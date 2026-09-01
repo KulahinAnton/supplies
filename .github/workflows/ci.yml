@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  # A second push supersedes the first: no point finishing a run for a commit
+  # nobody will merge.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      # The smoke test needs a real Postgres. This is the reason it belongs in
+      # CI rather than in the pre-commit hook, where a stopped Docker daemon
+      # would fail an honest commit.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: supplies
+          POSTGRES_PASSWORD: supplies
+          POSTGRES_DB: supplies
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U supplies"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://supplies:supplies@localhost:5432/supplies
+      # Auth.js needs a secret to boot; this one is CI-only and worthless.
+      AUTH_SECRET: ci-only-not-a-real-secret-000000000000000
+      APP_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Seed
+        run: pnpm db:seed
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Integration smoke test
+        run: pnpm test:db
+
+      # Last because it is the slowest, and a failure here is rarer than the
+      # others. `prisma generate` runs as part of the build script.
+      - name: Build
+        run: pnpm build

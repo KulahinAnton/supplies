@@ -67,9 +67,11 @@ export function BarcodeScanButton({ onScan }: { onScan: (code: string) => void }
             } catch {
               // A frame that cannot be decoded is normal — keep looking.
             }
-            requestAnimationFrame(tick);
+            // rAF wants a void callback: handing it the promise directly
+            // means a rejected frame becomes an unhandled rejection.
+            requestAnimationFrame(() => void tick());
           };
-          requestAnimationFrame(tick);
+          requestAnimationFrame(() => void tick());
           return;
         }
 
@@ -94,7 +96,9 @@ export function BarcodeScanButton({ onScan }: { onScan: (code: string) => void }
       setOpen(false);
     }
 
-    start();
+    // Deliberately not awaited — an effect cannot be async, and `start`
+    // handles its own failures by showing the camera error.
+    void start();
 
     return () => {
       cancelled = true;

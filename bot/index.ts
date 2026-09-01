@@ -18,8 +18,8 @@ if (!token) {
 
 const bot = createBot(token);
 
-process.once("SIGINT", () => bot.stop());
-process.once("SIGTERM", () => bot.stop());
+process.once("SIGINT", () => void bot.stop());
+process.once("SIGTERM", () => void bot.stop());
 
 async function main() {
   const info = await bot.api.getWebhookInfo();
