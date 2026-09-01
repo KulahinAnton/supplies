@@ -17,6 +17,7 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 | Forms | react-hook-form + zod v4 + @hookform/resolvers |
 | Bot | grammy (`bot/`) — webhook in prod, long polling in dev |
 | Barcode | native `BarcodeDetector`, `@zxing/browser` fallback; product lookup via Open Food Facts |
+| AI | Claude API via `@anthropic-ai/sdk` — Feature 32 recipe suggestions only. Model `claude-haiku-4-5` (cheapest), overridable with `ANTHROPIC_MODEL`. `lib/claude.ts` is the only module that talks to it |
 | Email | Resend via `lib/email.ts` `sendEmail()` (plain fetch, swappable) |
 | Language | **Ukrainian only — no i18n layer** (no next-intl, no catalogs, no switcher, no `User.locale`). Copy inline in components; `uk-UA` formatting via `lib/format.ts` |
 | Package manager | pnpm (build allowlist in `pnpm-workspace.yaml`) |
@@ -55,7 +56,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 
 - `app/login|register|join/[token]|forgot-password|reset-password` — public auth pages; each bounces a signed-in visitor via `validSessionOrNull()` (NOT the raw JWT)
 - `hooks/use-collapsed-groups.ts` — per-device collapse state for shopping groups (localStorage via `useSyncExternalStore`, so no setState-in-effect and no hydration mismatch)
-- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `settings/`
+- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `recipes/`, `settings/`
 - `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified)
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
 - `auth.ts` (root) — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation
@@ -92,4 +93,4 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - **Ukrainian only** (PROJECT_PROMPT.md §8): UI copy is written in Ukrainian **directly in the components** — no `t()`, no keys, no catalogs. Do not add an i18n library. Strings generated outside React (pure-engine rule errors, server-action/zod errors, bot replies, digest text) live in `lib/messages.ts` as a typed key → Ukrainian map with `{param}` interpolation; **pure functions return the key + params, never a formatted sentence**, so tests assert on keys, not prose. All dates and numbers format through `lib/format.ts` (`uk-UA`, `DD.MM.YYYY`, decimal comma, `Intl.PluralRules` for `one/few/many` — "1 пляшка / 2 пляшки / 5 пляшок"); never call `toLocaleString()` ad hoc. `<html lang="uk">`, manifest `"lang": "uk"`, Ukrainian seed data.
 - The **bot is a second front end, never a second implementation** — it calls `lib/stock-service.ts` and `lib/queries.ts`, same as the web UI.
 - `lib/format.ts` is deliberately **Prisma-free** — client components import it, and the generated client pulls `node:module` into the browser bundle and breaks the build.
-- Env (`.env`, gitignored; template `.env.example`): `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; optional `OFF_BASE_URL` and `GEPIR_BASE_URL` (barcode source overrides).
+- Env (`.env`, gitignored; template `.env.example`): `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; optional `OFF_BASE_URL` and `GEPIR_BASE_URL` (barcode source overrides), `ANTHROPIC_API_KEY` + optional `ANTHROPIC_MODEL` (Feature 32 — without the key the Recipes page loads and says so).

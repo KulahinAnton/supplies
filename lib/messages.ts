@@ -100,6 +100,15 @@ export const MESSAGES = {
   "digest.noChats": "Немає жодного прив'язаного чату — спершу прив'яжіть Telegram.",
   "digest.failed": "Не вдалося надіслати. Спробуйте ще раз.",
 
+  // --- recipes (Feature 32) ---
+  "recipe.notConfigured":
+    "Підказки рецептів не налаштовані — потрібен ключ Claude API.",
+  "recipe.rateLimited": "Забагато запитів. Спробуйте за хвилину.",
+  "recipe.unavailable": "Не вдалося отримати пораду. Спробуйте ще раз.",
+  "recipe.empty": "Модель не запропонувала страву. Спробуйте ще раз.",
+  "recipe.notEnoughFood":
+    "Замало продуктів удома, щоб щось запропонувати.",
+
   // --- generic ---
   "error.unexpected": "Щось пішло не так. Спробуйте ще раз.",
 } as const;

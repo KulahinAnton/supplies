@@ -1111,3 +1111,58 @@ needs neither.
 `bot/menu.test.ts` pins the two properties that matter: the keyboard never
 carries `is_persistent`, and every key on it is a label `shortcutFor` answers —
 a key the handler does not recognise is exactly the 30.1 symptom.
+
+### Feature 32 — «Рецепти»: what to cook from what is in the house
+
+A tab with one button. Pressing it asks Claude for a single dish made from the
+household's current stock, in Ukrainian.
+
+**The model is Claude Haiku 4.5**, because the cheapest was asked for: $1/$5 per
+million tokens, the least expensive available. The task is a short list in and a
+short recipe out and does not reward a larger model. `ANTHROPIC_MODEL` overrides
+it without a deploy if that judgement proves wrong. Haiku 4.5 predates adaptive
+thinking and effort levels, so neither is set — `effort` is rejected on it, and a
+thinking budget would buy deliberation this task does not need.
+
+**Nothing is spent on a page view.** The model is consulted only when someone
+presses the button; the page itself renders from the database and says how many
+items it would consider, so the answer is not a surprise. An almost-empty pantry
+is refused before any request is made.
+
+**What the model is told, and why it is short:**
+
+- One line per item — name, quantity, and a note only when it is about to
+  spoil. Sorted with the urgent first, and the model is told the list is sorted
+  that way. That ordering IS the recommendation: cheaper than restating a
+  priority on every line.
+- **Expired items are not sent at all.** Suggesting someone cook with food the
+  app itself flags as spoiled would be worse than suggesting nothing, and no
+  prompt wording is as reliable as not sending it.
+- Items at zero are not sent — a recipe is about what is in the house; the
+  shopping list is a different screen.
+- Capped at 60 lines. The household holds tens of items, so this is a guard
+  against a pathological list, not a routine trim.
+- `max_tokens` is 900. Output is billed at five times input here, so that
+  number matters more than the pantry does.
+
+**Non-food is handled in the prompt, not by filtering.** The list is the whole
+inventory — shampoo, paracetamol and cat food sit in it beside the eggs. A
+category filter would be sturdier, but categories are named by each household
+and cannot be matched reliably, so the model is told to ignore them. If that
+ever slips, the sturdy version is a per-category "це їжа" flag in Settings.
+
+**The answer is rendered as the text the model produced**, not parsed into
+fields. A recipe is prose with a shape, and every parser for that shape is one
+wording change away from showing nothing. The model is asked for a fixed layout
+and the layout is preserved.
+
+Nothing is stored. Pressing again asks again and replaces the suggestion —
+keeping a history would mean a table, a page, and a decision about whose
+suggestions those are, none of which was asked for. The token count of each
+answer is shown, so the cost of pressing the button is never a mystery.
+
+**Not verified against the live API.** There is no key on this machine, so the
+request was proven against a local stub that records what the SDK sends —
+correct model, `max_tokens`, and message shape, and the response parses. What a
+real Claude reply looks like, and whether the format instruction holds, is
+untested.

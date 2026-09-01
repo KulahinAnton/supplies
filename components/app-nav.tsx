@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, Settings, ShoppingCart } from "lucide-react";
+import {
+  ChefHat,
+  LayoutDashboard,
+  Package,
+  Settings,
+  ShoppingCart,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,6 +27,9 @@ export function AppNav({
   const links = [
     { href: "/dashboard", label: "Огляд", icon: LayoutDashboard, badge: expiring },
     { href: "/items", label: "Запаси", icon: Package, badge: 0 },
+    // Feature 32 — beside the stock it cooks from, not beside the shopping
+    // list: it answers "what do we have", never "what should we buy".
+    { href: "/recipes", label: "Рецепти", icon: ChefHat, badge: 0 },
     { href: "/shopping", label: "Покупки", icon: ShoppingCart, badge: restock },
     { href: "/settings", label: "Налаштування", icon: Settings, badge: 0 },
   ];
