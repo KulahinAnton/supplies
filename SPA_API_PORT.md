@@ -659,6 +659,74 @@ One fix on the way: `nest start --watch` looks for `dist/main`, but including
 `rootDir`, so the entry is `dist/apps/api/src/main`. `entryFile` in
 `nest-cli.json` now says so.
 
+### Phase 1 — the API · substantially done, 2026-09-05
+
+Documented as **Feature 34** in PROJECT_PROMPT.md before any of it was written.
+
+| # | Task | State |
+|---|---|---|
+| 1.1 | Nest on Fastify, config, Prisma, health, OpenAPI | done |
+| 1.2 | Auth: register/login/refresh/logout/me, rotation + reuse detection | done |
+| 1.3 | Global guard, `@CurrentUser` household scoping | done |
+| 1.4 | Items, dashboard, shopping, taxonomy, groups, movements, 5 stock writes | done |
+| 1.5 | zod pipe over `@supplies/core/validation` | done |
+| 1.6 | Error envelope carrying message keys + params | done |
+| 1.7 | CORS allowlist, helmet, throttler | done |
+| 1.8 | 11 e2e checks against a live database | done |
+| — | Settings CRUD, shopping writes, barcode, recipes, telegram | **remaining** |
+
+**`packages/db` arrived here, and it had to.** Feature 34 makes the API a third
+front end, and one that wrote its own queries would be a third implementation.
+So `prisma.ts`, `queries.ts` and `stock-service.ts` moved into a package every
+consumer shares — which needed one generated client instead of two
+(`moduleFormat = "cjs"`), and needed Feature 4's discard and correct to move out
+of `lib/actions/stock.ts` into the write path where the bot and the API can
+reach them.
+
+**Three toolchain findings, each verified rather than assumed:**
+
+- Prisma 7's ESM output carries `import.meta`, which survives a CommonJS build
+  and leaves a file Node rejects.
+- **ESM for the API is a dead end.** Node ESM needs file extensions, tsc never
+  adds them on emit, and Turbopack will not resolve `./decimal.js` to
+  `decimal.ts` — so `packages/core` breaks one of its two consumers whichever
+  way its source is written. Tried, reverted, documented.
+- **tsc does not rewrite module specifiers**, so anything `nest build` compiles
+  must import across packages relatively. This bit three times before it was
+  written down.
+
+### Phase 2 — the SPA · in progress, 2026-09-05
+
+| # | Task | State |
+|---|---|---|
+| 2.1 | Vite, React Router, TanStack Query, Tailwind scaffold | done |
+| 2.3 | Auth context, in-memory access token, refresh-cookie recovery | done |
+| 2.5 | Query-key map, written before the screens | done |
+| 2.6 | Login, dashboard, item list, item detail with take/restock | done |
+| 2.6 | The other 12 screens | **remaining** |
+| 2.2 | Generate the client from OpenAPI (hand-written types for now) | **remaining** |
+| 2.7 | Barcode scanner | **remaining** |
+| 2.8 | Playwright against the SPA | **remaining** |
+
+Verified in a browser rather than only by build: sign in, the dashboard shows
+the seeded household's expired/expiring/low items, open an item, press «Взяли»
+— 120 becomes 119 — press «Поповнити» and it is 120 again.
+
+Two bugs that only running it could find:
+
+- A reload landed on the login page with a valid session in the cookie jar.
+  `api.post` with no body still sent `Content-Type: application/json`, and
+  Fastify answers an empty JSON body with 400 *before the handler runs* — so
+  `/auth/refresh`, which needs no body, was answered by the body parser.
+- The item detail type was invented rather than read. `getItemDetail` returns
+  the row alongside the states computed from it, and sends no per-batch expiry
+  state — correctly, since shipping one would put a second copy of Feature 13's
+  category inheritance on the wire.
+
+### Phases 3–5 — not started
+
+React Native, the deploy, iOS.
+
 ### Start here
 
 **Phase 0.2 — the `decimal.js` decoupling — is the first commit**, and it is
