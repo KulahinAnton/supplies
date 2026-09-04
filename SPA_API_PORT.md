@@ -633,6 +633,32 @@ a copy that still says six units the day the schema has seven.
   validates with the zod schemas in `@supplies/core/validation`. Two validation
   libraries would be two definitions of a valid item.
 
+### Phase 2.1 — done, 2026-09-04
+
+`apps/spa` — Vite, React 19, React Router 7, TanStack Query, Tailwind v4. One
+route so far, and **nothing on it is mocked**: it fetches the API's liveness,
+readiness and unit list, and formats a quantity through `@supplies/core/format`
+to show the engine running in a browser bundle with no Prisma in it.
+
+**All three run together:**
+
+```bash
+pnpm dev:all     # Next :3000 · API :3200 · SPA :5173
+```
+
+Verified in a browser, not just with curl: the SPA's cross-origin requests to
+:3200 return 200 with `credentials: "include"`, the console is clean, and the
+Next app still serves `/login` alongside them.
+
+`credentials: "include"` is set before there is a cookie to send. Credentialed
+CORS is the configuration that fails loudest and most confusingly when wrong, so
+it gets exercised now rather than on the day the refresh token needs it.
+
+One fix on the way: `nest start --watch` looks for `dist/main`, but including
+`packages/core` in the API's tsconfig makes tsc infer the repo root as
+`rootDir`, so the entry is `dist/apps/api/src/main`. `entryFile` in
+`nest-cli.json` now says so.
+
 ### Start here
 
 **Phase 0.2 — the `decimal.js` decoupling — is the first commit**, and it is

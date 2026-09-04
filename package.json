@@ -27,13 +27,16 @@
     "db:prod-copy": "tsx scripts/prod-copy.ts",
     "migrate:deploy": "tsx scripts/migrate-deploy.ts",
     "prepare": "husky",
-    "verify": "pnpm lint && pnpm typecheck && pnpm --filter @supplies/api exec tsc --noEmit && pnpm test && pnpm test:api",
+    "verify": "pnpm lint && pnpm typecheck && pnpm -r --filter \"./apps/*\" typecheck && pnpm test && pnpm test:api",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "api:dev": "pnpm --filter @supplies/api dev",
     "api:build": "pnpm --filter @supplies/api build",
     "api:start": "pnpm --filter @supplies/api start",
-    "test:api": "pnpm --filter @supplies/api test"
+    "test:api": "pnpm --filter @supplies/api test",
+    "spa:dev": "pnpm --filter @supplies/spa dev",
+    "spa:build": "pnpm --filter @supplies/spa build",
+    "dev:all": "concurrently -n web,api,spa -c cyan,magenta,green -k \"pnpm dev\" \"pnpm api:dev\" \"pnpm spa:dev\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
@@ -70,6 +73,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",

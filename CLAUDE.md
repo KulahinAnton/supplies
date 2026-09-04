@@ -28,7 +28,8 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 
 ## Commands
 
-- `pnpm dev` — dev server (Turbopack)
+- `pnpm dev:all` — **all three at once**: Next :3000, API :3200, SPA :5173, labelled and colour-coded. The port map is deliberate — 3100 is Playwright's production build, so nothing collides
+- `pnpm dev` — Next dev server (Turbopack) · `pnpm api:dev` → [apps/api](apps/api/CLAUDE.md) · `pnpm spa:dev` → [apps/spa](apps/spa/CLAUDE.md)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
 - `pnpm verify` — lint + typecheck + unit tests, the same gate the pre-commit hook runs
 - `pnpm test:e2e` — Playwright over a production build on port 3100 (needs Docker + `pnpm db:seed`). Desktop and mobile viewports; deliberately small — see [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -104,3 +105,13 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - The **bot is a second front end, never a second implementation** — it calls `lib/stock-service.ts` and `lib/queries.ts`, same as the web UI.
 - `lib/format.ts` is deliberately **Prisma-free** — client components import it, and the generated client pulls `node:module` into the browser bundle and breaks the build.
 - Env (`.env`, gitignored; template `.env.example`): `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; optional `OFF_BASE_URL` and `GEPIR_BASE_URL` (barcode source overrides), `ANTHROPIC_API_KEY` + optional `ANTHROPIC_MODEL` (Feature 32 — without the key the Recipes page loads and says so).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
