@@ -12,7 +12,7 @@ import {
   addItemToGroupAction,
   removeItemFromGroupAction,
 } from "@/lib/actions/settings";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 
 export type MemberRow = { id: string; name: string; quantityLabel: string };
 export type CandidateRow = {

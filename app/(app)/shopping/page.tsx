@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/auth-guard";
 import { getShoppingView } from "@/lib/queries";
-import { formatQuantityWithUnit } from "@/lib/format";
+import { formatQuantityWithUnit } from "@supplies/core/format";
 import {
   ShoppingList,
   type Candidate,

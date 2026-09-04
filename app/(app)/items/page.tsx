@@ -6,8 +6,8 @@ import {
   getItemGroups,
   getItemsPage,
 } from "@/lib/queries";
-import { formatQuantityWithUnit } from "@/lib/format";
-import { todayUTC } from "@/lib/period";
+import { formatQuantityWithUnit } from "@supplies/core/format";
+import { todayUTC } from "@supplies/core/period";
 import { Button } from "@/components/ui/button";
 import { ItemsList, type ItemRow } from "@/components/items-list";
 import {
@@ -15,7 +15,7 @@ import {
   parsePage,
   parsePerPage,
   parseSort,
-} from "@/lib/item-list-params";
+} from "@supplies/core/item-list-params";
 
 /**
  * Feature 27 + 28 — the list's whole view state travels in the URL: what is

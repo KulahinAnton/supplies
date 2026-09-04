@@ -4,29 +4,29 @@
 // digest (`pnpm digest:run`). Client-safety is enforced by the Prisma import
 // below instead: pulling this into a browser bundle fails the build loudly.
 
-import { selectItems } from "@/lib/item-filter";
-import { paginate } from "@/lib/pagination";
-import type { ItemFilter, PerPage } from "@/lib/item-list-params";
-import type { ItemSort } from "@/lib/item-sort";
-import { buildGroupView, groupNeedsRestock } from "@/lib/item-group";
+import { selectItems } from "@supplies/core/item-filter";
+import { paginate } from "@supplies/core/pagination";
+import type { ItemFilter, PerPage } from "@supplies/core/item-list-params";
+import type { ItemSort } from "@supplies/core/item-sort";
+import { buildGroupView, groupNeedsRestock } from "@supplies/core/item-group";
 import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/units";
+import type { Unit } from "@supplies/core/units";
 import { prisma } from "@/lib/prisma";
 import {
   itemExpiryState,
   needsAttention,
   resolveWarnDays,
   type ExpiryState,
-} from "@/lib/expiry";
-import { todayUTC } from "@/lib/period";
+} from "@supplies/core/expiry";
+import { todayUTC } from "@supplies/core/period";
 import {
   itemQuantity,
   needsRestock,
   stockState,
   type StockBatchInput,
   type StockState,
-} from "@/lib/stock";
-import { shoppingCandidates, type ShoppingCandidate } from "@/lib/shopping";
+} from "@supplies/core/stock";
+import { shoppingCandidates, type ShoppingCandidate } from "@supplies/core/shopping";
 
 /**
  * Read helpers shared by the pages, the Telegram bot and the daily digest.

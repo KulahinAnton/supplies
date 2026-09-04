@@ -1,8 +1,8 @@
 "use server";
 
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
 import { getHousehold, getItemViews } from "@/lib/queries";
 import { askClaude } from "@/lib/claude";
 import {
@@ -12,7 +12,7 @@ import {
   estimateCostUsd,
   pantryLines,
 } from "@/lib/recipes";
-import { todayUTC } from "@/lib/period";
+import { todayUTC } from "@supplies/core/period";
 
 /**
  * Feature 32 — ask Claude what to cook from what the household actually has.

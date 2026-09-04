@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { isValidListRow } from "@/lib/shopping";
-import { groupIdForStorage } from "@/lib/shopping-groups";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { isValidListRow } from "@supplies/core/shopping";
+import { groupIdForStorage } from "@supplies/core/shopping-groups";
 import { addStockAction } from "@/lib/actions/stock";
 
 function refresh() {

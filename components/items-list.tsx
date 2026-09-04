@@ -14,7 +14,7 @@ import {
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@/components/ui/button";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -31,10 +31,10 @@ import {
   type ItemFilter,
   type ItemListState,
   type PerPage,
-} from "@/lib/item-list-params";
-import { ITEM_SORTS, ITEM_SORT_LABELS } from "@/lib/item-sort";
-import type { ExpiryState } from "@/lib/expiry";
-import type { StockState } from "@/lib/stock";
+} from "@supplies/core/item-list-params";
+import { ITEM_SORTS, ITEM_SORT_LABELS } from "@supplies/core/item-sort";
+import type { ExpiryState } from "@supplies/core/expiry";
+import type { StockState } from "@supplies/core/stock";
 import { cn } from "@/lib/utils";
 
 /**

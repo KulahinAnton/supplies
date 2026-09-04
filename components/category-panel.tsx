@@ -16,7 +16,7 @@ import {
   saveCategoryAction,
   setDefaultCategoryAction,
 } from "@/lib/actions/settings";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 
 export type CategoryRow = SettingsRow & {
   /** Feature 13 — null means inherit the household window. */

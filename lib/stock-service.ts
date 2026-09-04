@@ -4,10 +4,10 @@
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { parseDateOnly, todayUTC } from "@/lib/period";
-import { planConsumeBatch, planConsume } from "@/lib/stock";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { parseDateOnly, todayUTC } from "@supplies/core/period";
+import { planConsumeBatch, planConsume } from "@supplies/core/stock";
 
 /**
  * The stock write path, independent of HOW the caller authenticated.

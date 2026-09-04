@@ -1,19 +1,19 @@
 "use server";
 
-import { canJoinGroup } from "@/lib/item-group";
+import { canJoinGroup } from "@supplies/core/item-group";
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
 import {
   categorySchema,
   householdSettingsSchema,
   itemGroupSchema,
   locationSchema,
-} from "@/lib/validation/settings";
-import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
+} from "@supplies/core/validation/settings";
+import { firstIssueAsRuleMessage } from "@supplies/core/validation/shared";
 
 function refresh() {
   revalidatePath("/settings");

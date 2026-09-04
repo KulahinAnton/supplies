@@ -5,7 +5,7 @@ import {
   DEFAULT_GROUP_ID,
   groupIdForStorage,
   groupShoppingRows,
-} from "@/lib/shopping-groups";
+} from "@supplies/core/shopping-groups";
 import type { BotUser } from "@/bot/auth";
 import { CB, type View } from "@/bot/menu";
 

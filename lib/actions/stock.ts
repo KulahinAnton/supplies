@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { planCorrection, planDiscard } from "@/lib/stock";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { planCorrection, planDiscard } from "@supplies/core/stock";
 import {
   addStock,
   consume,
@@ -20,8 +20,8 @@ import {
   consumeSchema,
   correctionSchema,
   discardSchema,
-} from "@/lib/validation/stock";
-import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
+} from "@supplies/core/validation/stock";
+import { firstIssueAsRuleMessage } from "@supplies/core/validation/shared";
 
 /**
  * Server actions = session guard + input validation + cache invalidation.

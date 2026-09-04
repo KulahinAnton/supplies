@@ -16,7 +16,7 @@ import {
   deleteShoppingGroupAction,
   renameShoppingGroupAction,
 } from "@/lib/actions/shopping-groups";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 import { cn } from "@/lib/utils";
 
 /**

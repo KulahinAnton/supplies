@@ -2,21 +2,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { isBarcodeShaped } from "@/lib/validation/shared";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { isBarcodeShaped } from "@supplies/core/validation/shared";
 import {
   fetchProduct,
   needsLocalName,
   suggestedItemName,
-} from "@/lib/barcode-source";
-import { canContribute } from "@/lib/off-contribute";
-import { fetchMetroProduct } from "@/lib/metro";
+} from "@supplies/core/barcode-source";
+import { canContribute } from "@supplies/core/off-contribute";
+import { fetchMetroProduct } from "@supplies/core/metro";
 import {
   fetchGepirCompany,
   isUkrainianGtin,
   shortenCompanyName,
-} from "@/lib/gepir";
+} from "@supplies/core/gepir";
 
 /**
  * Feature 10 — what a scanned barcode turns into.

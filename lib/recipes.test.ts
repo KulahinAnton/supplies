@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Decimal } from "@/lib/decimal";
+import { Decimal } from "@supplies/core/decimal";
 import type { ItemView } from "@/lib/queries";
 import {
   MAX_PANTRY_LINES,

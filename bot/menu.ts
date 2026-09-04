@@ -1,10 +1,10 @@
 import { InlineKeyboard, Keyboard } from "grammy";
-import { todayUTC } from "@/lib/period";
-import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
+import { todayUTC } from "@supplies/core/period";
+import { formatExpiryLabel, formatQuantityWithUnit } from "@supplies/core/format";
 import { getRestockEntries, getItemViews } from "@/lib/queries";
-import { needsAttention, splitExpiring } from "@/lib/expiry";
+import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 
-import { MESSAGES } from "@/lib/messages";
+import { MESSAGES } from "@supplies/core/messages";
 
 /**
  * Feature 17.5 — the bot's home screen.

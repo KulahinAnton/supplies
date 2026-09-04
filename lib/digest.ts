@@ -1,14 +1,14 @@
 import { Bot } from "grammy";
 import { prisma } from "@/lib/prisma";
 import { getItemViews, getRestockEntries } from "@/lib/queries";
-import { needsAttention, splitExpiring } from "@/lib/expiry";
+import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 // Feature 30.3 — the digest is the one message that reaches a chat without
 // anyone opening the bot, so it doubles as the keyboard's delivery route.
 import { KEYBOARD_VERSION, replyKeyboard } from "@/bot/menu";
 import { markKeyboardSent } from "@/bot/state";
 
-import { formatExpiryLabel, formatQuantityWithUnit } from "@/lib/format";
-import { formatDateKey, todayUTC } from "@/lib/period";
+import { formatExpiryLabel, formatQuantityWithUnit } from "@supplies/core/format";
+import { formatDateKey, todayUTC } from "@supplies/core/period";
 
 /**
  * Feature 19 — the daily "this is about to go off" message.

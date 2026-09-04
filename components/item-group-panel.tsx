@@ -16,9 +16,9 @@ import {
   saveItemGroupAction,
 } from "@/lib/actions/settings";
 import Link from "next/link";
-import { renderMessage } from "@/lib/messages";
-import { formatQuantityWithUnit, UNIT_SHORT } from "@/lib/format";
-import type { Unit } from "@/lib/units";
+import { renderMessage } from "@supplies/core/messages";
+import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
+import type { Unit } from "@supplies/core/units";
 
 export type ItemGroupRow = SettingsRow & {
   /** The threshold for the whole set. Feature 25: 0 means no reminders. */

@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerAction } from "@/lib/actions/auth";
-import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
-import { registerSchema } from "@/lib/validation/auth";
+import { MESSAGES, renderMessage, type MessageKey } from "@supplies/core/messages";
+import { registerSchema } from "@supplies/core/validation/auth";
 
 type Values = z.infer<typeof registerSchema>;
 

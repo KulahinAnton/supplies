@@ -3,7 +3,7 @@ import {
   MovementReason as PrismaMovementReason,
   Unit as PrismaUnit,
 } from "@/lib/generated/prisma/enums";
-import { MOVEMENT_REASONS, UNITS } from "@/lib/units";
+import { MOVEMENT_REASONS, UNITS } from "@supplies/core/units";
 
 /**
  * The seam that keeps `lib/units.ts` honest.

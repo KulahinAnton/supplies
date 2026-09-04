@@ -1,18 +1,18 @@
 "use server";
 
-import type { Unit } from "@/lib/units";
-import { canJoinGroup } from "@/lib/item-group";
-import type { RuleMessage } from "@/lib/messages";
+import type { Unit } from "@supplies/core/units";
+import { canJoinGroup } from "@supplies/core/item-group";
+import type { RuleMessage } from "@supplies/core/messages";
 
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { itemSchema, updateItemSchema } from "@/lib/validation/item";
-import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
-import { canContribute, contributeProduct } from "@/lib/off-contribute";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { itemSchema, updateItemSchema } from "@supplies/core/validation/item";
+import { firstIssueAsRuleMessage } from "@supplies/core/validation/shared";
+import { canContribute, contributeProduct } from "@supplies/core/off-contribute";
 
 function refresh(itemId?: string) {
   revalidatePath("/items");

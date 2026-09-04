@@ -12,8 +12,8 @@ import {
   requestPasswordResetAction,
   resetPasswordAction,
 } from "@/lib/actions/auth";
-import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
-import { forgotPasswordSchema, resetPasswordSchema } from "@/lib/validation/auth";
+import { MESSAGES, renderMessage, type MessageKey } from "@supplies/core/messages";
+import { forgotPasswordSchema, resetPasswordSchema } from "@supplies/core/validation/auth";
 
 function messageFor(key?: string) {
   if (!key) return undefined;

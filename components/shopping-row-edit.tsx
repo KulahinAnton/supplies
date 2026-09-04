@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { updateListRowAction } from "@/lib/actions/shopping";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 
 /**
  * Feature 12.1 — edit a shopping row.

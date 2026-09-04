@@ -23,8 +23,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { moveIdInList } from "@/lib/ordering";
-import { renderMessage, type RuleMessage } from "@/lib/messages";
+import { moveIdInList } from "@supplies/core/ordering";
+import { renderMessage, type RuleMessage } from "@supplies/core/messages";
 import { cn } from "@/lib/utils";
 
 export type SettingsRow = {

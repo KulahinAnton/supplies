@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getItemGroupDetail } from "@/lib/queries";
-import { formatQuantityWithUnit, UNIT_SHORT } from "@/lib/format";
+import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { StockBadge } from "@/components/state-badges";

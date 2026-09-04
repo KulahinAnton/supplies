@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import { isItemSort, type ItemSort } from "@/lib/item-sort";
+import { isItemSort, type ItemSort } from "@supplies/core/item-sort";
 
 /**
  * Feature 12.2 — how this person likes the stock list ordered.

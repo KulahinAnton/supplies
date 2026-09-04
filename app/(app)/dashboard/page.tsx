@@ -3,10 +3,10 @@ import { CalendarClock, PackageX, ShoppingCart } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getDashboard } from "@/lib/queries.rsc";
 import type { ItemView } from "@/lib/queries";
-import { todayUTC } from "@/lib/period";
-import { splitExpiring } from "@/lib/expiry";
+import { todayUTC } from "@supplies/core/period";
+import { splitExpiring } from "@supplies/core/expiry";
 import { cn } from "@/lib/utils";
-import { formatDateTime, formatQuantityWithUnit } from "@/lib/format";
+import { formatDateTime, formatQuantityWithUnit } from "@supplies/core/format";
 import { ExpiryBadge, StockBadge } from "@/components/state-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

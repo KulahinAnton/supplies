@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { setItemArchivedAction } from "@/lib/actions/items";
-import { renderMessage } from "@/lib/messages";
+import { renderMessage } from "@supplies/core/messages";
 
 /**
  * Feature 3 — archive, never delete. StockMovement rows reference the item, and

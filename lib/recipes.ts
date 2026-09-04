@@ -1,4 +1,4 @@
-import { formatQuantityWithUnit } from "@/lib/format";
+import { formatQuantityWithUnit } from "@supplies/core/format";
 import type { ItemView } from "@/lib/queries";
 
 /**

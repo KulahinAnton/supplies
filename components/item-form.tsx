@@ -17,12 +17,12 @@ import {
   lookupBarcodeAction,
   type BarcodeLookup,
 } from "@/lib/actions/barcode";
-import { MESSAGES, renderMessage, type MessageKey } from "@/lib/messages";
-import { itemSchema } from "@/lib/validation/item";
-import { defaultRowId } from "@/lib/ordering";
-import { findSimilar } from "@/lib/duplicates";
-import { UNIT_PLURAL } from "@/lib/format";
-import type { Unit } from "@/lib/units";
+import { MESSAGES, renderMessage, type MessageKey } from "@supplies/core/messages";
+import { itemSchema } from "@supplies/core/validation/item";
+import { defaultRowId } from "@supplies/core/ordering";
+import { findSimilar } from "@supplies/core/duplicates";
+import { UNIT_PLURAL } from "@supplies/core/format";
+import type { Unit } from "@supplies/core/units";
 
 type Values = z.infer<typeof itemSchema>;
 

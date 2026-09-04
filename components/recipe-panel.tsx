@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ChefHat, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatUsd } from "@/lib/format";
-import { renderMessage } from "@/lib/messages";
+import { formatUsd } from "@supplies/core/format";
+import { renderMessage } from "@supplies/core/messages";
 import { suggestRecipeAction, type RecipeSuggestion } from "@/lib/actions/recipes";
 
 /**

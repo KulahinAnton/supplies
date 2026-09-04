@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
-import type { ExpiryState } from "@/lib/expiry";
-import type { StockState } from "@/lib/stock";
-import { formatExpiryLabel } from "@/lib/format";
+import type { ExpiryState } from "@supplies/core/expiry";
+import type { StockState } from "@supplies/core/stock";
+import { formatExpiryLabel } from "@supplies/core/format";
 
 /**
  * The two state axes are shown as two separate chips on purpose (§3.4/§3.5):

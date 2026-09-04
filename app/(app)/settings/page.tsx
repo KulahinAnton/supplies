@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth-guard";
-import { findDuplicateGroups } from "@/lib/duplicates";
+import { findDuplicateGroups } from "@supplies/core/duplicates";
 import {
   getCategoriesAndLocations,
   getItemGroupViews,

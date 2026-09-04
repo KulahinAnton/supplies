@@ -65,13 +65,13 @@ import {
   moveTargets,
   type GroupedList,
   type GroupRow,
-} from "@/lib/shopping-groups";
-import { renderMessage } from "@/lib/messages";
-import { UNIT_SHORT } from "@/lib/format";
+} from "@supplies/core/shopping-groups";
+import { renderMessage } from "@supplies/core/messages";
+import { UNIT_SHORT } from "@supplies/core/format";
 import { useCollapsedGroups } from "@/hooks/use-collapsed-groups";
 import { useShownArchived } from "@/hooks/use-shown-archived";
 import { cn } from "@/lib/utils";
-import type { Unit } from "@/lib/units";
+import type { Unit } from "@supplies/core/units";
 
 export type ListRow = {
   id: string;

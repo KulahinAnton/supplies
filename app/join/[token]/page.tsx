@@ -4,7 +4,7 @@ import { AuthPageShell } from "@/components/auth-page-shell";
 import { RegisterForm } from "@/components/register-form";
 import { inviteHouseholdName } from "@/lib/actions/auth";
 import { validSessionOrNull } from "@/lib/auth-guard";
-import { MESSAGES } from "@/lib/messages";
+import { MESSAGES } from "@supplies/core/messages";
 
 export default async function JoinPage({
   params,

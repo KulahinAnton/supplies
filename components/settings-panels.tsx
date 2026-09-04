@@ -15,7 +15,7 @@ import {
   sendDigestNowAction,
 } from "@/lib/actions/telegram";
 import { updateHouseholdAction } from "@/lib/actions/settings";
-import { renderMessage, type RuleMessage } from "@/lib/messages";
+import { renderMessage, type RuleMessage } from "@supplies/core/messages";
 
 async function handle(
   work: () => Promise<{ ok: boolean; error?: RuleMessage }>,

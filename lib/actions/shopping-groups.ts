@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { DEFAULT_GROUP_ID, groupIdForStorage } from "@/lib/shopping-groups";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { DEFAULT_GROUP_ID, groupIdForStorage } from "@supplies/core/shopping-groups";
 
 /**
  * Feature 11 — shopping list groups.

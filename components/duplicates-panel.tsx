@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Copy } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { NamedItem } from "@/lib/duplicates";
+import type { NamedItem } from "@supplies/core/duplicates";
 
 /**
  * Feature 16.3 — items whose names look like each other.

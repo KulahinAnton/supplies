@@ -9,8 +9,8 @@ import type { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MESSAGES, type MessageKey } from "@/lib/messages";
-import { loginSchema } from "@/lib/validation/auth";
+import { MESSAGES, type MessageKey } from "@supplies/core/messages";
+import { loginSchema } from "@supplies/core/validation/auth";
 
 type Values = z.infer<typeof loginSchema>;
 

@@ -32,6 +32,9 @@ importers:
       '@prisma/client':
         specifier: ^7.8.0
         version: 7.9.1(prisma@7.9.1(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3))(typescript@5.9.3)
+      '@supplies/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@zxing/browser':
         specifier: ^0.1.5
         version: 0.1.5(@zxing/library@0.21.3)
@@ -138,6 +141,15 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.11(@types/node@20.19.43)(vite@8.2.1(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/core:
+    dependencies:
+      decimal.js:
+        specifier: ^10.6.0
+        version: 10.6.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
 packages:
 

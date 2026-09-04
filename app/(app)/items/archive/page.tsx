@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getArchivedItems } from "@/lib/queries";
-import { formatQuantityWithUnit } from "@/lib/format";
+import { formatQuantityWithUnit } from "@supplies/core/format";
 
 /**
  * Feature 3 — archived items. They are hidden from every other screen, so this

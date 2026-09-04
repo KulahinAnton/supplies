@@ -1,11 +1,11 @@
 "use server";
 
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
-import { createLinkToken } from "@/lib/telegram-link";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
+import { createLinkToken } from "@supplies/core/telegram-link";
 import { sendDigestToHousehold } from "@/lib/digest";
-import { todayUTC } from "@/lib/period";
+import { todayUTC } from "@supplies/core/period";
 
 /**
  * Feature 9 — hand out a short-lived deep link that binds a Telegram chat to

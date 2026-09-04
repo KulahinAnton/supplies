@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { todayUTC } from "@/lib/period";
+import { todayUTC } from "@supplies/core/period";
 import {
   addStock,
   consume,
@@ -15,11 +15,11 @@ import {
   getItemViews,
   getShoppingView,
 } from "@/lib/queries";
-import { itemQuantity } from "@/lib/stock";
-import { renderMessage } from "@/lib/messages";
+import { itemQuantity } from "@supplies/core/stock";
+import { renderMessage } from "@supplies/core/messages";
 import { digestText } from "@/lib/digest";
-import { needsAttention, splitExpiring } from "@/lib/expiry";
-import { formatQuantityWithUnit } from "@/lib/format";
+import { needsAttention, splitExpiring } from "@supplies/core/expiry";
+import { formatQuantityWithUnit } from "@supplies/core/format";
 
 /**
  * One-off integration smoke test against a real Postgres. Exercises the paths

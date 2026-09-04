@@ -4,16 +4,16 @@ import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
-import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
-import { ruleMessage } from "@/lib/messages";
+import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
+import { ruleMessage } from "@supplies/core/messages";
 import { inviteEmail, passwordResetEmail, sendEmail } from "@/lib/email";
 import {
   changePasswordSchema,
   forgotPasswordSchema,
   registerSchema,
   resetPasswordSchema,
-} from "@/lib/validation/auth";
-import { firstIssueAsRuleMessage } from "@/lib/validation/shared";
+} from "@supplies/core/validation/auth";
+import { firstIssueAsRuleMessage } from "@supplies/core/validation/shared";
 
 const hashToken = (token: string) =>
   createHash("sha256").update(token).digest("hex");

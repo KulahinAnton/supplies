@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { addStockAction } from "@/lib/actions/stock";
-import { renderMessage } from "@/lib/messages";
-import { UNIT_SHORT } from "@/lib/format";
-import type { Unit } from "@/lib/units";
-import { formatDateKey, todayUTC } from "@/lib/period";
+import { renderMessage } from "@supplies/core/messages";
+import { UNIT_SHORT } from "@supplies/core/format";
+import type { Unit } from "@supplies/core/units";
+import { formatDateKey, todayUTC } from "@supplies/core/period";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 
 type Row = { quantity: string; expiresAt: string; openedAt: string; locationId: string };
