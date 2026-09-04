@@ -111,10 +111,15 @@ const eslintConfig = defineConfig([
   },
   {
     /**
-     * Config files at the root are plain JS and outside the tsconfig, so the
-     * type-aware rules have no program for them and error on the parse alone.
+     * Plain JS — config at the root, and tooling under `scripts/`. None of it
+     * is in a tsconfig, so the type-aware rules have no program for it and
+     * error on the parse alone.
+     *
+     * The pattern is `**` rather than root-only because a flat-config `files`
+     * entry of `"*.mjs"` matches only the top level: `scripts/*.mjs` fell
+     * through it and failed the commit gate on a parse error.
      */
-    files: ["*.mjs", "*.js"],
+    files: ["**/*.mjs", "**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
   },
   globalIgnores([

@@ -36,7 +36,7 @@
     "test:api": "pnpm --filter @supplies/api test",
     "spa:dev": "pnpm --filter @supplies/spa dev",
     "spa:build": "pnpm --filter @supplies/spa build",
-    "dev:all": "concurrently -n web,api,spa -c cyan,magenta,green -k \"pnpm dev\" \"pnpm api:dev\" \"pnpm spa:dev\""
+    "dev:all": "node scripts/check-dev-ports.mjs && concurrently -n web,api,spa -c cyan,magenta,green -k \"pnpm dev\" \"pnpm api:dev\" \"pnpm spa:dev\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
