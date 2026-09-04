@@ -551,6 +551,43 @@ the one-repo decision.
   build to `dist` (works everywhere with no bundler config, adds a build step).
   Source is the default; revisit only if Metro fights back in Phase 3.1.
 
+---
+
+## 11. Progress log
+
+### Phase 0 — done, 2026-09-04
+
+| # | Task | Commit |
+|---|---|---|
+| 0.1 | `packages:` key in `pnpm-workspace.yaml`; Next app stays the root package | `5396ea1` |
+| 0.2 | Engine decoupled from `Prisma.Decimal` → decimal.js; units moved out of the generated enums | `abadd29` |
+| 0.3 | 28 modules + their tests moved to `packages/core`, subpath exports, no barrel | `5396ea1` |
+| 0.4 | Every app import repointed to `@supplies/core/*` — done directly, no shim commit | `5396ea1` |
+| 0.5 | vitest over three roots, ESLint boundary rule, `transpilePackages` | — |
+
+**Gate met:** 351 unit tests (339 + 12 new), lint, typecheck, production build,
+and all 52 live-database smoke checks. Not yet run: `pnpm test:e2e` and a Vercel
+preview deploy — both belong to the `chore/post-review` PR this branch is
+stacked on.
+
+Three things worth knowing before Phase 1:
+
+**The boundary is enforced, not documented.** `eslint.config.mjs` bans Prisma,
+React, Next, `server-only`, the `@/` alias and Node builtins inside
+`packages/core`, with `node:crypto` the single exception for
+`telegram-link.ts`. Verified against a file that deliberately imports all of
+them, rather than assumed from a passing lint run. Core's *tests* keep every
+ban but the Node one — they run in Node, and `gepir.test.ts` reads fixtures off
+disk.
+
+**No barrel, and it must stay that way.** `exports` is `"./*": "./src/*.ts"`.
+An `index.ts` would put `node:crypto` in the module graph of any mobile screen
+that imported anything at all.
+
+**The engine's tests no longer need a database, an `.env`, or a generated
+client.** That is the property Phase 1 will lean on when the API imports the
+same rules, and Phase 3 when Metro does.
+
 ### Start here
 
 **Phase 0.2 — the `decimal.js` decoupling — is the first commit**, and it is

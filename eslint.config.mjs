@@ -11,6 +11,32 @@ import tseslint from "typescript-eslint";
  * rules below can, and that is the whole reason for the extra ~15s a lint run
  * now takes. `projectService` is what hands them the program.
  */
+/** What `packages/core` may never import, in source or in its tests. */
+const CORE_BANNED = [
+  {
+    group: ["@/*"],
+    message:
+      "packages/core cannot use the app's `@/` alias — it has no app. Import relatively.",
+  },
+  {
+    group: ["@prisma/*", "prisma", "**/generated/prisma/**"],
+    message:
+      "packages/core must not import Prisma: the generated client pulls node:process/path/url, which no browser or Metro bundle can take. Keep the database at the edge, in lib/queries.ts or lib/stock-service.ts.",
+  },
+  {
+    group: ["next", "next/*", "react", "react-dom", "server-only"],
+    message:
+      "packages/core is framework-free by contract — the API and the React Native app import it too.",
+  },
+];
+
+/** Source-only: tests run in Node and are allowed the builtins. */
+const CORE_BANNED_NODE = {
+  group: ["node:*", "!node:crypto"],
+  message:
+    "Node builtins do not exist on a phone. node:crypto is the one exception, and only because no mobile entry point reaches telegram-link.ts.",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -41,6 +67,46 @@ const eslintConfig = defineConfig([
         "error",
         { allowNumber: true, allow: [{ name: "Decimal", from: "package", package: "decimal.js" }] },
       ],
+    },
+  },
+  {
+    /**
+     * The boundary that makes `packages/core` worth having.
+     *
+     * The package's contract is that a NestJS API, a Vite SPA and a Metro
+     * bundle can all import it. Nothing in the type system enforces that: a
+     * single `import { Prisma }` would typecheck, pass every test, and break
+     * the mobile build weeks later, in a phase where the cause is no longer
+     * obvious. SPA_API_PORT.md §9.1 calls this out as the first risk, and a
+     * convention that is not enforced is a convention that breaks.
+     *
+     * `node:crypto` is the one exception, for `telegram-link.ts`. It is safe
+     * because the package has no barrel — a mobile app importing
+     * `@supplies/core/stock` never pulls that module into its graph. See
+     * packages/core/CLAUDE.md.
+     */
+    files: ["packages/core/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        { patterns: [...CORE_BANNED, CORE_BANNED_NODE] },
+      ],
+    },
+  },
+  {
+    /**
+     * Core's own tests keep every ban above except the Node one: they run under
+     * vitest, in Node, and never reach a bundle. `gepir.test.ts` reads its
+     * fixtures off disk, which is the correct thing for a test to do and would
+     * be the wrong thing for a rule to prevent.
+     *
+     * The Prisma ban still applies here, deliberately. A test that reached for
+     * the generated client would mean core's tests could no longer run in a
+     * checkout without a database — which is most of what makes them portable.
+     */
+    files: ["packages/core/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": ["error", { patterns: CORE_BANNED }],
     },
   },
   {
