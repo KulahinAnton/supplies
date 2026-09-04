@@ -7,7 +7,13 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@/lib/action-result";
 import { ruleMessage } from "@/lib/messages";
 import { planCorrection, planDiscard } from "@/lib/stock";
-import { addStock, consume, consumeBatch } from "@/lib/stock-service";
+import {
+  addStock,
+  consume,
+  consumeBatch,
+  withStockRetry,
+  writeBatchQuantity,
+} from "@/lib/stock-service";
 import {
   addStockSchema,
   consumeBatchSchema,
@@ -99,33 +105,37 @@ export async function discardBatchAction(input: unknown): Promise<ActionResult> 
   const parsed = discardSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const batch = await prisma.stockBatch.findFirst({
-    where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
-  });
-  if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
-
-  const plan = planDiscard(batch);
-  if (!plan.ok) return actionError(plan.error);
-
-  await prisma.$transaction(async (tx) => {
-    await tx.stockBatch.update({
-      where: { id: batch.id },
-      data: { quantity: "0.000" },
+  /**
+   * Feature 33 — read, plan and write inside the retry. If someone consumed
+   * from this batch first, re-planning records the smaller WASTE that actually
+   * happened rather than the amount this request thought was there.
+   */
+  return withStockRetry(async () => {
+    const batch = await prisma.stockBatch.findFirst({
+      where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
     });
-    await tx.stockMovement.create({
-      data: {
-        itemId: batch.itemId,
-        batchId: batch.id,
-        delta: plan.delta.toFixed(3),
-        reason: "WASTE",
-        userId: session.userId,
-        note: parsed.data.note ?? null,
-      },
-    });
-  });
+    if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
 
-  refresh(batch.itemId);
-  return actionOk();
+    const plan = planDiscard(batch);
+    if (!plan.ok) return actionError(plan.error);
+
+    await prisma.$transaction(async (tx) => {
+      await writeBatchQuantity(tx, batch.id, batch.quantity, new Prisma.Decimal(0));
+      await tx.stockMovement.create({
+        data: {
+          itemId: batch.itemId,
+          batchId: batch.id,
+          delta: plan.delta.toFixed(3),
+          reason: "WASTE",
+          userId: session.userId,
+          note: parsed.data.note ?? null,
+        },
+      });
+    });
+
+    refresh(batch.itemId);
+    return actionOk();
+  });
 }
 
 /** Feature 4 — set a batch's absolute quantity, recording the signed delta. */
@@ -134,35 +144,41 @@ export async function correctBatchAction(input: unknown): Promise<ActionResult> 
   const parsed = correctionSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  const batch = await prisma.stockBatch.findFirst({
-    where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
-  });
-  if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
-
-  const target = new Prisma.Decimal(parsed.data.quantity);
-  const plan = planCorrection(batch, target);
-  if (!plan.ok) return actionError(plan.error);
-
-  // A correction that changes nothing should not litter the audit log.
-  if (plan.delta.isZero()) return actionOk();
-
-  await prisma.$transaction(async (tx) => {
-    await tx.stockBatch.update({
-      where: { id: batch.id },
-      data: { quantity: target.toFixed(3) },
+  /**
+   * Feature 33 — retrying is right here, and the delta is why. A correction is
+   * an absolute claim about reality: "there are actually 5". If someone changed
+   * the batch in between, the target still stands but the SIGNED DELTA the
+   * audit log records does not — re-planning against the current value is what
+   * keeps that log truthful.
+   */
+  return withStockRetry(async () => {
+    const batch = await prisma.stockBatch.findFirst({
+      where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
     });
-    await tx.stockMovement.create({
-      data: {
-        itemId: batch.itemId,
-        batchId: batch.id,
-        delta: plan.delta.toFixed(3),
-        reason: "CORRECTION",
-        userId: session.userId,
-        note: parsed.data.note ?? null,
-      },
-    });
-  });
+    if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
 
-  refresh(batch.itemId);
-  return actionOk();
+    const target = new Prisma.Decimal(parsed.data.quantity);
+    const plan = planCorrection(batch, target);
+    if (!plan.ok) return actionError(plan.error);
+
+    // A correction that changes nothing should not litter the audit log.
+    if (plan.delta.isZero()) return actionOk();
+
+    await prisma.$transaction(async (tx) => {
+      await writeBatchQuantity(tx, batch.id, batch.quantity, target);
+      await tx.stockMovement.create({
+        data: {
+          itemId: batch.itemId,
+          batchId: batch.id,
+          delta: plan.delta.toFixed(3),
+          reason: "CORRECTION",
+          userId: session.userId,
+          note: parsed.data.note ?? null,
+        },
+      });
+    });
+
+    refresh(batch.itemId);
+    return actionOk();
+  });
 }
