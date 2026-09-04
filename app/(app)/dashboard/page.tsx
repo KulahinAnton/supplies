@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CalendarClock, PackageX, ShoppingCart } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getDashboard, type ItemView } from "@/lib/queries";
+import { getDashboard } from "@/lib/queries.rsc";
+import type { ItemView } from "@/lib/queries";
 import { todayUTC } from "@/lib/period";
 import { splitExpiring } from "@/lib/expiry";
 import { cn } from "@/lib/utils";

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getAttentionCounts, getHousehold } from "@/lib/queries";
+import { getAttentionCounts, getHousehold } from "@/lib/queries.rsc";
 import { AppNav } from "@/components/app-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";

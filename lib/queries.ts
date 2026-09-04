@@ -65,9 +65,16 @@ export async function getHousehold(householdId: string) {
   return prisma.household.findUniqueOrThrow({ where: { id: householdId } });
 }
 
+/** The row `getHousehold` returns, for callers that pass one back in. */
+export type HouseholdRow = Awaited<ReturnType<typeof getHousehold>>;
+
 /** Every non-archived item with its computed states. */
-export async function getItemViews(householdId: string): Promise<ItemView[]> {
-  const household = await getHousehold(householdId);
+export async function getItemViews(
+  householdId: string,
+  /** Feature 33 — reuse the caller's household row instead of re-reading it. */
+  preloadedHousehold?: HouseholdRow,
+): Promise<ItemView[]> {
+  const household = preloadedHousehold ?? (await getHousehold(householdId));
   const today = todayUTC();
 
   const items = await prisma.item.findMany({
@@ -126,9 +133,18 @@ export type DashboardData = {
 };
 
 /** Feature 5 — the morning glance. */
-export async function getDashboard(householdId: string): Promise<DashboardData> {
-  const household = await getHousehold(householdId);
-  const items = await getItemViews(householdId);
+export async function getDashboard(
+  householdId: string,
+  /**
+   * Feature 33 — pass the item views in when the caller already has them.
+   * The layout's nav badges load the whole household one line above this page
+   * does; without a seam here that scan happens twice per navigation. Same
+   * shape `getRestockEntries` already uses. Omitted, it loads its own.
+   */
+  preloaded?: { items?: ItemView[]; household?: HouseholdRow },
+): Promise<DashboardData> {
+  const household = preloaded?.household ?? (await getHousehold(householdId));
+  const items = preloaded?.items ?? (await getItemViews(householdId, household));
 
   const severity: Record<ExpiryState, number> = {
     EXPIRED: 0,
@@ -394,8 +410,12 @@ export async function getRestockEntries(
 }
 
 /** Header chips: how many things want attention right now. */
-export async function getAttentionCounts(householdId: string) {
-  const items = await getItemViews(householdId);
+export async function getAttentionCounts(
+  householdId: string,
+  /** Feature 33 — see `getDashboard`. */
+  preloaded?: ItemView[],
+) {
+  const items = preloaded ?? (await getItemViews(householdId));
   return {
     expiring: items.filter((item) => needsAttention(item.expiry)).length,
     // Feature 26 — a group of three brands is one thing to buy, so it counts

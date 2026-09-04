@@ -6,6 +6,14 @@ export type BotUser = {
   householdId: string;
   name: string;
   chatId: number;
+  /**
+   * Feature 33 — which reply keyboard this chat has been sent (Feature 30.3).
+   *
+   * Carried here because this query already read the row. Looking it up again
+   * downstream was a second identical round trip on every webhook update, and
+   * on a serverless bot every round trip is latency the user feels.
+   */
+  keyboardVersion: number;
 };
 
 /**
@@ -32,5 +40,6 @@ export async function resolveChat(chatId?: number): Promise<BotUser | null> {
     householdId: link.user.householdId,
     name: link.user.name,
     chatId,
+    keyboardVersion: link.keyboardVersion,
   };
 }

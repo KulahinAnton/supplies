@@ -49,3 +49,9 @@ next-env.d.ts
 # Database dumps — contain password hashes, emails and Telegram chat ids
 backups/
 .env.backup
+
+# Playwright output. The report is worth reading and never worth committing.
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

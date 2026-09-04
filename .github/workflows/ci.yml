@@ -68,7 +68,28 @@ jobs:
       - name: Integration smoke test
         run: pnpm test:db
 
-      # Last because it is the slowest, and a failure here is rarer than the
-      # others. `prisma generate` runs as part of the build script.
+      # Before the e2e run, which serves this build rather than compiling its
+      # own. `prisma generate` runs as part of the build script.
       - name: Build
         run: pnpm build
+
+      # Chromium only: the "mobile" project runs the same specs in the same
+      # engine at a phone viewport, so downloading a second browser would test
+      # Playwright's device emulation rather than this app.
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+        env:
+          AUTH_TRUST_HOST: "true"
+
+      # Only on failure — a green run should leave nothing to look at.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
