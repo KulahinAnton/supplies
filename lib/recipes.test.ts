@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Decimal } from "@/lib/decimal";
 import type { ItemView } from "@/lib/queries";
 import {
   MAX_PANTRY_LINES,
@@ -9,7 +9,7 @@ import {
   pantryLines,
 } from "@/lib/recipes";
 
-const dec = (n: string) => new Prisma.Decimal(n);
+const dec = (n: string) => new Decimal(n);
 
 function item(over: Partial<ItemView> & { name: string }): ItemView {
   return {

@@ -71,7 +71,7 @@ import { UNIT_SHORT } from "@/lib/format";
 import { useCollapsedGroups } from "@/hooks/use-collapsed-groups";
 import { useShownArchived } from "@/hooks/use-shown-archived";
 import { cn } from "@/lib/utils";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 
 export type ListRow = {
   id: string;

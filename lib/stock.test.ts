@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import { Decimal } from "@/lib/decimal";
+import type { Unit } from "@/lib/units";
 import { itemExpiryState, batchExpiryState } from "@/lib/expiry";
 import { renderMessage } from "@/lib/messages";
 import { dateOnlyUTC } from "@/lib/period";
@@ -18,7 +18,7 @@ import {
   type StockItemInput,
 } from "@/lib/stock";
 
-const d = (value: string | number) => new Prisma.Decimal(value);
+const d = (value: string | number) => new Decimal(value);
 
 function batch(
   id: string,
@@ -312,7 +312,7 @@ describe("Feature 24 — taking from a specific batch", () => {
   const today = dateOnlyUTC(2026, 8, 25);
   const batch = (id: string, qty: string, expiresAt: Date | null) => ({
     id,
-    quantity: new Prisma.Decimal(qty),
+    quantity: new Decimal(qty),
     expiresAt,
     createdAt: dateOnlyUTC(2026, 1, 1),
   });
@@ -325,7 +325,7 @@ describe("Feature 24 — taking from a specific batch", () => {
      */
     it("allows taking from an expired batch", () => {
       const expired = batch("b1", "3", dateOnlyUTC(2026, 8, 1));
-      const plan = planConsumeBatch(expired, new Prisma.Decimal("2"), unit);
+      const plan = planConsumeBatch(expired, new Decimal("2"), unit);
       expect(plan.ok).toBe(true);
       if (plan.ok) expect(plan.delta.toString()).toBe("-2");
     });
@@ -333,7 +333,7 @@ describe("Feature 24 — taking from a specific batch", () => {
     it("refuses more than the batch holds, naming what is there", () => {
       const plan = planConsumeBatch(
         batch("b1", "3", null),
-        new Prisma.Decimal("5"),
+        new Decimal("5"),
         unit,
       );
       expect(plan.ok).toBe(false);
@@ -342,16 +342,16 @@ describe("Feature 24 — taking from a specific batch", () => {
 
     it("refuses zero, negatives and an empty batch", () => {
       const live = batch("b1", "3", null);
-      expect(planConsumeBatch(live, new Prisma.Decimal("0"), unit).ok).toBe(false);
-      expect(planConsumeBatch(live, new Prisma.Decimal("-1"), unit).ok).toBe(false);
+      expect(planConsumeBatch(live, new Decimal("0"), unit).ok).toBe(false);
+      expect(planConsumeBatch(live, new Decimal("-1"), unit).ok).toBe(false);
       const empty = batch("b2", "0", null);
-      const plan = planConsumeBatch(empty, new Prisma.Decimal("1"), unit);
+      const plan = planConsumeBatch(empty, new Decimal("1"), unit);
       expect(plan.ok).toBe(false);
       if (!plan.ok) expect(plan.error.key).toBe("stock.batchEmpty");
     });
 
     it("allows taking the batch down to exactly zero", () => {
-      const plan = planConsumeBatch(batch("b1", "3", null), new Prisma.Decimal("3"), unit);
+      const plan = planConsumeBatch(batch("b1", "3", null), new Decimal("3"), unit);
       expect(plan.ok).toBe(true);
       if (plan.ok) expect(plan.delta.toString()).toBe("-3");
     });
@@ -364,27 +364,27 @@ describe("Feature 24 — taking from a specific batch", () => {
      * was — it just could not be taken that way.
      */
     it("says the stock is expired rather than absent", () => {
-      const item = { minQty: new Prisma.Decimal("0"), unit };
+      const item = { minQty: new Decimal("0"), unit };
       const batches = [batch("b1", "4", dateOnlyUTC(2026, 8, 1))];
-      const plan = planConsume(item, batches, new Prisma.Decimal("1"), today);
+      const plan = planConsume(item, batches, new Decimal("1"), today);
       expect(plan.ok).toBe(false);
       if (!plan.ok) expect(plan.error.key).toBe("stock.allExpired");
     });
 
     it("still reports a plain shortfall when some stock is usable", () => {
-      const item = { minQty: new Prisma.Decimal("0"), unit };
+      const item = { minQty: new Decimal("0"), unit };
       const batches = [
         batch("b1", "4", dateOnlyUTC(2026, 8, 1)), // expired
         batch("b2", "1", dateOnlyUTC(2027, 1, 1)), // usable
       ];
-      const plan = planConsume(item, batches, new Prisma.Decimal("3"), today);
+      const plan = planConsume(item, batches, new Decimal("3"), today);
       expect(plan.ok).toBe(false);
       if (!plan.ok) expect(plan.error.key).toBe("stock.shortfall");
     });
 
     it("reports nothing-to-consume when there is genuinely no stock", () => {
-      const item = { minQty: new Prisma.Decimal("0"), unit };
-      const plan = planConsume(item, [batch("b1", "0", null)], new Prisma.Decimal("1"), today);
+      const item = { minQty: new Decimal("0"), unit };
+      const plan = planConsume(item, [batch("b1", "0", null)], new Decimal("1"), today);
       expect(plan.ok).toBe(false);
       if (!plan.ok) expect(plan.error.key).not.toBe("stock.allExpired");
     });
@@ -394,7 +394,7 @@ describe("Feature 24 — taking from a specific batch", () => {
 describe("Feature 25 — minQty 0 opts out of every reminder", () => {
   const unit: Unit = "PIECE";
   const empty = [
-    { id: "b", quantity: new Prisma.Decimal("0"), expiresAt: null, createdAt: new Date() },
+    { id: "b", quantity: new Decimal("0"), expiresAt: null, createdAt: new Date() },
   ];
 
   /**
@@ -404,13 +404,13 @@ describe("Feature 25 — minQty 0 opts out of every reminder", () => {
    * digest. Half an opt-out is not an opt-out.
    */
   it("does not nag about an item that ran out with minQty 0", () => {
-    const item = { minQty: new Prisma.Decimal("0"), unit };
+    const item = { minQty: new Decimal("0"), unit };
     expect(stockState(item, empty)).toBe("OUT");
     expect(needsRestock(item, stockState(item, empty))).toBe(false);
   });
 
   it("still nags when a minimum was actually set", () => {
-    const item = { minQty: new Prisma.Decimal("1"), unit };
+    const item = { minQty: new Decimal("1"), unit };
     expect(needsRestock(item, stockState(item, empty))).toBe(true);
   });
 
@@ -419,15 +419,15 @@ describe("Feature 25 — minQty 0 opts out of every reminder", () => {
    * still says «Закінчився». Only the nagging is opt-out.
    */
   it("leaves the OUT state intact, so the badge still tells the truth", () => {
-    const optedOut = { minQty: new Prisma.Decimal("0"), unit };
-    const nagging = { minQty: new Prisma.Decimal("2"), unit };
+    const optedOut = { minQty: new Decimal("0"), unit };
+    const nagging = { minQty: new Decimal("2"), unit };
     expect(stockState(optedOut, empty)).toBe(stockState(nagging, empty));
   });
 
   it("suppresses LOW as well, as it always did", () => {
-    const item = { minQty: new Prisma.Decimal("0"), unit };
+    const item = { minQty: new Decimal("0"), unit };
     const some = [
-      { id: "b", quantity: new Prisma.Decimal("1"), expiresAt: null, createdAt: new Date() },
+      { id: "b", quantity: new Decimal("1"), expiresAt: null, createdAt: new Date() },
     ];
     expect(stockState(item, some)).toBe("OK");
     expect(needsRestock(item, stockState(item, some))).toBe(false);

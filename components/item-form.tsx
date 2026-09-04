@@ -22,7 +22,7 @@ import { itemSchema } from "@/lib/validation/item";
 import { defaultRowId } from "@/lib/ordering";
 import { findSimilar } from "@/lib/duplicates";
 import { UNIT_PLURAL } from "@/lib/format";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 
 type Values = z.infer<typeof itemSchema>;
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Decimal } from "@/lib/decimal";
 import { dateOnlyUTC } from "@/lib/period";
 import { isValidListRow, shoppingCandidates, type CandidateItem } from "@/lib/shopping";
 import type { StockBatchInput } from "@/lib/stock";
 
-const d = (value: string | number) => new Prisma.Decimal(value);
+const d = (value: string | number) => new Decimal(value);
 
 function batch(id: string, quantity: string): StockBatchInput {
   return { id, quantity: d(quantity), expiresAt: null, createdAt: dateOnlyUTC(2026, 1, 1) };

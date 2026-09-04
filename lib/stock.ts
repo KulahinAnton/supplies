@@ -4,16 +4,14 @@
  * §3.6 is reproduced verbatim in `lib/stock.test.ts`.
  */
 
-import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import { Decimal, ZERO } from "@/lib/decimal";
+import type { Unit } from "@/lib/units";
 import { batchExpiryState } from "@/lib/expiry";
 import { formatQuantityWithUnitLong } from "@/lib/format";
 import { ruleMessage, type RuleMessage } from "@/lib/messages";
 import { compareDateOnly } from "@/lib/period";
 
-type Decimal = Prisma.Decimal;
 
-const ZERO = new Prisma.Decimal(0);
 
 /** Stock level, §3.4. */
 export type StockState = "OUT" | "LOW" | "OK";
@@ -200,7 +198,7 @@ export function planConsume(
 
   for (const batch of ordered) {
     if (outstanding.lessThanOrEqualTo(ZERO)) break;
-    const take = Prisma.Decimal.min(batch.quantity, outstanding);
+    const take = Decimal.min(batch.quantity, outstanding);
     draws.push({
       batchId: batch.id,
       take,

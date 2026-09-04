@@ -10,7 +10,7 @@ import type { ItemFilter, PerPage } from "@/lib/item-list-params";
 import type { ItemSort } from "@/lib/item-sort";
 import { buildGroupView, groupNeedsRestock } from "@/lib/item-group";
 import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 import { prisma } from "@/lib/prisma";
 import {
   itemExpiryState,

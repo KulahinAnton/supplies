@@ -1,6 +1,6 @@
 "use server";
 
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 import { canJoinGroup } from "@/lib/item-group";
 import type { RuleMessage } from "@/lib/messages";
 

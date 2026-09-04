@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Decimal } from "@/lib/decimal";
 import {
   batchExpiryState,
   byUrgency,
@@ -12,7 +12,7 @@ import {
 } from "@/lib/expiry";
 import { dateOnlyUTC } from "@/lib/period";
 
-const d = (value: string | number) => new Prisma.Decimal(value);
+const d = (value: string | number) => new Decimal(value);
 
 function batch(quantity: string, expiresAt: Date | null): ExpiryBatch {
   return { quantity: d(quantity), expiresAt };

@@ -6,12 +6,13 @@
  * "4,5 л" and "19.08.2026" look the same on every screen.
  *
  * Deliberately Prisma-free: client components import this, and pulling the
- * generated client into a browser bundle drags `node:module` in with it. A
- * `Prisma.Decimal` satisfies `Numeric` via its `toString()`, so callers pass
- * one without this module ever importing the runtime.
+ * generated client into a browser bundle drags `node:module` in with it. Any
+ * decimal — the engine's, or one straight off a database row — satisfies
+ * `Numeric` via its `toString()`, so callers pass one without this module ever
+ * importing a runtime.
  */
 
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 import { daysBetween } from "@/lib/period";
 
 /** Anything that stringifies to a decimal: Decimal, string, or number. */

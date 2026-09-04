@@ -1,14 +1,17 @@
 import { z } from "zod";
-import { Unit } from "@/lib/generated/prisma/enums";
+import { UNITS } from "@/lib/units";
 import {
   BARCODE_PATTERN,
   key,
   nonNegativeQuantityString,
 } from "@/lib/validation/shared";
 
-// zod v4 accepts an enum-like object directly, which keeps the inferred type
-// as `Unit` rather than widening it to string.
-const unitField = z.enum(Unit);
+// zod v4 keeps a `const` tuple's literal members, so the inferred type stays
+// `Unit` rather than widening to string. The list comes from `lib/units.ts`
+// rather than the generated client so this schema can be shared with clients
+// that have no database — the API validates requests with it, and the SPA and
+// the RN app resolve their forms against the same object.
+const unitField = z.enum(UNITS);
 
 export const itemSchema = z.object({
   name: z.string().trim().min(1, key("item.nameRequired")),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import { Decimal } from "@/lib/decimal";
+import type { Unit } from "@/lib/units";
 import {
   buildGroupView,
   canJoinGroup,
@@ -10,7 +10,7 @@ import {
   type GroupMemberInput,
 } from "@/lib/item-group";
 
-const d = (value: string) => new Prisma.Decimal(value);
+const d = (value: string) => new Decimal(value);
 const member = (id: string, quantity: string, unit: Unit = "PIECE"): GroupMemberInput => ({
   id,
   name: id,

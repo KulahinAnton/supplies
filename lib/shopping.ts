@@ -6,7 +6,7 @@
  * deliberate non-goal: a list that fills itself stops being read.
  */
 
-import { Prisma } from "@/lib/generated/prisma/client";
+import type { Decimal } from "@/lib/decimal";
 import {
   itemQuantity,
   needsRestock,
@@ -16,7 +16,6 @@ import {
   type StockState,
 } from "@/lib/stock";
 
-type Decimal = Prisma.Decimal;
 
 export type CandidateItem = StockItemInput & {
   id: string;

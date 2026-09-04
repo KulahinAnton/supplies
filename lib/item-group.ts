@@ -9,13 +9,11 @@
  * Pure, like the rest of the engine. No Prisma client, no React.
  */
 
-import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import { Decimal, ZERO } from "@/lib/decimal";
+import type { Unit } from "@/lib/units";
 import { stateFor, type StockState } from "@/lib/stock";
 import { ruleMessage, type RuleMessage } from "@/lib/messages";
 
-type Decimal = Prisma.Decimal;
-const ZERO = new Prisma.Decimal(0);
 
 /** The member fields this module reads. Real `ItemView`s satisfy it. */
 export type GroupMemberInput = {

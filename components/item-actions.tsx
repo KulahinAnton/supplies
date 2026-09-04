@@ -23,7 +23,7 @@ import {
 } from "@/lib/actions/stock";
 import { renderMessage } from "@/lib/messages";
 import { UNIT_SHORT } from "@/lib/format";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 
 export function ItemActions({
   itemId,

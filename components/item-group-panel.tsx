@@ -18,7 +18,7 @@ import {
 import Link from "next/link";
 import { renderMessage } from "@/lib/messages";
 import { formatQuantityWithUnit, UNIT_SHORT } from "@/lib/format";
-import type { Unit } from "@/lib/generated/prisma/enums";
+import type { Unit } from "@/lib/units";
 
 export type ItemGroupRow = SettingsRow & {
   /** The threshold for the whole set. Feature 25: 0 means no reminders. */
