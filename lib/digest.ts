@@ -1,6 +1,6 @@
 import { Bot } from "grammy";
-import { prisma } from "@/lib/prisma";
-import { getItemViews, getRestockEntries } from "@/lib/queries";
+import { prisma } from "@supplies/db/prisma";
+import { getItemViews, getRestockEntries } from "@supplies/db/queries";
 import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 // Feature 30.3 — the digest is the one message that reaches a chat without
 // anyone opening the bot, so it doubles as the keyboard's delivery route.

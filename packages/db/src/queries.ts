@@ -4,29 +4,29 @@
 // digest (`pnpm digest:run`). Client-safety is enforced by the Prisma import
 // below instead: pulling this into a browser bundle fails the build loudly.
 
-import { selectItems } from "@supplies/core/item-filter";
-import { paginate } from "@supplies/core/pagination";
-import type { ItemFilter, PerPage } from "@supplies/core/item-list-params";
-import type { ItemSort } from "@supplies/core/item-sort";
-import { buildGroupView, groupNeedsRestock } from "@supplies/core/item-group";
-import { Prisma } from "@/lib/generated/prisma/client";
-import type { Unit } from "@supplies/core/units";
-import { prisma } from "@/lib/prisma";
+import { selectItems } from "../../core/src/item-filter";
+import { paginate } from "../../core/src/pagination";
+import type { ItemFilter, PerPage } from "../../core/src/item-list-params";
+import type { ItemSort } from "../../core/src/item-sort";
+import { buildGroupView, groupNeedsRestock } from "../../core/src/item-group";
+import { Prisma } from "./generated/prisma/client";
+import type { Unit } from "../../core/src/units";
+import { prisma } from "./prisma";
 import {
   itemExpiryState,
   needsAttention,
   resolveWarnDays,
   type ExpiryState,
-} from "@supplies/core/expiry";
-import { todayUTC } from "@supplies/core/period";
+} from "../../core/src/expiry";
+import { todayUTC } from "../../core/src/period";
 import {
   itemQuantity,
   needsRestock,
   stockState,
   type StockBatchInput,
   type StockState,
-} from "@supplies/core/stock";
-import { shoppingCandidates, type ShoppingCandidate } from "@supplies/core/shopping";
+} from "../../core/src/stock";
+import { shoppingCandidates, type ShoppingCandidate } from "../../core/src/shopping";
 
 /**
  * Read helpers shared by the pages, the Telegram bot and the daily digest.

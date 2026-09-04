@@ -7,7 +7,7 @@ import {
   getMembers,
   hasTelegramLink,
   getItemNames,
-} from "@/lib/queries";
+} from "@supplies/db/queries";
 import { CategoryPanel } from "@/components/category-panel";
 import { DuplicatesPanel } from "@/components/duplicates-panel";
 import { ItemGroupPanel } from "@/components/item-group-panel";

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getArchivedItems } from "@/lib/queries";
+import { getArchivedItems } from "@supplies/db/queries";
 import { formatQuantityWithUnit } from "@supplies/core/format";
 
 /**

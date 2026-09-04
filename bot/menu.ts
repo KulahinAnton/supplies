@@ -1,7 +1,7 @@
 import { InlineKeyboard, Keyboard } from "grammy";
 import { todayUTC } from "@supplies/core/period";
 import { formatExpiryLabel, formatQuantityWithUnit } from "@supplies/core/format";
-import { getRestockEntries, getItemViews } from "@/lib/queries";
+import { getRestockEntries, getItemViews } from "@supplies/db/queries";
 import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 
 import { MESSAGES } from "@supplies/core/messages";

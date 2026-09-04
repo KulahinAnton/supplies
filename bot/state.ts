@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@supplies/db/prisma";
 
 /**
  * Feature 17.4 — the chat's half-finished flow.

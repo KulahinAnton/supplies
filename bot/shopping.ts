@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@/lib/prisma";
-import { getShoppingView } from "@/lib/queries";
+import { prisma } from "@supplies/db/prisma";
+import { getShoppingView } from "@supplies/db/queries";
 import {
   DEFAULT_GROUP_ID,
   groupIdForStorage,

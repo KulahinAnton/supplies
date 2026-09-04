@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "node16",
     "target": "ES2023",
     "lib": ["ES2023"],
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "declaration": false,
     "removeComments": false,
     "emitDecoratorMetadata": true,
@@ -19,6 +19,6 @@
     "noImplicitAny": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "vitest.config.mts", "../../packages/core/src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "../../packages/core/src/**/*.test.ts"]
+  "include": ["src/**/*.ts", "vitest.config.mts", "../../packages/core/src/**/*.ts", "../../packages/db/src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "../../packages/core/src/**/*.test.ts", "../../packages/db/src/**/*.test.ts"]
 }

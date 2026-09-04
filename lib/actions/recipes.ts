@@ -3,7 +3,7 @@
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
 import { ruleMessage } from "@supplies/core/messages";
-import { getHousehold, getItemViews } from "@/lib/queries";
+import { getHousehold, getItemViews } from "@supplies/db/queries";
 import { askClaude } from "@/lib/claude";
 import {
   MIN_PANTRY_LINES,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@supplies/db/generated/prisma/client";
 import { Decimal, ZERO, toDbQuantity, toDecimal } from "@supplies/core/decimal";
 
 /**

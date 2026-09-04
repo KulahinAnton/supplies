@@ -1,4 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
+import { Public } from "../auth/jwt-auth.guard";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { MOVEMENT_REASONS, UNITS } from "../core";
 
@@ -15,6 +16,7 @@ import { MOVEMENT_REASONS, UNITS } from "../core";
  * schemas validate against and the same one `lib/units.test.ts` pins to the
  * Prisma enum. One list, one source, four clients.
  */
+@Public()
 @ApiTags("meta")
 @Controller("meta")
 export class MetaController {

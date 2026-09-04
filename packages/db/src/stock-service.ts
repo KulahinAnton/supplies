@@ -2,12 +2,12 @@
 // lib/queries.ts. The bot calls this module from plain Node, where that
 // package throws unconditionally.
 
-import { Prisma } from "@/lib/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
-import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
-import { ruleMessage } from "@supplies/core/messages";
-import { parseDateOnly, todayUTC } from "@supplies/core/period";
-import { planConsumeBatch, planConsume } from "@supplies/core/stock";
+import { Prisma } from "./generated/prisma/client";
+import { prisma } from "./prisma";
+import { actionError, actionOk, type ActionResult } from "../../core/src/action-result";
+import { ruleMessage } from "../../core/src/messages";
+import { parseDateOnly, todayUTC } from "../../core/src/period";
+import { planConsumeBatch, planConsume } from "../../core/src/stock";
 
 /**
  * The stock write path, independent of HOW the caller authenticated.

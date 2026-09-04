@@ -1,9 +1,9 @@
 import { Bot, type Context } from "grammy";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@supplies/db/prisma";
 import { MESSAGES, renderMessage } from "@supplies/core/messages";
 import { verifyLinkToken } from "@supplies/core/telegram-link";
 import { UNIT_SHORT } from "@supplies/core/format";
-import { getItemViews } from "@/lib/queries";
+import { getItemViews } from "@supplies/db/queries";
 import { botConsume, botAddStock } from "@/bot/actions";
 import {
   clearPending,

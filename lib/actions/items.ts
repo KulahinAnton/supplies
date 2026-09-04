@@ -5,8 +5,8 @@ import { canJoinGroup } from "@supplies/core/item-group";
 import type { RuleMessage } from "@supplies/core/messages";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/lib/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { Prisma } from "@supplies/db/generated/prisma/client";
+import { prisma } from "@supplies/db/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
 import { ruleMessage } from "@supplies/core/messages";

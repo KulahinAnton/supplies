@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { Prisma } from "@/lib/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { Prisma } from "@supplies/db/generated/prisma/client";
+import { prisma } from "@supplies/db/prisma";
 import { todayUTC } from "@supplies/core/period";
 import {
   addStock,
@@ -8,13 +8,13 @@ import {
   consumeBatch,
   StockConflict,
   writeBatchQuantity,
-} from "@/lib/stock-service";
+} from "@supplies/db/stock-service";
 import {
   getDashboard,
   getItemGroupViews,
   getItemViews,
   getShoppingView,
-} from "@/lib/queries";
+} from "@supplies/db/queries";
 import { itemQuantity } from "@supplies/core/stock";
 import { renderMessage } from "@supplies/core/messages";
 import { digestText } from "@/lib/digest";

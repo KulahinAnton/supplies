@@ -1,3 +1,4 @@
+import "./env-first";
 import "reflect-metadata";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";

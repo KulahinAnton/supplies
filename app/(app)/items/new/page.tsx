@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth-guard";
-import { getItemGroups, getCategoriesAndLocations, getItemNames } from "@/lib/queries";
+import { getItemGroups, getCategoriesAndLocations, getItemNames } from "@supplies/db/queries";
 import { ItemForm } from "@/components/item-form";
 
 export default async function NewItemPage({

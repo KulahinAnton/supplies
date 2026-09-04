@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MovementReason as PrismaMovementReason,
   Unit as PrismaUnit,
-} from "@/lib/generated/prisma/enums";
+} from "@supplies/db/generated/prisma/enums";
 import { MOVEMENT_REASONS, UNITS } from "@supplies/core/units";
 
 /**

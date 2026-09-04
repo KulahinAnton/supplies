@@ -1,4 +1,4 @@
-import { addStock, consume, type BatchRow } from "@/lib/stock-service";
+import { addStock, consume, type BatchRow } from "@supplies/db/stock-service";
 import type { BotUser } from "@/bot/auth";
 
 /**

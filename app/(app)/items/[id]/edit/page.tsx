@@ -5,7 +5,7 @@ import {
   getItemDetail,
   getItemGroups,
   getItemNames,
-} from "@/lib/queries";
+} from "@supplies/db/queries";
 import { ItemForm } from "@/components/item-form";
 
 export default async function EditItemPage({

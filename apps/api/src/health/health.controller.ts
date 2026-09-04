@@ -1,4 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
+import { Public } from "../auth/jwt-auth.guard";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -11,6 +12,7 @@ import { PrismaService } from "../prisma/prisma.service";
  * probe that does not will route requests to an instance that cannot serve
  * them.
  */
+@Public()
 @ApiTags("health")
 @Controller("health")
 export class HealthController {

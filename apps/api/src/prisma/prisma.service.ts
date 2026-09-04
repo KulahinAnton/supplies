@@ -4,52 +4,33 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client";
-import type { Env } from "../config/env";
+import { prisma } from "../db";
 
 /**
- * The same database the Next app and the Telegram bot use, reached the same way
- * — driver adapter over `pg`, one schema, one set of migrations. Nothing here
- * owns any rules: those live in `@supplies/core`, and the write path they serve
- * is being ported module by module.
+ * Feature 34 — the API's handle on the one client in `packages/db`.
  *
- * **Wraps a client rather than extending one.** The usual Nest recipe is
- * `class PrismaService extends PrismaClient`, and it does not work with Prisma
- * 7's `prisma-client` generator: `PrismaClient` there is
- * `getPrismaClientClass()`, a value produced by a factory in a `@ts-nocheck`
- * file, so the base class TypeScript sees carries none of the model delegates
- * or even `$connect`. Composition sidesteps that, and costs one `.client`.
+ * It does not construct its own. `packages/db/prisma` is a module-level
+ * singleton, and the queries and the stock write path the API shares with the
+ * Next app and the bot all close over exactly that instance. A second client
+ * here would mean a second connection pool and, worse, two clients where the
+ * shared code only ever uses one — so this service would be managing the
+ * lifecycle of something nothing else was using.
  *
- * It reads better anyway. `PrismaService` is not a database client with some
- * lifecycle bolted on; it is the thing that owns the connection's lifetime.
- *
- * Nest owns that lifetime rather than a module-level singleton. The Next app
- * needs its `globalThis` trick because hot reload re-evaluates modules and
- * would otherwise open a connection per edit; a long-lived API process has one
- * container, constructs this once, and gets a real shutdown hook — which is the
- * half the singleton could never offer.
+ * What it does own is the lifecycle: eager connect at boot, disconnect on
+ * shutdown. Neither is available to a bare module singleton, and both matter
+ * for a long-lived process behind a health check.
  */
 @Injectable()
 export class PrismaService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
-  readonly client: PrismaClient;
-
-  constructor(config: ConfigService<Env, true>) {
-    this.client = new PrismaClient({
-      adapter: new PrismaPg({
-        connectionString: config.get("DATABASE_URL", { infer: true }),
-      }),
-    });
-  }
+  readonly client = prisma;
 
   async onModuleInit(): Promise<void> {
     /**
-     * Connect eagerly. Prisma would connect lazily on the first query, which
-     * means a bad `DATABASE_URL` presents as one failed request rather than a
-     * process that refused to start — and a container orchestrator would
-     * happily route traffic to it in the meantime.
+     * Prisma would connect lazily on the first query, which means a bad
+     * `DATABASE_URL` presents as one failed request rather than a process that
+     * refused to start — and an orchestrator would route traffic to it in the
+     * meantime.
      */
     await this.client.$connect();
     this.logger.log("Database connected");

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getItemGroupDetail } from "@/lib/queries";
+import { getItemGroupDetail } from "@supplies/db/queries";
 import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

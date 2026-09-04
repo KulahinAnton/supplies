@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@/lib/generated/prisma/client";
-import { prisma } from "@/lib/prisma";
+import { Prisma } from "@supplies/db/generated/prisma/client";
+import { prisma } from "@supplies/db/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
 import { ruleMessage } from "@supplies/core/messages";
@@ -13,7 +13,7 @@ import {
   consumeBatch,
   withStockRetry,
   writeBatchQuantity,
-} from "@/lib/stock-service";
+} from "@supplies/db/stock-service";
 import {
   addStockSchema,
   consumeBatchSchema,

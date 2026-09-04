@@ -5,7 +5,7 @@ import {
   getArchivedItems,
   getItemGroups,
   getItemsPage,
-} from "@/lib/queries";
+} from "@supplies/db/queries";
 import { formatQuantityWithUnit } from "@supplies/core/format";
 import { todayUTC } from "@supplies/core/period";
 import { Button } from "@/components/ui/button";

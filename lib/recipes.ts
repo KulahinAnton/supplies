@@ -1,5 +1,5 @@
 import { formatQuantityWithUnit } from "@supplies/core/format";
-import type { ItemView } from "@/lib/queries";
+import type { ItemView } from "@supplies/db/queries";
 
 /**
  * Feature 32 — what Claude is told about the pantry, and what to do with it.

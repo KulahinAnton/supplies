@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@supplies/db/prisma";
 import { sendDigests } from "@/lib/digest";
 
 /**

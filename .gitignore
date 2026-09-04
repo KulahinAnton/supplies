@@ -42,8 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 # generated Prisma client — recreated by `pnpm prisma generate` (also postinstall)
-/lib/generated
-/apps/api/src/generated
+/packages/db/src/generated
 
 # the env template IS committed; real .env files are not
 !.env.example

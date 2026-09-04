@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getCategoriesAndLocations, getItemDetail } from "@/lib/queries";
+import { getCategoriesAndLocations, getItemDetail } from "@supplies/db/queries";
 import { batchExpiryState } from "@supplies/core/expiry";
 import { sanitizeListSearch } from "@supplies/core/item-list-params";
 import { todayUTC } from "@supplies/core/period";

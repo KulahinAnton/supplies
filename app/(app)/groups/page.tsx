@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Boxes, ChevronRight } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
-import { getItemGroupViews } from "@/lib/queries";
+import { getItemGroupViews } from "@supplies/db/queries";
 import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
 import { Button } from "@/components/ui/button";
 

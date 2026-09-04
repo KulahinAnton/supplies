@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "./generated/prisma/client";
 import {
   StockConflict,
   withStockRetry,
   writeBatchQuantity,
-} from "@/lib/stock-service";
+} from "./stock-service";
 
 /**
  * Feature 33 — the concurrency primitives, tested without a database.

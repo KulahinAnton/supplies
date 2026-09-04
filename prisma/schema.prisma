@@ -3,31 +3,20 @@
 // PROJECT_PROMPT.md §3. Quantities are Decimal(12,3) and dates that mean "a
 // calendar day" (expiry, opened) are @db.Date — never DateTime.
 
+// ONE generated client, in `packages/db`, shared by every consumer: the
+// Next app, the Telegram bot, the digest, the scripts and the NestJS API.
+//
+// It was briefly two — a second generator writing into apps/api — because
+// the API compiles to CommonJS and the default ESM output carries
+// `import.meta`, which Node rejects in a CJS file. `moduleFormat = "cjs"`
+// fixes that for everyone: Next and Vite bundle CommonJS without complaint,
+// and one client means `packages/db` can hold the queries and the stock
+// write path that all of them share.
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider     = "prisma-client"
+  output       = "../packages/db/src/generated/prisma"
+  moduleFormat = "cjs"
 }
-
-// The API gets its OWN generated copy rather than importing the one above.
-//
-// A tsconfig path alias would not survive `nest build`: tsc does not rewrite
-// aliases in its output, so the compiled JS would ask Node for a specifier
-// nothing can resolve. Reaching across the workspace with `../../../lib/...`
-// would work and would also drag the generated client into the API build's
-// rootDir inference, putting the output somewhere nobody expects.
-//
-// One schema, one database, two generated clients. They are build artefacts,
-// gitignored, and regenerated together by every `prisma generate`.
-// SPA_API_PORT.md notes `packages/db` as the eventual consolidation.
-generator api {
-  provider            = "prisma-client"
-  output              = "../apps/api/src/generated/prisma"
-  // Nest compiles to CommonJS, so the generated client must be too. The ESM
-  // build imports "./internal/class" with no extension: fine for a bundler,
-  // unresolvable for Node ESM, and tsc never adds extensions on emit.
-  moduleFormat        = "cjs"
-}
-
 datasource db {
   provider = "postgresql"
 }

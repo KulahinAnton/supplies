@@ -18,6 +18,7 @@ export default defineConfig({
     //   test, and they live with the views that use them.
     include: [
       "packages/core/src/**/*.test.ts",
+      "packages/db/src/**/*.test.ts",
       "lib/**/*.test.ts",
       "bot/**/*.test.ts",
     ],

@@ -5,7 +5,7 @@ import {
   getDashboard as uncachedDashboard,
   getHousehold as uncachedHousehold,
   getItemViews as uncachedItemViews,
-} from "@/lib/queries";
+} from "@supplies/db/queries";
 
 /**
  * Feature 33 — the same readers, deduplicated within one request.

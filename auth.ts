@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@supplies/db/prisma";
 
 /**
  * Auth.js v5, Credentials + JWT (PROJECT_PROMPT.md Feature 1).
