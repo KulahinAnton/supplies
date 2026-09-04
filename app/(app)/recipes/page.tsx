@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth-guard";
-import { getHousehold, getItemViews } from "@/lib/queries";
+import { getHousehold, getItemViews } from "@/lib/queries.rsc";
 import { pantryLines } from "@/lib/recipes";
 import { RecipePanel } from "@/components/recipe-panel";
 
@@ -14,6 +14,13 @@ import { RecipePanel } from "@/components/recipe-panel";
  * What the page DOES show for free is how many things it would consider and
  * what is about to spoil, so the button's answer is not a surprise.
  */
+/**
+ * The one route in this app that waits on a third party. 30s gives the Claude
+ * call (12s, one retry) room to fail on its own terms and return the Ukrainian
+ * error, rather than being cut off mid-request by the platform default.
+ */
+export const maxDuration = 30;
+
 export default async function RecipesPage() {
   const session = await requireSession();
 

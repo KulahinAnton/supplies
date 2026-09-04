@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–30 implemented and running in production on Vercel + Neon. 13 migrations, seed idempotent, `pnpm test` (314 across 20 files), `pnpm test:db` (49 integration checks, re-runnable), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–33 implemented and running in production on Vercel + Neon. 14 migrations, seed idempotent, `pnpm test` (339 across 22 files), `pnpm test:db` (52 integration checks against a live database, re-runnable), `pnpm test:e2e` (Playwright, 4 specs across desktop and mobile), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
 
@@ -31,6 +31,7 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 - `pnpm dev` — dev server (Turbopack)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
 - `pnpm verify` — lint + typecheck + unit tests, the same gate the pre-commit hook runs
+- `pnpm test:e2e` — Playwright over a production build on port 3100 (needs Docker + `pnpm db:seed`). Desktop and mobile viewports; deliberately small — see [CONTRIBUTING.md](CONTRIBUTING.md)
 - ESLint is **type-aware** (`typescript-eslint` `recommendedTypeChecked`), which is what catches unawaited promises and unsafe `any`. That is why a lint run takes ~15s
 - `pnpm test` / `pnpm test:watch` — vitest over pure `lib/` rules, colocated `lib/*.test.ts` and `bot/*.test.ts`, no DB (`@` alias in `vitest.config.mts`)
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
@@ -71,6 +72,7 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 - `lib/stock-service.ts` — **the single stock write path**, called by both the server actions and the bot. Takes an `Actor` instead of reading a session, which is what makes "one implementation, two front ends" real
 - `lib/shopping-groups.ts` — pure grouping (Feature 11): `null` groupId means «Загальна група»
 - `lib/actions/` — server actions (session guard + validation + `revalidatePath`); `lib/validation/` — zod schemas shared client/server
+- `lib/queries.rsc.ts` — the same hot readers wrapped in `React.cache` for server components. Feature 33: the layout and the page beneath it were each scanning the whole household; measured 6 loader calls per dashboard render, now 2. `server-only`, so the bot and digest keep importing the uncached `lib/queries.ts`
 - `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves. Sets have two readers: `getItemGroups` (cheap — name, unit, count) for the pickers, `getItemGroupViews` (loads members' batches) for the two views that show a combined total
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
 - `lib/messages.ts` — Ukrainian strings for everything produced outside React

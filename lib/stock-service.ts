@@ -37,6 +37,82 @@ async function loadItem(itemId: string, householdId: string) {
 }
 
 /**
+ * Feature 33 — a stock write that refuses to act on a stale read.
+ *
+ * Every write in this module is a read-modify-write: load the batches, plan
+ * against them, then store an ABSOLUTE quantity. Between the read and the write
+ * another person can change the same row — two phones in one kitchen is this
+ * app's normal case, not its edge case — and the second writer would overwrite
+ * the first with a number computed from stock that no longer exists. A take
+ * disappears; worse, a batch can be *resurrected* to a quantity nobody has.
+ *
+ * So each write states what it believed: update only `WHERE quantity = <what I
+ * planned from>`. Postgres matches zero rows if anyone moved first, and that
+ * zero is the conflict signal. More precise than serializable isolation, which
+ * also aborts on conflicts that would not have mattered.
+ */
+export class StockConflict extends Error {
+  constructor() {
+    super("stock changed between read and write");
+    this.name = "StockConflict";
+  }
+}
+
+/** The slice of a Prisma client (or transaction) this needs. */
+type BatchWriter = {
+  stockBatch: {
+    updateMany(args: {
+      where: { id: string; quantity: string };
+      data: { quantity: string };
+    }): Promise<{ count: number }>;
+  };
+};
+
+/**
+ * Writes `next` into the batch only if it still holds `expected`. Throws
+ * `StockConflict` otherwise, which rolls back the surrounding transaction — so
+ * a multi-batch FEFO draw stays all-or-nothing even when it loses a race.
+ */
+export async function writeBatchQuantity(
+  tx: BatchWriter,
+  batchId: string,
+  expected: Prisma.Decimal,
+  next: Prisma.Decimal,
+): Promise<void> {
+  const { count } = await tx.stockBatch.updateMany({
+    where: { id: batchId, quantity: expected.toFixed(3) },
+    data: { quantity: next.toFixed(3) },
+  });
+  if (count === 0) throw new StockConflict();
+}
+
+/**
+ * Re-runs the whole load-plan-write when it lost a race.
+ *
+ * Re-PLANNING rather than retrying the write is the point: FEFO depends on what
+ * is in the fridge now, so a second attempt may legitimately draw from
+ * different batches, or find there is no longer enough and refuse with the
+ * shortfall. That is the same principle the offline replay uses when it applies
+ * a queued take an hour late.
+ *
+ * Three attempts. A fourth would mean sustained contention a family kitchen
+ * cannot produce, and looping on a bug is worse than failing.
+ */
+export async function withStockRetry<T>(
+  work: () => Promise<T>,
+  attempts = 3,
+): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof StockConflict && attempt < attempts) continue;
+      throw error;
+    }
+  }
+}
+
+/**
  * Feature 22 — the storage locations this household is allowed to name.
  *
  * Batch rows arrive from a client that could send any id, so an id is only
@@ -162,6 +238,17 @@ export async function consume(
   quantity: string,
   note?: string,
 ): Promise<ActionResult> {
+  // Feature 33 — the load is inside the retry: losing a race means planning
+  // again against current stock, not replaying a plan the fridge disagrees with.
+  return withStockRetry(() => consumeOnce(actor, itemId, quantity, note));
+}
+
+async function consumeOnce(
+  actor: Actor,
+  itemId: string,
+  quantity: string,
+  note?: string,
+): Promise<ActionResult> {
   const item = await loadItem(itemId, actor.householdId);
   if (!item) return actionError(ruleMessage("item.notFound"));
 
@@ -180,10 +267,14 @@ export async function consume(
 
   await prisma.$transaction(async (tx) => {
     for (const draw of plan.draws) {
-      await tx.stockBatch.update({
-        where: { id: draw.batchId },
-        data: { quantity: draw.remaining.toFixed(3) },
-      });
+      // The draw takes `take` and leaves `remaining`, so it planned against
+      // their sum. If the row no longer holds that, someone moved first.
+      await writeBatchQuantity(
+        tx,
+        draw.batchId,
+        draw.take.plus(draw.remaining),
+        draw.remaining,
+      );
       await tx.stockMovement.create({
         data: {
           itemId,
@@ -218,6 +309,16 @@ export async function consumeBatch(
   quantity: string,
   note?: string,
 ): Promise<ActionResult<{ itemId: string }>> {
+  // Feature 33 — same reason as `consume`: the read has to be inside the retry.
+  return withStockRetry(() => consumeBatchOnce(actor, batchId, quantity, note));
+}
+
+async function consumeBatchOnce(
+  actor: Actor,
+  batchId: string,
+  quantity: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
   const batch = await prisma.stockBatch.findFirst({
     where: { id: batchId, item: { householdId: actor.householdId } },
     include: { item: { select: { unit: true } } },
@@ -235,10 +336,14 @@ export async function consumeBatch(
   if (!plan.ok) return actionError(plan.error);
 
   await prisma.$transaction(async (tx) => {
-    await tx.stockBatch.update({
-      where: { id: batch.id },
-      data: { quantity: batch.quantity.plus(plan.delta).toFixed(3) },
-    });
+    // `plan.delta` is negative, so this is the batch minus what was taken —
+    // conditional on the batch still holding what the plan read.
+    await writeBatchQuantity(
+      tx,
+      batch.id,
+      batch.quantity,
+      batch.quantity.plus(plan.delta),
+    );
     // CONSUME, not WASTE: used and binned are different facts, and this log is
     // the only place that distinction survives.
     await tx.stockMovement.create({

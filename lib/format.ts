@@ -26,12 +26,27 @@ const dateFormatter = new Intl.DateTimeFormat(LOCALE, {
   timeZone: "UTC", // date-only values are UTC-midnight; see lib/period.ts
 });
 
+/**
+ * Movement timestamps are real instants, so the zone they render in is a
+ * decision — and leaving it to the process was the wrong one. Locally that is
+ * Kyiv and looks right; on Vercel it is UTC, so every «Останні дії» entry in
+ * production has been showing 2–3 hours earlier than it happened.
+ *
+ * Hardcoded rather than a `Household.timezone` column, which is what the
+ * "settings are data, not constants" rule would otherwise ask for. There is
+ * one household in one city, and `lib/digest.ts` already hardcodes the same
+ * zone to decide when noon is. Add the column the day a second timezone
+ * exists, and change both places together.
+ */
+const HOUSEHOLD_TIME_ZONE = "Europe/Kyiv";
+
 const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: HOUSEHOLD_TIME_ZONE,
 });
 
 /** `DD.MM.YYYY` — for date-only values (expiry, opened). */

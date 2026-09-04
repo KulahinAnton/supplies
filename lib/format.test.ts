@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatDate,
+  formatDateTime,
   formatDays,
   formatExpiryLabel,
   formatQuantity,
@@ -133,5 +134,36 @@ describe("formatExpiryLabel", () => {
       if (offset < 0) expect(text.startsWith("прострочено")).toBe(true);
       else expect(text.startsWith("прострочено")).toBe(false);
     }
+  });
+});
+
+describe("formatDateTime", () => {
+  it("renders in Kyiv time, not the server's", () => {
+    // The bug: no timeZone meant the process decided. Vercel runs UTC, so
+    // production showed every movement 2–3 hours early. September is EEST
+    // (UTC+3), so 09:30Z is half past noon at home.
+    expect(formatDateTime(new Date("2026-09-01T09:30:00Z"))).toBe("01.09.2026, 12:30");
+  });
+
+  it("follows Ukrainian DST rather than a fixed offset", () => {
+    // January is EET (UTC+2). A hardcoded +3 would read 11:30 here and be
+    // wrong for half the year.
+    expect(formatDateTime(new Date("2026-01-15T09:30:00Z"))).toBe("15.01.2026, 11:30");
+  });
+
+  it("can cross a date boundary, which is the point of pinning the zone", () => {
+    // 23:30 UTC on the 1st is already 02:30 on the 2nd at home. Rendering
+    // this in UTC would put the movement on the wrong day, not just the
+    // wrong hour.
+    expect(formatDateTime(new Date("2026-09-01T23:30:00Z"))).toBe("02.09.2026, 02:30");
+  });
+});
+
+describe("formatDate", () => {
+  it("stays in UTC, because date-only values are UTC midnight", () => {
+    // @db.Date comes back as midnight UTC. Formatting it in Kyiv would still
+    // land on the same day, but the pin is what guarantees that rather than
+    // the offset happening to be positive.
+    expect(formatDate(new Date("2026-09-05T00:00:00Z"))).toBe("05.09.2026");
   });
 });

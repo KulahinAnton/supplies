@@ -53,7 +53,22 @@ export async function askClaude(
     return { ok: false, error: ruleMessage("recipe.notConfigured") };
   }
 
-  const client = new Anthropic();
+  /**
+   * The SDK defaults are a 10-minute timeout and 2 retries — sane for a script,
+   * wrong inside a serverless function. The platform would kill the function
+   * long before the SDK gave up, so a hung upstream call would surface as a
+   * generic Next error instead of the Ukrainian sentence this module exists to
+   * guarantee.
+   *
+   * The arithmetic matters: worst case is `timeout × (maxRetries + 1)` plus
+   * backoff, so 12s × 2 ≈ 25s, which fits inside the 30s `maxDuration` the
+   * recipes segment declares. Raising either number without raising that one
+   * puts the timeout back outside the platform's patience.
+   *
+   * A normal Haiku reply here takes a few seconds; 12s is a ceiling, not a
+   * target.
+   */
+  const client = new Anthropic({ timeout: 12_000, maxRetries: 1 });
 
   try {
     const response = await client.messages.create({

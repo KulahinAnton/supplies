@@ -1199,3 +1199,52 @@ visible one:
 **Existing households get it switched off**, this one included: the column
 defaults to false, so the tab disappears until someone turns it back on. That
 is the intended reading of "by default disabled" and not an upgrade accident.
+
+### Feature 33 — what the architecture review found, and what was done
+
+A read of the whole codebase against its own rules. Most of it held; four things
+did not. Full findings and the fix log: [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md).
+
+**A stock write must not act on a stale read.** This is a rule, not an
+optimisation, and it belongs beside §3.3. Every write here is a
+read-modify-write — load the batches, plan, store an ABSOLUTE quantity — and
+between the read and the write another member of the household can change the
+same row. Two phones in one kitchen is the normal case. The second writer used
+to overwrite the first with a number computed from stock that no longer existed:
+a take vanished, or a batch was resurrected to a quantity nobody had.
+
+So every write states what it believed — `WHERE quantity = <what I planned
+from>` — and zero matched rows means someone moved first. That throws, the
+transaction rolls back, and the whole load-plan-write runs again, up to three
+times. **Re-planning rather than retrying the write is the rule**: FEFO depends
+on what is in the fridge *now*, so a second attempt may draw from different
+batches, or find there is no longer enough and refuse with the shortfall. This
+is the same principle the offline replay (Feature 31) uses for a take applied an
+hour late.
+
+Correction is the subtle case. Its target is an absolute claim about reality —
+"there are actually 5" — and survives a retry unchanged. Its **signed delta**
+does not, and re-planning against the current value is what keeps the movement
+log truthful.
+
+Chosen over serializable isolation because it aborts only on real conflicts, and
+because the conflict branch is injectable and therefore testable.
+
+**Movement timestamps are Kyiv time**, not the server's. `formatDateTime` had no
+`timeZone`, so Vercel's UTC made every «Останні дії» entry read 2–3 hours early
+— and an instant at 23:30Z rendered as the *previous day*. Hardcoded next to a
+comment naming the `Household.timezone` upgrade path; `lib/digest.ts` already
+hardcodes the same zone to decide when noon is, and the two change together.
+
+**Server components read through `lib/queries.rsc.ts`.** The authed layout and
+the page beneath it each scanned the whole household. Wrapping the exported
+readers in `React.cache` fixes nothing on its own — the scan happens *inside*
+`getAttentionCounts` and `getDashboard` — so both take their inputs as optional
+arguments and the cached module threads them through. Measured on a dashboard
+render: six loader calls became two. The bot and the digest keep importing the
+uncached `lib/queries.ts`, because `server-only` would kill them.
+
+**End-to-end tests exist now** (`e2e/`, `pnpm test:e2e`) and are deliberately
+small: a form in a real browser, a server action, a database write, and the
+number on screen changing to match. Everything provable without a browser stays
+in the unit and smoke suites.

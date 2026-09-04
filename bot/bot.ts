@@ -8,7 +8,6 @@ import { botConsume, botAddStock } from "@/bot/actions";
 import {
   clearPending,
   getPending,
-  keyboardVersionOf,
   markKeyboardSent,
   setPending,
 } from "@/bot/state";
@@ -158,7 +157,8 @@ export function createBot(token: string) {
    */
   async function settleKeyboardDebt(ctx: Context, user: BotUser) {
     try {
-      if ((await keyboardVersionOf(user.chatId)) >= KEYBOARD_VERSION) return;
+      // Read by `resolveChat` a moment ago — no second lookup.
+      if (user.keyboardVersion >= KEYBOARD_VERSION) return;
       await ctx.reply(MESSAGES["bot.keyboardRefreshed"], {
         reply_markup: replyKeyboard(),
       });

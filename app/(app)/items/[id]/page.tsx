@@ -105,7 +105,12 @@ export default async function ItemDetailPage({
       <Card>
         <CardContent className="flex items-center justify-between gap-4 py-5">
           <div>
-            <div className="text-3xl font-semibold tabular-nums">
+            {/* Feature 33 — the e2e suite asserts on this number, and a
+                test id survives copy changes that a text selector would not. */}
+            <div
+              data-testid="item-quantity"
+              className="text-3xl font-semibold tabular-nums"
+            >
               {formatQuantityWithUnit(quantity, item.unit)}
             </div>
             <div className="text-xs text-muted-foreground">

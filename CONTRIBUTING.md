@@ -63,3 +63,25 @@ Postgres, and a production build. All of it must pass before merge.
   UI, the Telegram bot and the offline replay are all callers of it. A second
   implementation is the bug this rule prevents.
 - **Migrations are reviewed like code.** They run against production data.
+
+## End-to-end tests
+
+```bash
+pnpm test:e2e
+```
+
+Playwright, in `e2e/`. It builds and serves the app on **port 3100** — not 3000,
+so a run can never silently attach to your dev server and prove nothing about
+the build. Needs Docker up and `pnpm db:seed` run first; the specs sign in as
+the demo household, mutate stock, and put back what they changed so the suite
+is re-runnable.
+
+Two projects: `chromium` (desktop) and `mobile` (Pixel 7 viewport). The app is
+mobile-first and used standing in a shop, so a layout that only works at 1280px
+is not working.
+
+**Keep the suite small.** FEFO, shortfalls and expiry states are proven in
+`lib/stock.test.ts` in milliseconds without a browser; re-asserting them here
+buys minutes and flakes. What e2e owns is the seam nothing else covers — a form
+in a real browser, a server action, a database write, and the number on screen
+changing to match.

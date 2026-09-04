@@ -70,3 +70,45 @@ and demands `AUTH_TRUST_HOST` or `AUTH_URL`.
 The fix is the same: stop the dev server, delete `.next`, start it again. Do
 not add `AUTH_TRUST_HOST` to make it go away — that hides a stale build rather
 than fixing it. Set it only when deliberately serving `pnpm start` locally.
+
+## Drift when a migration lives on another branch
+
+Two branches that each add a migration will fight over one local database, and
+the symptom is `prisma migrate dev` refusing to run:
+
+    Drift detected: Your database schema is not in sync with your migration history.
+
+It means the database has migrations applied that the *checked-out branch* has
+no files for — you migrated on branch A, switched to branch B, and B knows
+nothing about them. It is not corruption and it does not need a reset.
+
+Find what the database has that the branch does not:
+
+```sql
+select migration_name from "_prisma_migrations" order by migration_name;
+```
+
+Compare with `prisma/migrations/`. For each extra one, drop what it created and
+delete its history row — the files still exist on the other branch and will
+re-apply when you check it out again:
+
+```sql
+drop table if exists "ThatNewTable";
+delete from "_prisma_migrations" where migration_name = '20260831192302_client_operations';
+```
+
+`prisma migrate reset` also works and is more thorough, at the cost of the demo
+data (`pnpm db:seed` rebuilds it).
+
+**The cheaper fix is not to be in this position.** A branch carrying a
+migration should merge in days, not weeks; the longer two of them coexist, the
+more often this costs somebody twenty minutes.
+
+Related: a **prod-copy database can be behind the schema** in the same way.
+`pnpm db:prod-copy` restores whatever the dump held, which may predate
+migrations that are already on `main` — the app then crashes on a column that
+does not exist there. Fix by pointing `migrate deploy` at the copy:
+
+```bash
+DATABASE_URL="postgresql://postgres:postgres@localhost:5435/supplies" pnpm exec prisma migrate deploy
+```
