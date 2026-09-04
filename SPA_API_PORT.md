@@ -588,6 +588,51 @@ that imported anything at all.
 client.** That is the property Phase 1 will lean on when the API imports the
 same rules, and Phase 3 when Metro does.
 
+### Phase 1.1 — done, 2026-09-04
+
+`apps/api` boots, connects, and serves. Verified by running it, not by building
+it: `/health`, `/health/ready` (real `SELECT 1`), `/api/meta`, and Swagger UI at
+`/docs` all answered on port 3200.
+
+| Piece | State |
+|---|---|
+| NestJS 11 on Fastify, helmet, cookie, throttler | done |
+| `PrismaService` — eager connect, real shutdown hook | done |
+| Env config: zod-validated at boot, 11 tests | done |
+| `GET /api/meta` — units and movement reasons from `@supplies/core` | done |
+| OpenAPI at `/docs` | done |
+| Auth, resource modules, zod pipe | Phase 1.2+ |
+
+**§4.2 is implemented.** No domain appears anywhere in `apps/api`. The config
+refuses to boot on `SameSite=None` without `Secure`, refuses an origin that is
+not a URL, refuses plain `http://` origins in production, and names every bad
+variable in one message rather than one per restart. `API_JWT_SECRET` is the
+only value with no default — a fallback secret is a fallback that reaches
+production.
+
+**`GET /api/meta` is the wiring proof, not a placeholder.** It serves the unit
+list from the same module the zod schemas validate against, which is the same
+one `lib/units.test.ts` pins to the Prisma enum. The SPA and the phone will both
+need that list for their «Одиниця» dropdowns, and a hardcoded copy in either is
+a copy that still says six units the day the schema has seven.
+
+**Toolchain, in one line each** — the detail is in
+[apps/api/CLAUDE.md](apps/api/CLAUDE.md):
+
+- The API is **CommonJS**, and Prisma's generator is told `moduleFormat = "cjs"`
+  for it. Its default ESM output carries `import.meta`, which survives a
+  CommonJS build and makes Node reject the file.
+- **ESM is a dead end here.** Node ESM needs file extensions, tsc never adds
+  them on emit, and Turbopack will not resolve `./decimal.js` to `decimal.ts` —
+  so one of the two consumers of `packages/core` breaks whichever way its source
+  is written. Tried, reverted, documented.
+- A tsconfig `paths` alias does not survive emit, so the API has its **own
+  generated client** and one file (`src/core.ts`) that reaches into
+  `packages/core/src` relatively.
+- **No `ValidationPipe`.** Nest's default needs class-validator; this API
+  validates with the zod schemas in `@supplies/core/validation`. Two validation
+  libraries would be two definitions of a valid item.
+
 ### Start here
 
 **Phase 0.2 — the `decimal.js` decoupling — is the first commit**, and it is

@@ -8,6 +8,26 @@ generator client {
   output   = "../lib/generated/prisma"
 }
 
+// The API gets its OWN generated copy rather than importing the one above.
+//
+// A tsconfig path alias would not survive `nest build`: tsc does not rewrite
+// aliases in its output, so the compiled JS would ask Node for a specifier
+// nothing can resolve. Reaching across the workspace with `../../../lib/...`
+// would work and would also drag the generated client into the API build's
+// rootDir inference, putting the output somewhere nobody expects.
+//
+// One schema, one database, two generated clients. They are build artefacts,
+// gitignored, and regenerated together by every `prisma generate`.
+// SPA_API_PORT.md notes `packages/db` as the eventual consolidation.
+generator api {
+  provider            = "prisma-client"
+  output              = "../apps/api/src/generated/prisma"
+  // Nest compiles to CommonJS, so the generated client must be too. The ESM
+  // build imports "./internal/class" with no extension: fine for a bundler,
+  // unresolvable for Node ESM, and tsc never adds extensions on emit.
+  moduleFormat        = "cjs"
+}
+
 datasource db {
   provider = "postgresql"
 }

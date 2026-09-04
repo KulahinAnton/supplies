@@ -29,7 +29,11 @@
     "prepare": "husky",
     "verify": "pnpm lint && pnpm typecheck && pnpm test",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "api:dev": "pnpm --filter @supplies/api dev",
+    "api:build": "pnpm --filter @supplies/api build",
+    "api:start": "pnpm --filter @supplies/api start",
+    "test:api": "pnpm --filter @supplies/api test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

@@ -30,5 +30,14 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Each app owns its own compiler settings. The API needs
+    // `experimentalDecorators` and `emitDecoratorMetadata`, which this config
+    // must not turn on for the Next app, and `pnpm --filter` runs its
+    // typecheck separately. `packages/core` is deliberately NOT excluded: the
+    // web app compiles it, so this config is one of the things keeping it
+    // honest.
+    "apps/**"
+  ]
 }

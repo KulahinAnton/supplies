@@ -43,6 +43,7 @@ next-env.d.ts
 
 # generated Prisma client — recreated by `pnpm prisma generate` (also postinstall)
 /lib/generated
+/apps/api/src/generated
 
 # the env template IS committed; real .env files are not
 !.env.example
@@ -56,3 +57,7 @@ backups/
 /playwright-report/
 /blob-report/
 /.playwright/
+
+# Compiler output (apps/api). `nest build` emits the API and the core sources
+# it pulls in, which is a lot of files that are already tracked as source.
+dist/

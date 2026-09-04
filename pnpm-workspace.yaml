@@ -17,3 +17,6 @@ allowBuilds:
   esbuild: true
   '@parcel/watcher': true
   '@swc/core': true
+  # Telemetry beacon pulled in transitively. Declined: it phones home on
+  # install and nothing here needs it.
+  '@scarf/scarf': false
