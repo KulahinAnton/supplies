@@ -19,6 +19,6 @@
     "noImplicitAny": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "vitest.config.mts", "../../packages/core/src/**/*.ts", "../../packages/db/src/**/*.ts"],
+  "include": ["src/**/*.ts", "vitest.config.mts", "vitest.e2e.config.mts", "../../packages/core/src/**/*.ts", "../../packages/db/src/**/*.ts"],
   "exclude": ["node_modules", "dist", "../../packages/core/src/**/*.test.ts", "../../packages/db/src/**/*.test.ts"]
 }
