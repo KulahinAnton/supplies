@@ -27,7 +27,7 @@
     "db:prod-copy": "tsx scripts/prod-copy.ts",
     "migrate:deploy": "tsx scripts/migrate-deploy.ts",
     "prepare": "husky",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test",
+    "verify": "pnpm lint && pnpm typecheck && pnpm --filter @supplies/api exec tsc --noEmit && pnpm test && pnpm test:api",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "api:dev": "pnpm --filter @supplies/api dev",

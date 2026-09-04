@@ -3,7 +3,13 @@
 # `pnpm test:db` is deliberately NOT here. It needs a live seeded Postgres, and
 # a hook that fails because Docker is not running teaches people to reach for
 # --no-verify, which disables the whole gate. CI runs it instead, where the
-# database is guaranteed.
+# database is guaranteed. `pnpm test:e2e` is out for the same reason, plus a
+# production build nobody wants to wait for.
+#
+# The API's tests ARE here: they take a third of a second, because
+# `validateEnv` is given its environment as an argument rather than reading
+# `process.env`. A config module is exactly the thing you want to find broken
+# before it is pushed.
 #
 # eslint is type-aware, so it is the slow one (~15s). Together this is around
 # half a minute per commit.
@@ -11,4 +17,6 @@ set -e
 
 pnpm exec lint-staged
 pnpm typecheck
+pnpm --filter @supplies/api exec tsc --noEmit
 pnpm test
+pnpm test:api
