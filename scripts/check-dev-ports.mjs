@@ -68,15 +68,34 @@ const busy = PORTS.filter((entry) => held.has(entry.port)).map((entry) => ({
   pid: held.get(entry.port),
 }));
 
-if (busy.length === 0) process.exit(0);
-
 const kill = process.platform === "win32" ? "taskkill /F /PID" : "kill";
+
+/**
+ * `pnpm dev:stop`. The reporting path below prints the commands to run, which
+ * is fine once and tedious the third time — most often the holder is a dev
+ * server from an earlier session that nobody meant to leave running.
+ */
+if (process.argv.includes("--kill")) {
+  if (busy.length === 0) {
+    console.log("Nothing listening on 3000, 3200 or 5173.");
+    process.exit(0);
+  }
+  for (const { port, who, pid } of busy) {
+    run(`${kill} ${pid}`);
+    console.log(`stopped ${who} on ${port} (PID ${pid})`);
+  }
+  process.exit(0);
+}
+
+if (busy.length === 0) process.exit(0);
 
 console.error("\n  Cannot start: these ports are already in use.\n");
 for (const { port, who, note, pid } of busy) {
   console.error(`    ${port}  ${who.padEnd(4)}  PID ${pid}`);
   console.error(`            ${note}`);
 }
-console.error("\n  Stop those processes, or free the ports with:\n");
+console.error("\n  Stop them all with:\n");
+console.error("    pnpm dev:stop\n");
+console.error("  Or individually:\n");
 console.error(`    ${busy.map(({ pid }) => `${kill} ${pid}`).join("\n    ")}\n`);
 process.exit(1);
