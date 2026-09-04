@@ -6,6 +6,7 @@ import { validateEnv } from "./config/env";
 import { HealthController } from "./health/health.controller";
 import { MetaController } from "./meta/meta.controller";
 import { PrismaModule } from "./prisma/prisma.module";
+import { AuthModule } from "./auth/auth.module";
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
 
     PrismaModule,
+    AuthModule,
   ],
   controllers: [HealthController, MetaController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

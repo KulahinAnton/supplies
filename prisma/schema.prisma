@@ -94,6 +94,7 @@ model User {
   shoppingChecked ShoppingListItem[] @relation("ShoppingCheckedBy")
   telegramLink TelegramLink?
   resetTokens  PasswordResetToken[]
+  apiTokens    ApiRefreshToken[]
 
   @@index([householdId])
 }
@@ -325,6 +326,34 @@ model TelegramLink {
   keyboardVersion Int @default(0)
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Feature 34 — refresh tokens for the HTTP API.
+///
+/// The API issues a short access JWT (15 min, unrevocable until it expires)
+/// and a long refresh token that IS revocable, because it is this row.
+///
+/// Only the SHA-256 hash is stored, like HouseholdInvite and
+/// PasswordResetToken: a database dump must not be a set of live credentials.
+///
+/// Rotated on every use. `revokedAt` is set rather than the row deleted, so a
+/// replayed token can be RECOGNISED as revoked — which is the signal that
+/// either a bug or a theft has happened, and the API cannot tell which. It
+/// revokes every token for that user and forces a fresh login.
+model ApiRefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  /// Free text from the client, for a future "where you are signed in" screen.
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {

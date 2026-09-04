@@ -1248,3 +1248,54 @@ uncached `lib/queries.ts`, because `server-only` would kill them.
 small: a form in a real browser, a server action, a database write, and the
 number on screen changing to match. Everything provable without a browser stays
 in the unit and smoke suites.
+
+---
+
+### Feature 34 — the HTTP API, and token auth for clients that have no cookies
+
+Plan and phases: [SPA_API_PORT.md](SPA_API_PORT.md). This section records only
+the **rules**, which are the part that belongs in the spec; the toolchain lives
+in [apps/api/CLAUDE.md](apps/api/CLAUDE.md).
+
+`apps/api` is a **third front end, never a third implementation** — the same
+rule the Telegram bot has followed since Feature 9. Every read goes through the
+same queries and every write through the same engine in `@supplies/core`. An
+endpoint that computed a stock state itself would be a second definition of
+"low".
+
+**Auth is tokens, not a session cookie.** Auth.js keeps the Next app signed in
+with an httpOnly cookie, which a React Native app cannot use and a cross-origin
+SPA can only use awkwardly. So the API issues:
+
+- an **access token** — JWT, 15 minutes, sent as `Authorization: Bearer …`,
+  carrying `sub` and `householdId` exactly as the Auth.js token does;
+- a **refresh token** — 30 days, opaque, stored **hashed** in
+  `ApiRefreshToken`, and **rotated on every use**.
+
+Short access token because it cannot be revoked before it expires. Long refresh
+token because it can: it is a row, and deleting the row ends the session.
+
+**Rotation with reuse detection.** Refreshing revokes the presented token and
+issues a new one. Presenting an already-revoked token means either a bug or a
+stolen token being replayed, and the API cannot tell which — so it revokes
+**every** token for that user and forces a fresh login. A legitimate user
+re-authenticating is a smaller harm than an attacker keeping a session alive.
+
+**Only the hash is stored.** Same rule as `HouseholdInvite.tokenHash` and
+`PasswordResetToken.tokenHash` (Features 1, 8): a database dump must not be a
+set of live credentials.
+
+**`API_JWT_SECRET` is separate from `AUTH_SECRET`.** `AUTH_SECRET` signs Auth.js
+sessions *and* Telegram link tokens; rotating it to end API sessions would sign
+everyone out of the web app and invalidate every outstanding bot link. Two
+secrets, two blast radii.
+
+**Passwords are the same bcrypt hashes.** One `User` row, one password, whether
+you sign in on the web, in the SPA, or on a phone. Registration through the API
+creates the same household defaults as Feature 1, because it calls the same
+code.
+
+**Household scoping is a guard, not a convention.** Every authed request
+carries `householdId` from the verified token, and handlers receive it rather
+than reading it themselves — a handler that forgets to scope a query cannot
+compile.

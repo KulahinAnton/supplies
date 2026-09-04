@@ -113,6 +113,8 @@ export const MESSAGES = {
 
   // --- generic ---
   "error.unexpected": "Щось пішло не так. Спробуйте ще раз.",
+  /** Feature 34 — the API throttles; the web app has no equivalent. */
+  "error.rateLimited": "Забагато запитів. Спробуйте за хвилину.",
 } as const;
 
 export type MessageKey = keyof typeof MESSAGES;

@@ -10,6 +10,7 @@ import {
 } from "@nestjs/platform-fastify";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
+import { RuleErrorFilter } from "./common/rule-error.filter";
 import type { Env } from "./config/env";
 
 async function bootstrap(): Promise<void> {
@@ -49,6 +50,8 @@ async function bootstrap(): Promise<void> {
    *
    * The zod pipe lands with the first endpoint that takes a body (Phase 1.5).
    */
+  app.useGlobalFilters(new RuleErrorFilter());
+
   app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
   app.enableShutdownHooks();
 

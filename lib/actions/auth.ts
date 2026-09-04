@@ -6,6 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
 import { ruleMessage } from "@supplies/core/messages";
+import {
+  DEFAULT_CATEGORIES,
+  DEFAULT_LOCATIONS,
+  defaultHouseholdName,
+} from "@supplies/core/household-defaults";
 import { inviteEmail, passwordResetEmail, sendEmail } from "@/lib/email";
 import {
   changePasswordSchema,
@@ -20,24 +25,6 @@ const hashToken = (token: string) =>
 
 const newToken = () => randomBytes(32).toString("base64url");
 
-/** Ukrainian defaults every new household starts with (Feature 0/3). */
-const DEFAULT_CATEGORIES = [
-  { name: "Продукти", icon: "apple", sortOrder: 0 },
-  { name: "Напої", icon: "cup-soda", sortOrder: 1 },
-  { name: "Побутова хімія", icon: "spray-can", sortOrder: 2 },
-  { name: "Гігієна", icon: "bath", sortOrder: 3 },
-  { name: "Ліки", icon: "pill", sortOrder: 4 },
-  { name: "Для тварин", icon: "paw-print", sortOrder: 5 },
-  { name: "Інше", icon: "package", sortOrder: 6 },
-];
-
-const DEFAULT_LOCATIONS = [
-  { name: "Комора", sortOrder: 0 },
-  { name: "Холодильник", sortOrder: 1 },
-  { name: "Морозильник", sortOrder: 2 },
-  { name: "Ванна кімната", sortOrder: 3 },
-  { name: "Гараж", sortOrder: 4 },
-];
 
 /**
  * Register. Without an invite token this creates a NEW household and seeds its
@@ -84,7 +71,7 @@ export async function registerAction(input: unknown): Promise<ActionResult> {
 
   await prisma.$transaction(async (tx) => {
     const household = await tx.household.create({
-      data: { name: `Родина ${name}` },
+      data: { name: defaultHouseholdName(name) },
     });
     await tx.category.createMany({
       data: DEFAULT_CATEGORIES.map((category) => ({

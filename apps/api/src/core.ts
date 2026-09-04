@@ -42,3 +42,15 @@ export {
   type MessageKey,
   type RuleMessage,
 } from "../../../packages/core/src/messages";
+
+export {
+  firstIssueAsRuleMessage,
+} from "../../../packages/core/src/validation/shared";
+
+export { loginSchema, registerSchema } from "../../../packages/core/src/validation/auth";
+
+export {
+  DEFAULT_CATEGORIES,
+  DEFAULT_LOCATIONS,
+  defaultHouseholdName,
+} from "../../../packages/core/src/household-defaults";
