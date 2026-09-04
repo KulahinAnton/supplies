@@ -74,3 +74,24 @@ domain appears anywhere in this source tree.
 container and is one of the reasons this API does not belong on a serverless
 platform — every request would arrive at a fresh instance and the counter would
 always read zero.
+
+## Tests
+
+```bash
+pnpm test:api        # unit — tokens and config, no database, ~0.3s
+pnpm test:api:e2e    # the whole app against a live seeded database
+```
+
+The split is the same bargain `pnpm test` and `pnpm test:db` make in the root
+package. The unit suite runs on every commit; the e2e suite needs Docker and
+`pnpm db:seed`, so it stays out of the hook — a gate that fails because Docker
+is not running teaches people to reach for `--no-verify`.
+
+What the e2e suite is for is the wiring nothing else can see: the guard actually
+refusing, zod actually rejecting, an `ActionResult` actually becoming a 422, and
+a replayed refresh token actually revoking every session. The arithmetic
+underneath is covered in microseconds by `tokens.test.ts`; this covers whether
+it is plugged in.
+
+It mutates the demo household and puts back what it changed, so it runs twice in
+a row.
