@@ -1,18 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@supplies/db/generated/prisma/client";
-import { prisma } from "@supplies/db/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
-import { ruleMessage } from "@supplies/core/messages";
-import { planCorrection, planDiscard } from "@supplies/core/stock";
 import {
   addStock,
   consume,
   consumeBatch,
-  withStockRetry,
-  writeBatchQuantity,
+  correctBatch,
+  discardBatch,
 } from "@supplies/db/stock-service";
 import {
   addStockSchema,
@@ -105,37 +101,9 @@ export async function discardBatchAction(input: unknown): Promise<ActionResult> 
   const parsed = discardSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  /**
-   * Feature 33 — read, plan and write inside the retry. If someone consumed
-   * from this batch first, re-planning records the smaller WASTE that actually
-   * happened rather than the amount this request thought was there.
-   */
-  return withStockRetry(async () => {
-    const batch = await prisma.stockBatch.findFirst({
-      where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
-    });
-    if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
-
-    const plan = planDiscard(batch);
-    if (!plan.ok) return actionError(plan.error);
-
-    await prisma.$transaction(async (tx) => {
-      await writeBatchQuantity(tx, batch.id, batch.quantity, new Prisma.Decimal(0));
-      await tx.stockMovement.create({
-        data: {
-          itemId: batch.itemId,
-          batchId: batch.id,
-          delta: plan.delta.toFixed(3),
-          reason: "WASTE",
-          userId: session.userId,
-          note: parsed.data.note ?? null,
-        },
-      });
-    });
-
-    refresh(batch.itemId);
-    return actionOk();
-  });
+  const result = await discardBatch(session, parsed.data.batchId, parsed.data.note);
+  if (result.ok) refresh(result.data.itemId);
+  return result.ok ? actionOk() : result;
 }
 
 /** Feature 4 — set a batch's absolute quantity, recording the signed delta. */
@@ -144,41 +112,13 @@ export async function correctBatchAction(input: unknown): Promise<ActionResult> 
   const parsed = correctionSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
 
-  /**
-   * Feature 33 — retrying is right here, and the delta is why. A correction is
-   * an absolute claim about reality: "there are actually 5". If someone changed
-   * the batch in between, the target still stands but the SIGNED DELTA the
-   * audit log records does not — re-planning against the current value is what
-   * keeps that log truthful.
-   */
-  return withStockRetry(async () => {
-    const batch = await prisma.stockBatch.findFirst({
-      where: { id: parsed.data.batchId, item: { householdId: session.householdId } },
-    });
-    if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
-
-    const target = new Prisma.Decimal(parsed.data.quantity);
-    const plan = planCorrection(batch, target);
-    if (!plan.ok) return actionError(plan.error);
-
-    // A correction that changes nothing should not litter the audit log.
-    if (plan.delta.isZero()) return actionOk();
-
-    await prisma.$transaction(async (tx) => {
-      await writeBatchQuantity(tx, batch.id, batch.quantity, target);
-      await tx.stockMovement.create({
-        data: {
-          itemId: batch.itemId,
-          batchId: batch.id,
-          delta: plan.delta.toFixed(3),
-          reason: "CORRECTION",
-          userId: session.userId,
-          note: parsed.data.note ?? null,
-        },
-      });
-    });
-
-    refresh(batch.itemId);
-    return actionOk();
-  });
+  const result = await correctBatch(
+    session,
+    parsed.data.batchId,
+    parsed.data.quantity,
+    parsed.data.note,
+  );
+  if (result.ok) refresh(result.data.itemId);
+  return result.ok ? actionOk() : result;
 }
+

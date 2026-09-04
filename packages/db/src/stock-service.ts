@@ -7,7 +7,12 @@ import { prisma } from "./prisma";
 import { actionError, actionOk, type ActionResult } from "../../core/src/action-result";
 import { ruleMessage } from "../../core/src/messages";
 import { parseDateOnly, todayUTC } from "../../core/src/period";
-import { planConsumeBatch, planConsume } from "../../core/src/stock";
+import {
+  planConsume,
+  planConsumeBatch,
+  planCorrection,
+  planDiscard,
+} from "../../core/src/stock";
 
 /**
  * The stock write path, independent of HOW the caller authenticated.
@@ -359,5 +364,114 @@ async function consumeBatchOnce(
   });
 
   // The caller revalidates /items/[id]; it cannot know which item this was.
+  return actionOk({ itemId: batch.itemId });
+}
+
+/**
+ * Feature 4 — discard a batch as WASTE. The only way expired stock leaves.
+ *
+ * Moved here from `lib/actions/stock.ts` when the API arrived (Feature 34).
+ * It was the last piece of the write path living in a server action, which
+ * meant a second front end had to either duplicate it or go without — and
+ * "one implementation, N front ends" is not a rule that survives exceptions.
+ */
+export async function discardBatch(
+  actor: Actor,
+  batchId: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
+  /**
+   * Feature 33 — read, plan and write inside the retry. If someone consumed
+   * from this batch first, re-planning records the smaller WASTE that actually
+   * happened rather than the amount this request thought was there.
+   */
+  return withStockRetry(() => discardBatchOnce(actor, batchId, note));
+}
+
+async function discardBatchOnce(
+  actor: Actor,
+  batchId: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
+  const batch = await prisma.stockBatch.findFirst({
+    where: { id: batchId, item: { householdId: actor.householdId } },
+  });
+  if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
+
+  const plan = planDiscard(batch);
+  if (!plan.ok) return actionError(plan.error);
+
+  await prisma.$transaction(async (tx) => {
+    await writeBatchQuantity(tx, batch.id, batch.quantity, new Prisma.Decimal(0));
+    await tx.stockMovement.create({
+      data: {
+        itemId: batch.itemId,
+        batchId: batch.id,
+        delta: plan.delta.toFixed(3),
+        reason: "WASTE",
+        userId: actor.userId,
+        note: note ?? null,
+      },
+    });
+  });
+
+  return actionOk({ itemId: batch.itemId });
+}
+
+/** Feature 4 — set a batch's absolute quantity, recording the signed delta. */
+export async function correctBatch(
+  actor: Actor,
+  batchId: string,
+  quantity: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
+  /**
+   * Feature 33 — retrying is right here, and the delta is why. A correction is
+   * an absolute claim about reality: "there are actually 5". If someone changed
+   * the batch in between, the target still stands but the SIGNED DELTA the
+   * audit log records does not — re-planning against the current value is what
+   * keeps that log truthful.
+   */
+  return withStockRetry(() => correctBatchOnce(actor, batchId, quantity, note));
+}
+
+async function correctBatchOnce(
+  actor: Actor,
+  batchId: string,
+  quantity: string,
+  note?: string,
+): Promise<ActionResult<{ itemId: string }>> {
+  const batch = await prisma.stockBatch.findFirst({
+    where: { id: batchId, item: { householdId: actor.householdId } },
+  });
+  if (!batch) return actionError(ruleMessage("stock.batchNotFound"));
+
+  let target: Prisma.Decimal;
+  try {
+    target = new Prisma.Decimal(quantity.replace(",", "."));
+  } catch {
+    return actionError(ruleMessage("stock.correctionNegative"));
+  }
+
+  const plan = planCorrection(batch, target);
+  if (!plan.ok) return actionError(plan.error);
+
+  // A correction that changes nothing should not litter the audit log.
+  if (plan.delta.isZero()) return actionOk({ itemId: batch.itemId });
+
+  await prisma.$transaction(async (tx) => {
+    await writeBatchQuantity(tx, batch.id, batch.quantity, target);
+    await tx.stockMovement.create({
+      data: {
+        itemId: batch.itemId,
+        batchId: batch.id,
+        delta: plan.delta.toFixed(3),
+        reason: "CORRECTION",
+        userId: actor.userId,
+        note: note ?? null,
+      },
+    });
+  });
+
   return actionOk({ itemId: batch.itemId });
 }

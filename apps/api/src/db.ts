@@ -38,5 +38,8 @@ export {
   addStock,
   consume,
   consumeBatch,
+  correctBatch,
+  discardBatch,
   type Actor,
 } from "../../../packages/db/src/stock-service";
+

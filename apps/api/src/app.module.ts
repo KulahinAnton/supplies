@@ -7,6 +7,10 @@ import { HealthController } from "./health/health.controller";
 import { MetaController } from "./meta/meta.controller";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
+import { DashboardController } from "./dashboard/dashboard.controller";
+import { ItemsController } from "./items/items.controller";
+import { ShoppingController } from "./shopping/shopping.controller";
+import { StockController } from "./stock/stock.controller";
 
 @Module({
   imports: [
@@ -35,7 +39,14 @@ import { AuthModule } from "./auth/auth.module";
     PrismaModule,
     AuthModule,
   ],
-  controllers: [HealthController, MetaController],
+  controllers: [
+    HealthController,
+    MetaController,
+    DashboardController,
+    ItemsController,
+    ShoppingController,
+    StockController,
+  ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

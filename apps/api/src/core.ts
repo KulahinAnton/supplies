@@ -54,3 +54,20 @@ export {
   DEFAULT_LOCATIONS,
   defaultHouseholdName,
 } from "../../../packages/core/src/household-defaults";
+
+export {
+  addStockSchema,
+  consumeBatchSchema,
+  consumeSchema,
+  correctionSchema,
+  discardSchema,
+} from "../../../packages/core/src/validation/stock";
+
+export {
+  parseFilter,
+  parsePage,
+  parsePerPage,
+  parseSort,
+} from "../../../packages/core/src/item-list-params";
+
+export type { ActionResult } from "../../../packages/core/src/action-result";
