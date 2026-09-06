@@ -43,3 +43,38 @@ export {
   type Actor,
 } from "../../../packages/db/src/stock-service";
 
+
+export {
+  createItem,
+  setItemArchived,
+  updateItem,
+  type ItemInput,
+} from "../../../packages/db/src/item-service";
+
+export {
+  addListRow,
+  archiveCheckedRows,
+  checkListRow,
+  deleteArchivedRows,
+  deleteListRow,
+  setListRowArchived,
+  uncheckListRow,
+  updateListRow,
+} from "../../../packages/db/src/shopping-service";
+
+export {
+  addItemToGroup,
+  deleteCategory,
+  deleteItemGroup,
+  deleteLocation,
+  removeItemFromGroup,
+  reorderCategories,
+  reorderItemGroups,
+  reorderLocations,
+  saveCategory,
+  saveItemGroup,
+  saveLocation,
+  setDefaultCategory,
+  setDefaultLocation,
+  updateHousehold,
+} from "../../../packages/db/src/settings-service";

@@ -9,6 +9,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { DashboardController } from "./dashboard/dashboard.controller";
 import { ItemsController } from "./items/items.controller";
+import { SettingsController } from "./settings/settings.controller";
 import { ShoppingController } from "./shopping/shopping.controller";
 import { StockController } from "./stock/stock.controller";
 
@@ -44,6 +45,7 @@ import { StockController } from "./stock/stock.controller";
     MetaController,
     DashboardController,
     ItemsController,
+    SettingsController,
     ShoppingController,
     StockController,
   ],

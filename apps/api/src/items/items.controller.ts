@@ -1,15 +1,28 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser, type Caller } from "../auth/jwt-auth.guard";
 import { ApiRuleError } from "../common/api-rule-error";
 import {
+  createItem,
   getArchivedItems,
   getItemDetail,
   getItemNames,
   getItemViews,
   getItemsPage,
+  setItemArchived,
+  updateItem,
+  type ItemInput,
 } from "../db";
-import { parseFilter, parsePage, parsePerPage, parseSort } from "../core";
+import {
+  itemSchema,
+  parseFilter,
+  parsePage,
+  parsePerPage,
+  parseSort,
+  updateItemSchema,
+} from "../core";
+import { zodBody } from "../common/zod.pipe";
+import { unwrap } from "../common/unwrap";
 
 /**
  * Feature 34 — reads, and nothing more.
@@ -77,5 +90,42 @@ export class ItemsController {
     const item = await getItemDetail(caller.householdId, id);
     if (!item) throw new ApiRuleError(404, "item.notFound");
     return item;
+  }
+
+  @Post()
+  @ApiOperation({ summary: "Create an item." })
+  async create(
+    @CurrentUser() caller: Caller,
+    @Body(zodBody(itemSchema)) body: ItemInput,
+  ) {
+    return unwrap(await createItem(caller, body));
+  }
+
+  @Patch(":id")
+  @ApiOperation({
+    summary: "Update an item. The unit is locked once it has batches (§3.2).",
+  })
+  async update(
+    @CurrentUser() caller: Caller,
+    @Param("id") id: string,
+    @Body(zodBody(updateItemSchema)) body: ItemInput & { id: string },
+  ) {
+    // The body carries an id too, because the schema is shared with a form
+    // that has no URL to read it from. The PATH wins: it is the addressed
+    // resource, and letting a body redirect a PATCH is how one gets written
+    // that edits a different item than the URL says.
+    return unwrap(await updateItem(caller, id, body));
+  }
+
+  @Post(":id/archive")
+  @ApiOperation({
+    summary: "Archive or restore. Never deletes — movements reference the item.",
+  })
+  async archive(
+    @CurrentUser() caller: Caller,
+    @Param("id") id: string,
+    @Body() body: { archived?: boolean },
+  ) {
+    return unwrap(await setItemArchived(caller, id, body.archived !== false));
   }
 }

@@ -71,3 +71,12 @@ export {
 } from "../../../packages/core/src/item-list-params";
 
 export type { ActionResult } from "../../../packages/core/src/action-result";
+
+export { itemSchema, updateItemSchema } from "../../../packages/core/src/validation/item";
+
+export {
+  categorySchema,
+  householdSettingsSchema,
+  itemGroupSchema,
+  locationSchema,
+} from "../../../packages/core/src/validation/settings";

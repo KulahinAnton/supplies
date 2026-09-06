@@ -1,8 +1,8 @@
 import { Body, Controller, Post } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser, type Caller } from "../auth/jwt-auth.guard";
-import { ApiRuleError } from "../common/api-rule-error";
 import { zodBody } from "../common/zod.pipe";
+import { unwrap } from "../common/unwrap";
 import { addStock, consume, consumeBatch, correctBatch, discardBatch } from "../db";
 import {
   addStockSchema,
@@ -10,7 +10,6 @@ import {
   consumeSchema,
   correctionSchema,
   discardSchema,
-  type ActionResult,
 } from "../core";
 
 /**
@@ -90,18 +89,4 @@ export class StockController {
   ) {
     return unwrap(await correctBatch(caller, body.batchId, body.quantity, body.note));
   }
-}
-
-/**
- * `ActionResult` is the shape this codebase already speaks, and its failures
- * carry a message KEY — so turning one into an HTTP error loses nothing. The
- * key crosses the wire and the client renders the same Ukrainian the web app
- * would show for the same refusal.
- *
- * 422 rather than 400: the request was well-formed and a *rule* declined it.
- * "You only have 2 left" is not a malformed request.
- */
-function unwrap<T>(result: ActionResult<T>): T | { ok: true } {
-  if (!result.ok) throw new ApiRuleError(422, result.error.key, result.error.params);
-  return result.data ?? { ok: true };
 }
