@@ -1,11 +1,11 @@
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@supplies/db/prisma";
-import { getShoppingView } from "@supplies/db/queries";
+import { prisma } from "../packages/db/src/prisma";
+import { getShoppingView } from "../packages/db/src/queries";
 import {
   DEFAULT_GROUP_ID,
   groupIdForStorage,
   groupShoppingRows,
-} from "@supplies/core/shopping-groups";
+} from "../packages/core/src/shopping-groups";
 import type { BotUser } from "./auth";
 import { CB, type View } from "./menu";
 

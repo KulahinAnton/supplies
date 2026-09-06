@@ -453,7 +453,7 @@ Two rules for the work, because they change what "aligned" means:
 | 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
 | 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
 | 6 | shopping | full port: drag between groups, the move menu, group create/rename/delete, per-group add, the buy dialog with its stock-in, check/uncheck, archive and its reveal toggle, row editing, candidates with their detail lines, and who added or bought each row | **done** |
-| 7 | settings | on the design system, with `Switch`. Still missing: adding categories and locations, per-category warn-day overrides, reorder, members, invites, Telegram link, «Надіслати дайджест» | partial |
+| 7 | settings | all seven panels: household, categories with per-category warn days, locations, item groups with their thresholds, duplicates, members and invites, Telegram, password — with drag-to-reorder, star-a-default, add and delete throughout | **done** |
 | 8 | recipes | matched | **done** |
 | 9 | groups + group detail | both screens, with the membership editor and its barcode scan | **done** |
 | 10 | items archive | **missing entirely** | to do |
@@ -827,6 +827,14 @@ app already links. Adding them to the API would mean pulling grammy and
 `lib/digest.ts` into it to serve a button no other client has. If the SPA or
 the phone ever grows a Telegram settings screen, they are two thin wrappers.
 
+> **Reversed 2026-09-07.** The SPA grew that settings screen, so the "no other
+> client has it" clause expired. Both endpoints exist now, and the prediction
+> held: they are two thin wrappers. The cost was as stated — `apps/api`
+> depends on `@supplies/bot` and therefore grammy — and it also dragged the
+> bot into the API's compile graph, which broke the API until the bot's
+> cross-package imports were made relative. See the Phase 2.9 entry for 7
+> September.
+
 ### Phase 2 — the SPA · in progress, 2026-09-05
 
 | # | Task | State |
@@ -1072,6 +1080,61 @@ One thing worth knowing for next time: **`pnpm test:api:e2e` signs you out.**
 The refresh-replay check deliberately revokes every session for
 `anton@example.com`, so a browser logged in as the demo user is logged out by
 the suite. That is the theft response working, not a bug.
+
+### Phase 2.9 — «Налаштування», and a skip revisited · 2026-09-07
+
+Seven panels, all of them: household, categories with Feature 13's
+per-category warn window, locations, item groups with their thresholds and a
+link into each set, Feature 16.3's duplicate report, members and invites,
+Telegram, password.
+
+**The Telegram skip is reversed.** Those two buttons were left out of the API
+on the grounds that they were settings-page conveniences next to a bot the web
+app already links. That reasoning held right up until the SPA had a settings
+page of its own; parity here means the same two buttons, and the alternative
+was telling someone to go and use the other client. The cost is named rather
+than hidden: `apps/api` now depends on `@supplies/bot`, and so on grammy, to
+send a digest. Reading whether a chat is linked never did — that is a row.
+
+**Three more services had never left `apps/web`**, the same finding as Feature
+11 on the shopping screen: `changePassword` and `createInvite` (now
+`packages/db/account-service`, with `email.ts` moving there too) and the
+Telegram link token (`packages/db/telegram-service`). `sendDigestNow` went to
+`bot/digest-now.ts` instead, because `bot` already depends on `packages/db`
+and putting it the other way round would be a cycle.
+
+`SettingsListPanel` moved to `packages/ui` — 276 lines of drag-to-reorder that
+both clients need. Sharing it meant taking `useRouter` and `toast` out: its
+callbacks now return a boolean and the host decides what a refusal looks like.
+The Next app supplies them through a new `useActionRunner`, the SPA through
+its own `useWrite`.
+
+Two bugs found by using it:
+
+- **Pulling `bot/` into the API's compile graph broke the API.** The bot
+  imported across packages by specifier, tsc left those verbatim on emit, and
+  Node then resolved them to `.ts` files outside `dist` — `ERR_MODULE_NOT_FOUND`
+  at boot. This is the trap apps/api/CLAUDE.md already documents for
+  `packages/core` and `packages/db`; the bot had never been in that graph, so
+  it had never had to follow the rule. Its cross-package imports are relative
+  now, and bot/CLAUDE.md says why.
+- **Changing the household warn window left every category placeholder quoting
+  the old one.** Each category's day field shows the household default as its
+  placeholder, meaning "inherit this", and `keys.household` was missing from
+  the invalidation list. The Next app never had it because `router.refresh()`
+  re-renders everything.
+
+Also corrected: `updateHousehold`'s signature omitted `name` while the schema
+parsed it and Prisma saved it — the rename worked and the type denied it.
+
+Verified against all three on one database: saved the warn window and watched
+the dashboard caption follow it to «попередження за 9 дн.»; added a category,
+gave it its own 14-day window, starred it, un-starred it, deleted it; had
+«Продукти» refused with «Категорію не можна видалити: у ній є товари.»; set
+and cleared a set's threshold; created an invite link pointing at
+`APP_URL/join/…`; minted a Telegram deep link with the real bot username; and
+was refused a password change with «Поточний пароль невірний.» Everything was
+put back to the seeded values.
 
 ### Phases 3–5 — not started
 

@@ -11,9 +11,9 @@ import {
   DEFAULT_LOCATIONS,
   defaultHouseholdName,
 } from "@supplies/core/household-defaults";
-import { inviteEmail, passwordResetEmail, sendEmail } from "@/lib/email";
+import { passwordResetEmail, sendEmail } from "@supplies/db/email";
+import { changePassword, createInvite } from "@supplies/db/account-service";
 import {
-  changePasswordSchema,
   forgotPasswordSchema,
   registerSchema,
   resetPasswordSchema,
@@ -95,27 +95,9 @@ export async function registerAction(input: unknown): Promise<ActionResult> {
 
 export async function changePasswordAction(input: unknown): Promise<ActionResult> {
   const session = await requireSession();
-  const parsed = changePasswordSchema.safeParse(input);
-  if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
-
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
-  if (!user) return actionError(ruleMessage("auth.sessionRequired"));
-
-  const valid = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
-  if (!valid) return actionError(ruleMessage("auth.currentPasswordWrong"));
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: await bcrypt.hash(parsed.data.newPassword, 12) },
-  });
-
-  return actionOk();
+  return changePassword(session, input);
 }
 
-/**
- * Always reports success — an unknown address must look exactly like a known
- * one, or this becomes a way to test whether someone has an account.
- */
 export async function requestPasswordResetAction(
   input: unknown,
 ): Promise<ActionResult> {
@@ -177,30 +159,10 @@ export async function createInviteAction(
   email?: string,
 ): Promise<ActionResult<{ url: string }>> {
   const session = await requireSession();
-  const token = newToken();
-
-  const household = await prisma.household.findUnique({
-    where: { id: session.householdId },
-    select: { name: true },
+  return createInvite(session, {
+    appUrl: process.env.APP_URL ?? "http://localhost:3000",
+    email,
   });
-
-  await prisma.householdInvite.create({
-    data: {
-      householdId: session.householdId,
-      tokenHash: hashToken(token),
-      email: email?.trim() || null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      createdById: session.userId,
-    },
-  });
-
-  if (email?.trim() && household) {
-    const mail = inviteEmail(token, household.name);
-    await sendEmail({ to: email.trim(), ...mail });
-  }
-
-  const base = process.env.APP_URL ?? "http://localhost:3000";
-  return actionOk({ url: `${base}/join/${token}` });
 }
 
 /** Used by /join/[token] to show whose household the visitor is joining. */

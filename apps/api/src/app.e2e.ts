@@ -617,3 +617,74 @@ describe("a POST with no body", () => {
     await request("DELETE", `/api/shopping/${id}`, { token: accessToken });
   });
 });
+
+/**
+ * The Settings screen's own endpoints, which the SPA needed and the API did
+ * not have: the password change, the invite link, and the two Telegram
+ * buttons that were deliberately skipped when this API was built.
+ */
+describe("account and telegram", () => {
+  it("refuses a password change when the current one is wrong", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request("POST", "/api/account/password", {
+      token: accessToken,
+      body: { currentPassword: "definitely-not-it", newPassword: "long-enough-123" },
+    });
+
+    // A rule refusal with a key, not a 401 — the caller is signed in, they
+    // just got the old password wrong.
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "auth.currentPasswordWrong" });
+  });
+
+  it("validates the new password with the schema the web form uses", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request("POST", "/api/account/password", {
+      token: accessToken,
+      body: { currentPassword: LOGIN.password, newPassword: "short" },
+    });
+
+    expect(status).toBe(422);
+    // Whatever the rule is, it comes from @supplies/core/validation/auth and
+    // arrives as a key rather than a sentence.
+    expect(body).toHaveProperty("key");
+    expect(String((body as unknown as { key: string }).key)).not.toBe(
+      "auth.currentPasswordWrong",
+    );
+  });
+
+  it("creates an invite link pointing at where /join is actually served", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request("POST", "/api/account/invite", {
+      token: accessToken,
+    });
+    expect(status).toBe(201);
+
+    const { url } = body as unknown as { url: string };
+    // APP_URL, not the API's own origin: the SPA has no join page, so both
+    // clients hand out one canonical place to accept an invitation.
+    expect(url).toContain("/join/");
+    expect(url.startsWith("http")).toBe(true);
+  });
+
+  it("refuses a digest when no bot is configured, rather than throwing", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request("POST", "/api/telegram/digest", {
+      token: accessToken,
+    });
+
+    // Either outcome is a rule answer. Which one depends on whether this
+    // checkout has a bot token and a linked chat, and neither is something a
+    // test should require of a developer's machine.
+    expect([200, 201, 422]).toContain(status);
+    if (status === 422) {
+      expect(["digest.botNotConfigured", "digest.noChats", "digest.failed"]).toContain(
+        (body as unknown as { key: string }).key,
+      );
+    }
+  });
+});

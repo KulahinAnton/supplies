@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import {
   DndContext,
   KeyboardSensor,
@@ -19,13 +18,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Star, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@supplies/ui/button";
-import { Input } from "@supplies/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
+import { Button } from "./button";
+import { Input } from "./input";
+import { Card, CardContent, CardHeader, CardTitle } from "./card";
 import { moveIdInList } from "@supplies/core/ordering";
-import { renderMessage, type RuleMessage } from "@supplies/core/messages";
-import { cn } from "@supplies/ui/utils";
+import { cn } from "./utils";
 
 export type SettingsRow = {
   id: string;
@@ -39,8 +36,6 @@ export type SettingsRow = {
    */
   subtitle?: string;
 };
-
-type Result = { ok: boolean; error?: RuleMessage };
 
 /**
  * Feature 15 — the shared Settings list: drag to reorder, star a default,
@@ -71,15 +66,14 @@ export function SettingsListPanel({
   defaultHint: string;
   /** Explicit, or dnd-kit's aria ids differ between server and client. */
   dndId: string;
-  onReorder: (orderedIds: string[]) => Promise<Result>;
+  onReorder: (orderedIds: string[]) => Promise<boolean>;
   /** Omit where the concept does not apply — Feature 26 groups have no default. */
-  onSetDefault?: (id: string) => Promise<Result>;
-  onDelete: (id: string) => Promise<Result>;
-  onAdd: (name: string) => Promise<Result>;
+  onSetDefault?: (id: string) => Promise<boolean>;
+  onDelete: (id: string) => Promise<boolean>;
+  onAdd: (name: string) => Promise<boolean>;
   renderExtra?: (row: SettingsRow) => ReactNode;
   children?: ReactNode;
 }) {
-  const router = useRouter();
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState(false);
   /** Optimistic order, so a drag does not wait for the round trip to show. */
@@ -95,17 +89,18 @@ export function SettingsListPanel({
     useSensor(KeyboardSensor),
   );
 
-  async function run(work: () => Promise<Result>, onOk?: () => void) {
+  /**
+   * The host reports. This component knows the row was refused and stops
+   * pretending otherwise; it does not know whether that becomes a toast, an
+   * inline note, or a re-render — the Next app answers with `router.refresh()`
+   * and a `sonner` toast, the SPA with `invalidateQueries` and its own.
+   */
+  async function run(work: () => Promise<boolean>, onOk?: () => void) {
     setPending(true);
-    const result = await work();
+    const ok = await work();
     setPending(false);
-    if (!result.ok && result.error) {
-      toast.error(renderMessage(result.error));
-      return false;
-    }
-    onOk?.();
-    router.refresh();
-    return true;
+    if (ok) onOk?.();
+    return ok;
   }
 
   async function onDragEnd(event: DragEndEvent) {
@@ -125,8 +120,9 @@ export function SettingsListPanel({
     if (!draft.trim()) return;
     await run(() => onAdd(draft), () => {
       setDraft("");
+      // Let the refreshed list decide the order rather than keeping an
+      // optimistic one that does not know where the new row landed.
       setOrder(null);
-      toast.success("Додано");
     });
   }
 
@@ -157,12 +153,7 @@ export function SettingsListPanel({
                   onSetDefault={
                     onSetDefault ? () => run(() => onSetDefault(row.id)) : undefined
                   }
-                  onDelete={() =>
-                    run(() => onDelete(row.id), () => {
-                      setOrder(null);
-                      toast.success("Видалено");
-                    })
-                  }
+                  onDelete={() => run(() => onDelete(row.id), () => setOrder(null))}
                 />
               ))}
             </ul>

@@ -6,10 +6,8 @@ import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@supplies/ui/button";
 import { Input } from "@supplies/ui/input";
-import {
-  SettingsListPanel,
-  type SettingsRow,
-} from "@/components/settings-list-panel";
+import { SettingsListPanel, type SettingsRow } from "@supplies/ui/settings-list-panel";
+import { useActionRunner } from "@/lib/use-action-runner";
 import {
   deleteCategoryAction,
   reorderCategoriesAction,
@@ -38,6 +36,7 @@ export function CategoryPanel({
   householdWarnDays: number;
 }) {
   const router = useRouter();
+  const run = useActionRunner();
   const [edited, setEdited] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
 
@@ -71,10 +70,10 @@ export function CategoryPanel({
       rows={rows}
       addPlaceholder="Нова категорія"
       defaultHint="Перетягніть, щоб змінити порядок. Зірочка — категорія за замовчуванням для нових товарів."
-      onReorder={reorderCategoriesAction}
-      onSetDefault={setDefaultCategoryAction}
-      onDelete={deleteCategoryAction}
-      onAdd={(name) => saveCategoryAction({ name })}
+      onReorder={(ids) => run(() => reorderCategoriesAction(ids))}
+      onSetDefault={(id) => run(() => setDefaultCategoryAction(id))}
+      onDelete={(id) => run(() => deleteCategoryAction(id))}
+      onAdd={(name) => run(() => saveCategoryAction({ name }))}
       renderExtra={(base) => {
         const row = rows.find((r) => r.id === base.id);
         if (!row) return null;

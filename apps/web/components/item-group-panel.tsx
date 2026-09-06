@@ -6,10 +6,8 @@ import { ArrowUpRight, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@supplies/ui/button";
 import { Input } from "@supplies/ui/input";
-import {
-  SettingsListPanel,
-  type SettingsRow,
-} from "@/components/settings-list-panel";
+import { SettingsListPanel, type SettingsRow } from "@supplies/ui/settings-list-panel";
+import { useActionRunner } from "@/lib/use-action-runner";
 import {
   deleteItemGroupAction,
   reorderItemGroupsAction,
@@ -40,6 +38,7 @@ export type ItemGroupRow = SettingsRow & {
  */
 export function ItemGroupPanel({ rows }: { rows: ItemGroupRow[] }) {
   const router = useRouter();
+  const run = useActionRunner();
   const [edited, setEdited] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(false);
 
@@ -82,9 +81,9 @@ export function ItemGroupPanel({ rows }: { rows: ItemGroupRow[] }) {
       }))}
       addPlaceholder="Новий набір"
       defaultHint="Один мінімум на кілька взаємозамінних товарів — наприклад, молоко різних марок. Перетягніть, щоб змінити порядок."
-      onReorder={reorderItemGroupsAction}
-      onDelete={deleteItemGroupAction}
-      onAdd={(name) => saveItemGroupAction({ name, minQty: "0" })}
+      onReorder={(ids) => run(() => reorderItemGroupsAction(ids))}
+      onDelete={(id) => run(() => deleteItemGroupAction(id))}
+      onAdd={(name) => run(() => saveItemGroupAction({ name, minQty: "0" }))}
       renderExtra={(base) => {
         const row = rows.find((r) => r.id === base.id);
         if (!row) return null;

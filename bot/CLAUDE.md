@@ -4,7 +4,7 @@ Spec: [PROJECT_PROMPT.md Feature 9](../PROJECT_PROMPT.md).
 
 ## The rule that matters
 
-**The bot is a second front end, never a second implementation.** Every read goes through `@supplies/db/queries`; every write goes through `@supplies/db/stock-service` — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `lib/`, and both front ends inherit it.
+**The bot is a second front end, never a second implementation.** Every read goes through the shared query layer; every write goes through the shared stock service — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `packages/`, and every front end inherits it.
 
 `bot/actions.ts` is deliberately three lines per operation. If it ever grows business logic, that logic is in the wrong file.
 
@@ -16,7 +16,7 @@ Spec: [PROJECT_PROMPT.md Feature 9](../PROJECT_PROMPT.md).
 
 ## Linking a chat
 
-`/start <token>` where the token is a signed `userId.expiry.signature` triple from `lib/telegram-link.ts`, generated in Settings → Telegram and valid for 15 minutes.
+`/start <token>` where the token is a signed `userId.expiry.signature` triple from `@supplies/core/telegram-link`, generated in Settings → Telegram and valid for 15 minutes.
 
 Stateless on purpose: no table, no cleanup job, and it cannot be replayed once expired. **Rotating `AUTH_SECRET` invalidates every outstanding link token** — correct behaviour, not a bug.
 
@@ -84,3 +84,18 @@ Where state can be avoided it is. Inline buttons carry what they need in their c
 ## Strings
 
 Bot replies come from `@supplies/core/messages` (`MESSAGES` / `renderMessage`) or are inline Ukrainian. There is **no** `bot/i18n.ts` here, unlike AquaBill — this app is Ukrainian-only (PROJECT_PROMPT.md §8).
+
+## Cross-package imports are relative
+
+`../packages/core/src/expiry`, not `@supplies/core/expiry` — the same rule
+`packages/db` follows, and for the same reason.
+
+`apps/api` compiles `bot/digest-now.ts` (Feature 19.1's "send the digest now"
+button) with `tsc`, and **tsc never rewrites a module specifier on emit**. A
+package specifier survives into `dist` unchanged, where Node resolves it to a
+`.ts` file outside the build output and dies with `ERR_MODULE_NOT_FOUND`. The
+bot itself runs under `tsx`, where either form works — which is exactly why
+this breaks somewhere else and not here.
+
+The `@supplies/bot` package name is still how *other* packages import this
+one; it is imports going out that must be relative.

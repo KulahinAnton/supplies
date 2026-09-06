@@ -1,9 +1,9 @@
 import { Bot, type Context } from "grammy";
-import { prisma } from "@supplies/db/prisma";
-import { MESSAGES, renderMessage } from "@supplies/core/messages";
-import { verifyLinkToken } from "@supplies/core/telegram-link";
-import { UNIT_SHORT } from "@supplies/core/format";
-import { getItemViews } from "@supplies/db/queries";
+import { prisma } from "../packages/db/src/prisma";
+import { MESSAGES, renderMessage } from "../packages/core/src/messages";
+import { verifyLinkToken } from "../packages/core/src/telegram-link";
+import { UNIT_SHORT } from "../packages/core/src/format";
+import { getItemViews } from "../packages/db/src/queries";
 import { botConsume, botAddStock } from "./actions";
 import {
   clearPending,

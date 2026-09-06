@@ -146,8 +146,11 @@ export type Category = {
   name: string;
   icon: string;
   sortOrder: number;
+  /** Feature 13 — null means inherit the household's window. */
   expiryWarnDays: number | null;
   isDefault: boolean;
+  /** How many items use it, which is what makes a delete refusable. */
+  _count: { items: number };
 };
 
 export type StorageLocation = {
@@ -155,7 +158,10 @@ export type StorageLocation = {
   name: string;
   sortOrder: number;
   isDefault: boolean;
+  _count: { items: number };
 };
+
+export type Member = { id: string; name: string; email: string };
 
 export type Taxonomy = { categories: Category[]; locations: StorageLocation[] };
 

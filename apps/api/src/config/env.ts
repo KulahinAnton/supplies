@@ -82,6 +82,25 @@ const schema = z
     ACCESS_TOKEN_TTL: z.string().default("15m"),
     /** Long, and rotated on every use — revocable, unlike the access token. */
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
+
+    /**
+     * Where `/join/:token` is actually served — the Next app. An invitation
+     * created through this API still has to be accepted somewhere, and the
+     * SPA has no join page; handing out a link to a route that does not exist
+     * would be worse than one canonical place to accept an invitation.
+     */
+    APP_URL: z.url().default("http://localhost:3000"),
+
+    /**
+     * Feature 9 — signs the Telegram deep-link token. This is `AUTH_SECRET`
+     * on purpose and not `API_JWT_SECRET`: the bot verifies these tokens with
+     * the secret the Next app signs them with, and a link minted here must be
+     * redeemable there. Optional, because a household with no bot configured
+     * should not stop the API booting — the endpoint refuses instead.
+     */
+    AUTH_SECRET: z.string().optional(),
+    TELEGRAM_BOT_USERNAME: z.string().optional(),
+    TELEGRAM_BOT_TOKEN: z.string().optional(),
   })
   /**
    * The cookie settings are a matched set, not three independent switches.

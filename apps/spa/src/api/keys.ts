@@ -21,6 +21,9 @@ export const keys = {
     params ? (["items", params] as const) : (["items"] as const),
   item: (id: string) => ["item", id] as const,
   groups: ["groups"] as const,
+  members: ["members"] as const,
+  telegram: ["telegram"] as const,
+  itemNames: ["item-names"] as const,
   group: (id: string) => ["group", id] as const,
 };
 

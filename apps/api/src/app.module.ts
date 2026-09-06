@@ -7,6 +7,7 @@ import { HealthController } from "./health/health.controller";
 import { MetaController } from "./meta/meta.controller";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
+import { AccountController } from "./account/account.controller";
 import { BarcodeController } from "./barcode/barcode.controller";
 import { DashboardController } from "./dashboard/dashboard.controller";
 import { ItemsController } from "./items/items.controller";
@@ -15,6 +16,7 @@ import { SettingsController } from "./settings/settings.controller";
 import { ShoppingController } from "./shopping/shopping.controller";
 import { ShoppingGroupsController } from "./shopping/shopping-groups.controller";
 import { StockController } from "./stock/stock.controller";
+import { TelegramController } from "./telegram/telegram.controller";
 
 @Module({
   imports: [
@@ -46,6 +48,7 @@ import { StockController } from "./stock/stock.controller";
   controllers: [
     HealthController,
     MetaController,
+    AccountController,
     BarcodeController,
     DashboardController,
     ItemsController,
@@ -54,6 +57,7 @@ import { StockController } from "./stock/stock.controller";
     ShoppingController,
     ShoppingGroupsController,
     StockController,
+    TelegramController,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -148,7 +148,18 @@ export async function setDefaultLocation(
  */
 export async function updateHousehold(
   actor: Actor,
-  data: { expiryWarnDays?: number; digestHour?: number; aiEnabled?: boolean },
+  /**
+   * `name` was missing here while `householdSettingsSchema` parsed it and
+   * Prisma saved it — the rename worked and the type denied it. Saying so
+   * matters now that a second client calls this through a PATCH that may send
+   * the name on its own.
+   */
+  data: {
+    name?: string;
+    expiryWarnDays?: number;
+    digestHour?: number;
+    aiEnabled?: boolean;
+  },
 ): Promise<ActionResult> {
   await prisma.household.update({ where: { id: actor.householdId }, data });
   return actionOk();

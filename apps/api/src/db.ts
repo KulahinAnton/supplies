@@ -98,3 +98,7 @@ export {
   renameShoppingGroup,
   reorderShoppingGroups,
 } from "../../../packages/db/src/shopping-groups-service";
+
+export { changePassword, createInvite } from "../../../packages/db/src/account-service";
+
+export { createTelegramLink } from "../../../packages/db/src/telegram-service";

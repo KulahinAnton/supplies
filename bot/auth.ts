@@ -1,4 +1,4 @@
-import { prisma } from "@supplies/db/prisma";
+import { prisma } from "../packages/db/src/prisma";
 
 /** A Telegram chat resolved to an app user (Feature 9). */
 export type BotUser = {

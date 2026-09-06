@@ -58,7 +58,12 @@ export class SettingsController {
      */
     @CurrentUser() caller: Caller,
     @Body(zodBody(householdSettingsSchema.partial()))
-    body: { expiryWarnDays?: number; digestHour?: number; aiEnabled?: boolean },
+    body: {
+      name?: string;
+      expiryWarnDays?: number;
+      digestHour?: number;
+      aiEnabled?: boolean;
+    },
   ) {
     return unwrap(await updateHousehold(caller, body));
   }
