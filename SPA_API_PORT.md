@@ -449,13 +449,13 @@ Two rules for the work, because they change what "aligned" means:
 | — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` | **done** |
 | 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
 | 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
-| 3 | items | search, sort menu, filter and category chips, pagination and page size, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: barcode scan (Phase 2.7), the «Створити ‹query›» affordance, the archive link | **done** |
+| 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: the «Створити ‹query›» affordance (Feature 16.2), the archive link | **done** |
 | 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
 | 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
 | 6 | shopping | on the design system. Still missing: drag-to-reorder, per-row quantity edit, archived view | partial |
 | 7 | settings | on the design system, with `Switch`. Still missing: adding categories and locations, per-category warn-day overrides, reorder, members, invites, Telegram link, «Надіслати дайджест» | partial |
 | 8 | recipes | matched | **done** |
-| 9 | groups + group detail | **missing entirely** | to do |
+| 9 | groups + group detail | both screens, with the membership editor and its barcode scan | **done** |
 | 10 | items archive | **missing entirely** | to do |
 | 11 | register · join · forgot · reset | **missing entirely** — 4 public routes | to do |
 
@@ -837,7 +837,7 @@ the phone ever grows a Telegram settings screen, they are two thin wrappers.
 | 2.6 | Login, dashboard, items, item detail, item form, shopping, settings, recipes | done |
 | 2.6 | Groups, archive, register, invite, password reset | **remaining** |
 | 2.2 | Generate the client from OpenAPI (hand-written types for now) | **remaining** |
-| 2.7 | Barcode scanner | **remaining** |
+| 2.7 | Barcode scanner | done — shared, in `packages/ui` |
 | 2.8 | Playwright against the SPA | **remaining** |
 
 Verified in a browser rather than only by build: sign in, the dashboard shows
@@ -989,6 +989,42 @@ Two smaller things:
   exclusion is the boundary working rather than a hole in it — the root config
   still has no DOM lib, so the moment `core` or `db` reaches for `window` it
   says so. `pnpm -r typecheck` covers every package under its own settings.
+
+### Phase 2.9 — the scan button and «Набори» · 2026-09-07
+
+Both spotted by using the SPA's items page next to the Next one.
+
+**The barcode scan button moved to `packages/ui`** rather than being rebuilt.
+It is a camera, a decoder and a dialog — nothing Next-specific — and a second
+scanner would sooner or later disagree about which formats it reads or how it
+strips non-digits. `@zxing/browser` moved with it. The lookup behind it was
+already shared: `GET /api/barcode/:code/item` answers the same question
+`findItemByBarcodeAction` does, out of `@supplies/db/barcode-service`.
+
+**Moving it exposed a latent bug in the Next app.** The component had `onScan`
+in its effect's dependency array, and every call site writes that handler
+inline — so any parent re-render while the dialog was open tore the camera down
+and started it again. Typing in the search box beside the button was enough.
+The fix is a ref holding the latest callback, so the effect depends only on
+what should actually restart the camera; asking each caller to `useCallback`
+puts the burden in the wrong place and is one forgotten wrap from the same bug.
+Both clients get the fix.
+
+**«Набори» needed the screens to exist first**, so a button linking nowhere was
+not an option — the two group screens landed with it. That in turn needed
+`GET /api/groups/:id`, which did not exist: the API had every group *mutation*
+and no way to read one. Feature 26.2's membership editor came with it, barcode
+scan included.
+
+Verified against all three running on one database: the button appears only
+because the household has a set; the set's editor found «Кава мелена», added it
+(the total became «200 г»), and removed it again, leaving the set as found. The
+scan dialog opens and reports the camera correctly as unavailable in a headless
+pane — the camera itself remains the one thing only a real device can prove,
+as it always has been for the Next app.
+
+`?name=` and `?barcode=` now carry into the SPA's item form, so «Створити»
+under a fruitless scan is not a dead end.
 
 ### Phases 3–5 — not started
 

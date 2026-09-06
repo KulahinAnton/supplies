@@ -20,7 +20,6 @@
     "@supplies/core": "workspace:*",
     "@supplies/db": "workspace:*",
     "@supplies/ui": "workspace:*",
-    "@zxing/browser": "^0.1.5",
     "bcryptjs": "^3.0.3",
     "decimal.js": "^10.6.0",
     "grammy": "^1.44.0",

@@ -1,11 +1,13 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Param } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { CurrentUser, type Caller } from "../auth/jwt-auth.guard";
+import { ApiRuleError } from "../common/api-rule-error";
 import {
   getAttentionCounts,
   getCategoriesAndLocations,
   getDashboard,
   getHousehold,
+  getItemGroupDetail,
   getItemGroupViews,
   getMembers,
   getRecentMovements,
@@ -66,6 +68,25 @@ export class DashboardController {
   @ApiOperation({ summary: "Feature 26 sets, with their combined totals." })
   async groups(@CurrentUser() caller: Caller) {
     return getItemGroupViews(caller.householdId);
+  }
+
+  /**
+   * One set: its combined view, its members, and the items that could join it.
+   *
+   * `getItemGroupDetail` computes the candidates — Feature 26's one-unit rule
+   * means only items sharing the set's unit may join, and an empty set accepts
+   * any. That decision belongs with the rule, not with whichever client is
+   * drawing the picker.
+   */
+  @Get("groups/:id")
+  @ApiOperation({ summary: "One set: combined view, members, and who may join." })
+  async group(@CurrentUser() caller: Caller, @Param("id") id: string) {
+    // Scoped by householdId inside the query, so a set belonging to someone
+    // else is indistinguishable from one that does not exist — which is the
+    // only thing this caller can be told.
+    const detail = await getItemGroupDetail(caller.householdId, id);
+    if (!detail) throw new ApiRuleError(404, "group.notFound");
+    return detail;
   }
 
   @Get("restock")

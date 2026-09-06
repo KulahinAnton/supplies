@@ -11,7 +11,7 @@ import { Button } from "@supplies/ui/button";
 import { Input } from "@supplies/ui/input";
 import { Label } from "@supplies/ui/label";
 import { Textarea } from "@supplies/ui/textarea";
-import { BarcodeScanButton } from "@/components/barcode-scan-button";
+import { BarcodeScanButton } from "@supplies/ui/barcode-scan-button";
 import { createItemAction, updateItemAction } from "@/lib/actions/items";
 import {
   lookupBarcodeAction,

@@ -13,7 +13,7 @@ import { renderMessage } from "@supplies/core/messages";
 import { UNIT_SHORT } from "@supplies/core/format";
 import type { Unit } from "@supplies/core/units";
 import { formatDateKey, todayUTC } from "@supplies/core/period";
-import { BarcodeScanButton } from "@/components/barcode-scan-button";
+import { BarcodeScanButton } from "@supplies/ui/barcode-scan-button";
 
 type Row = { quantity: string; expiresAt: string; openedAt: string; locationId: string };
 type Values = { rows: Row[] };

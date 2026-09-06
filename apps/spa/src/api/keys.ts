@@ -20,6 +20,8 @@ export const keys = {
   items: (params?: Record<string, string>) =>
     params ? (["items", params] as const) : (["items"] as const),
   item: (id: string) => ["item", id] as const,
+  groups: ["groups"] as const,
+  group: (id: string) => ["group", id] as const,
 };
 
 /** What a stock write makes stale, in one place, for every screen that writes. */

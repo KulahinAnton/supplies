@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownUp, Boxes, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toDecimal } from "@supplies/core/decimal";
 import { formatQuantityWithUnit } from "@supplies/core/format";
 import {
@@ -13,7 +13,9 @@ import {
   type PerPage,
 } from "@supplies/core/item-list-params";
 import { ITEM_SORTS, ITEM_SORT_LABELS } from "@supplies/core/item-sort";
+import { renderMessage } from "@supplies/core/messages";
 import { todayUTC } from "@supplies/core/period";
+import { BarcodeScanButton } from "@supplies/ui/barcode-scan-button";
 import { Button } from "@supplies/ui/button";
 import {
   DropdownMenu,
@@ -25,9 +27,9 @@ import { Input } from "@supplies/ui/input";
 import { ExpiryBadge, StockBadge } from "@supplies/ui/state-badges";
 import { useItemSort } from "@supplies/ui/use-item-sort";
 import { cn } from "@supplies/ui/utils";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { keys } from "../api/keys";
-import { reviveItemView, type ItemsPage } from "../api/types";
+import { reviveItemView, type GroupView, type ItemsPage } from "../api/types";
 import { ErrorNote, Spinner } from "../components/feedback";
 
 const FILTERS: { value: ItemFilter; label: string }[] = [
@@ -52,18 +54,39 @@ const FILTERS: { value: ItemFilter; label: string }[] = [
  * controls. Here both halves are the same component, because the fetch is a
  * query rather than a render.
  *
- * Still missing, knowingly: the barcode scan button (Phase 2.7 — it needs the
- * camera code lifted out of `apps/web/components/barcode-scan-button.tsx`) and
- * the «Створити ‹query›» affordance that sits under a fruitless search.
+ * Still missing, knowingly: the «Створити ‹query›» affordance that sits under
+ * a fruitless search (Feature 16.2), and the link to the archive.
  */
 export function ItemsRoute() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const urlState = parseItemListSearch(params);
 
   const [query, setQuery] = useState(urlState.query);
+  /**
+   * Feature 21 — the outcome of the last scan. Deliberately NOT folded into
+   * `query`: the text filter matches names, so a barcode there would empty the
+   * list and then offer to create an item literally named "4823063114912".
+   */
+  const [scan, setScan] = useState<
+    | { code: string; state: "searching" | "missing" }
+    | { code: string; state: "error"; message: string }
+    | null
+  >(null);
   // Feature 12.2 — per-person, per-device. The URL wins when it says
   // something; the stored preference applies to a list opened fresh.
   const [sort, setSort] = useItemSort(params.get("sort") ?? undefined);
+
+  /**
+   * The «Набори» shortcut only exists once there is a set to look at. Loaded
+   * as its own query rather than folded into the list response: the Next page
+   * fetches it alongside the page because it is already on the server, and
+   * here that would mean a second thing the items endpoint has to know about.
+   */
+  const groups = useQuery({
+    queryKey: keys.groups,
+    queryFn: () => api.get<GroupView[]>("/api/groups"),
+  });
 
   const view: ItemListState = { ...urlState, sort };
   const search = itemListSearch(view);
@@ -99,6 +122,50 @@ export function ItemsRoute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
+  /**
+   * Feature 21 — a hit navigates straight to the item, because the scan
+   * already said exactly which one; making the reader pick it out of a
+   * filtered list would be asking a question with one answer. A miss stays
+   * here and offers to create it, carrying the code so it is never retyped.
+   *
+   * No memoisation at this call site: `BarcodeScanButton` reads the latest
+   * callback through a ref, so this changing identity every render does not
+   * restart the camera.
+   */
+  async function onScan(code: string) {
+    setScan({ code, state: "searching" });
+    try {
+      const found = await api.get<
+        { kind: "found"; itemId: string } | { kind: "missing" }
+      >(`/api/barcode/${encodeURIComponent(code)}/item`);
+
+      if (found.kind === "found") {
+        void navigate(`/items/${found.itemId}`);
+        return;
+      }
+      setScan({ code, state: "missing" });
+    } catch (cause) {
+      /**
+       * Never report a failure as "you do not have this". A broken lookup once
+       * shipped as a confident "not found" in the Next app, which read as data
+       * and contradicted the item form. Saying nothing would have been better;
+       * saying what actually happened is better still.
+       *
+       * `ApiError.message` is already the Ukrainian the API rendered from the
+       * shared catalogue, so this is the same sentence the web app shows for
+       * the same refusal.
+       */
+      setScan({
+        code,
+        state: "error",
+        message:
+          cause instanceof ApiError
+            ? cause.message
+            : renderMessage({ key: "error.unexpected" }),
+      });
+    }
+  }
+
   const page = items.data;
   const householdIsEmpty =
     page?.total === 0 && !view.query && view.filter === "all" && view.category === "all";
@@ -113,6 +180,19 @@ export function ItemsRoute() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
+          {/* Feature 26 — no sets, no shortcut. An empty «Набори» page reached
+              from a button that is always there is a dead end. */}
+          {groups.data && groups.data.length > 0 ? (
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Набори"
+              nativeButton={false}
+              render={<Link to="/groups" />}
+            >
+              <Boxes className="size-4" />
+            </Button>
+          ) : null}
           <Button nativeButton={false} render={<Link to="/items/new" />}>
             <Plus className="size-4" />
             Додати
@@ -144,12 +224,19 @@ export function ItemsRoute() {
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  // Typing a name replaces the scan as the active question; a
+                  // stale barcode hint below the field would answer neither.
+                  setScan(null);
+                }}
                 placeholder="Пошук за назвою…"
                 className="pl-9"
                 type="search"
               />
             </div>
+
+            <BarcodeScanButton onScan={(code) => void onScan(code)} />
 
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -204,6 +291,40 @@ export function ItemsRoute() {
               </Chip>
             ))}
           </div>
+
+          {/*
+            Feature 21 — the scan result, directly under the search field where
+            the reader is looking. A hit never reaches here; it has already
+            navigated.
+          */}
+          {scan ? (
+            scan.state === "searching" ? (
+              <p className="text-sm text-muted-foreground">Шукаємо за штрихкодом…</p>
+            ) : scan.state === "error" ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {scan.message}
+              </p>
+            ) : (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed px-3 py-2">
+                <p className="min-w-0 text-xs text-muted-foreground">
+                  Штрихкоду{" "}
+                  <span className="font-medium text-foreground">{scan.code}</span>{" "}
+                  ще немає серед ваших запасів.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  nativeButton={false}
+                  render={
+                    <Link to={`/items/new?barcode=${encodeURIComponent(scan.code)}`} />
+                  }
+                >
+                  <Plus className="size-3.5" />
+                  Створити
+                </Button>
+              </div>
+            )
+          ) : null}
 
           {page.rows.length === 0 ? (
             <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">

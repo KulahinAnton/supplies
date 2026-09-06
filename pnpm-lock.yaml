@@ -227,9 +227,6 @@ importers:
       '@supplies/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@zxing/browser':
-        specifier: ^0.1.5
-        version: 0.1.5(@zxing/library@0.21.3)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
@@ -342,6 +339,9 @@ importers:
       '@supplies/core':
         specifier: workspace:*
         version: link:../core
+      '@zxing/browser':
+        specifier: ^0.1.5
+        version: 0.1.5(@zxing/library@0.21.3)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

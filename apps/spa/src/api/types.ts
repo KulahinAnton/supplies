@@ -222,3 +222,41 @@ export type RevivedItemView = Omit<ItemView, "nextExpiry"> & {
 export function reviveItemView(item: ItemView): RevivedItemView {
   return { ...item, nextExpiry: item.nextExpiry ? new Date(item.nextExpiry) : null };
 }
+
+/**
+ * Feature 26 — sets of interchangeable items.
+ *
+ * A set owns the low-stock threshold, so a household short of "milk" is
+ * reminded once rather than once per brand. `unit` is null for an empty set:
+ * there is nothing to count in yet, and inventing one would make «0» read as
+ * a real quantity.
+ */
+export type GroupView = {
+  id: string;
+  name: string;
+  state: StockState;
+  quantity: string;
+  minQty: string;
+  unit: Unit | null;
+  memberCount: number;
+};
+
+export type GroupDetail = {
+  group: { id: string; name: string; minQty: string };
+  view: GroupView;
+  members: { id: string; name: string; unit: Unit; quantity: string }[];
+  /**
+   * Every other item, with `compatible` already decided by the server —
+   * Feature 26's one-unit rule, which an empty set waives. The picker shows
+   * them all and says why the incompatible ones cannot join, rather than
+   * hiding items someone is looking for.
+   */
+  candidates: {
+    id: string;
+    name: string;
+    unit: Unit;
+    barcode: string | null;
+    currentGroupName: string | null;
+    compatible: boolean;
+  }[];
+};

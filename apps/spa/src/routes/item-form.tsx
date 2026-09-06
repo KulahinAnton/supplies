@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { MESSAGES, type MessageKey } from "@supplies/core/messages";
 import { UNITS, type Unit } from "@supplies/core/units";
 import { itemSchema } from "@supplies/core/validation/item";
@@ -69,6 +69,7 @@ type FormState = {
  */
 export function ItemFormRoute() {
   const { id } = useParams();
+  const [search] = useSearchParams();
   const editing = Boolean(id);
 
   const taxonomy = useQuery({
@@ -104,12 +105,16 @@ export function ItemFormRoute() {
         notes: row.notes ?? "",
       }
     : {
-        name: "",
+        // Feature 16.2 — carried from the /items search, and Feature 21 from a
+        // scan there that found no match. Both exist so nothing is retyped;
+        // dropping them would make «Створити» on those two prompts land on an
+        // empty form and quietly waste the thing the reader just did.
+        name: search.get("name") ?? "",
         categoryId: category?.id ?? "",
         locationId: location?.id ?? "",
         unit: "PIECE",
         minQty: "0",
-        barcode: "",
+        barcode: search.get("barcode") ?? "",
         notes: "",
       };
 

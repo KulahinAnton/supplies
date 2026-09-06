@@ -11,7 +11,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { BarcodeScanButton } from "@/components/barcode-scan-button";
+import { BarcodeScanButton } from "@supplies/ui/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
 import { Button } from "@supplies/ui/button";
 import { renderMessage } from "@supplies/core/messages";

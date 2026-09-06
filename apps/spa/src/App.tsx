@@ -10,6 +10,8 @@ import { Spinner } from "./components/feedback";
 import { ThemeToggle } from "./components/theme";
 import { UserMenu } from "./components/user-menu";
 import { DashboardRoute } from "./routes/dashboard";
+import { GroupDetailRoute } from "./routes/group-detail";
+import { GroupsRoute } from "./routes/groups";
 import { ItemDetailRoute } from "./routes/item-detail";
 import { ItemFormRoute } from "./routes/item-form";
 import { ItemsRoute } from "./routes/items";
@@ -84,6 +86,8 @@ export function App() {
           <Route path="/items/new" element={<ItemFormRoute />} />
           <Route path="/items/:id" element={<ItemDetailRoute />} />
           <Route path="/items/:id/edit" element={<ItemFormRoute />} />
+          <Route path="/groups" element={<GroupsRoute />} />
+          <Route path="/groups/:id" element={<GroupDetailRoute />} />
           <Route path="/shopping" element={<ShoppingRoute />} />
           <Route path="/recipes" element={<RecipesRoute />} />
           <Route path="/settings" element={<SettingsRoute />} />

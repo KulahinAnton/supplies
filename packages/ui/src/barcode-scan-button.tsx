@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ScanLine, X } from "lucide-react";
-import { Button } from "@supplies/ui/button";
+import { Button } from "./button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@supplies/ui/dialog";
+} from "./dialog";
 
 /**
  * Feature 10 — decoding happens entirely in the browser. Only the digits ever
@@ -18,6 +18,11 @@ import {
  * Chrome/Android has a native `BarcodeDetector`; Safari and Firefox do not, so
  * @zxing/browser is loaded lazily as a fallback (it is ~200 KB, and there is no
  * reason to ship it to someone who never taps "scan").
+ *
+ * Shared by both web clients. Nothing here is Next-specific — it is a camera,
+ * a canvas and a dialog — and the alternative was the SPA growing a second
+ * scanner that would sooner or later disagree about which formats it reads or
+ * how it strips non-digits from a result.
  */
 
 type BarcodeDetectorLike = {
@@ -37,6 +42,30 @@ export function BarcodeScanButton({ onScan }: { onScan: (code: string) => void }
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const stopRef = useRef<(() => void) | null>(null);
+
+  /**
+   * The callback is held in a ref rather than watched as a dependency.
+   *
+   * `onScan` is written inline at every call site, so its identity changes on
+   * every render of the parent — and with it in the dependency array, a parent
+   * re-render while the dialog is open tore the camera down and started it
+   * again. Typing in the search box next to this button was enough to do it.
+   *
+   * The alternative, asking each caller to wrap its handler in `useCallback`,
+   * puts the burden in the wrong place and is one forgotten wrap away from the
+   * same bug. Reading the latest callback through a ref means the effect
+   * depends only on what should actually restart the camera: whether the
+   * dialog is open.
+   */
+  const onScanRef = useRef(onScan);
+
+  // In an effect, not during render — a ref written while rendering is torn
+  // under concurrent rendering, and `react-hooks/refs` says so. Committing it
+  // here is soon enough: `finish` only ever runs from an animation frame or a
+  // decoder callback, both of which are long past commit.
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +121,7 @@ export function BarcodeScanButton({ onScan }: { onScan: (code: string) => void }
     }
 
     function finish(code: string) {
-      onScan(code.replace(/\D/g, ""));
+      onScanRef.current(code.replace(/\D/g, ""));
       setOpen(false);
     }
 
@@ -106,7 +135,7 @@ export function BarcodeScanButton({ onScan }: { onScan: (code: string) => void }
       stopRef.current = null;
       stream?.getTracks().forEach((track) => track.stop());
     };
-  }, [open, onScan]);
+  }, [open]);
 
   return (
     <>

@@ -7,7 +7,7 @@ import { Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@supplies/ui/button";
 import { Input } from "@supplies/ui/input";
-import { BarcodeScanButton } from "@/components/barcode-scan-button";
+import { BarcodeScanButton } from "@supplies/ui/barcode-scan-button";
 import {
   addItemToGroupAction,
   removeItemFromGroupAction,
