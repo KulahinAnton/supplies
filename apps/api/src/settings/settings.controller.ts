@@ -46,8 +46,18 @@ export class SettingsController {
   @Patch("household")
   @ApiOperation({ summary: "Warn days, digest hour, AI switch — household data." })
   async household(
+    /**
+     * `.partial()` rather than the whole schema. The shared object describes
+     * the web app's settings FORM, which submits every field at once; a PATCH
+     * is by definition partial, and a client flipping one checkbox should not
+     * have to send back a name and a digest hour it never touched.
+     *
+     * Derived rather than declared separately, so every per-field rule — the
+     * 0–365 warn window, the 0–23 hour, the coercion — still comes from one
+     * place.
+     */
     @CurrentUser() caller: Caller,
-    @Body(zodBody(householdSettingsSchema))
+    @Body(zodBody(householdSettingsSchema.partial()))
     body: { expiryWarnDays?: number; digestHour?: number; aiEnabled?: boolean },
   ) {
     return unwrap(await updateHousehold(caller, body));

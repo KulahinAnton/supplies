@@ -38,8 +38,19 @@ async function bootstrap(): Promise<void> {
    * browser clients. The React Native app sends a bearer token instead and
    * needs none of this — see SPA_API_PORT.md §4.2 for why the cookie settings
    * are environment variables rather than constants.
+   *
+   * `methods` is spelled out because `@fastify/cors` defaults to
+   * `GET,HEAD,POST` — unlike the Express middleware most CORS examples are
+   * written against. Without it the preflight for a PATCH or a DELETE
+   * succeeds with 204 and the real request is then blocked by the browser,
+   * which surfaces as an opaque network failure with no server-side trace at
+   * all. Found by clicking a checkbox in the SPA.
    */
-  app.enableCors({ origin: origins, credentials: true });
+  app.enableCors({
+    origin: origins,
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+  });
 
   /**
    * No global `ValidationPipe` here, deliberately. Nest's default one is built

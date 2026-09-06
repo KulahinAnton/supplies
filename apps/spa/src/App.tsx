@@ -7,8 +7,11 @@ import { useAuth } from "./auth/auth-context";
 import { Button, Spinner } from "./components/ui";
 import { DashboardRoute } from "./routes/dashboard";
 import { ItemDetailRoute } from "./routes/item-detail";
+import { ItemFormRoute } from "./routes/item-form";
 import { ItemsRoute } from "./routes/items";
 import { LoginRoute } from "./routes/login";
+import { RecipesRoute } from "./routes/recipes";
+import { SettingsRoute } from "./routes/settings";
 import { ShoppingRoute } from "./routes/shopping";
 import { StatusRoute } from "./routes/status";
 
@@ -61,8 +64,12 @@ export function App() {
         <Routes>
           <Route path="/" element={<DashboardRoute />} />
           <Route path="/items" element={<ItemsRoute />} />
+          <Route path="/items/new" element={<ItemFormRoute />} />
           <Route path="/items/:id" element={<ItemDetailRoute />} />
+          <Route path="/items/:id/edit" element={<ItemFormRoute />} />
           <Route path="/shopping" element={<ShoppingRoute />} />
+          <Route path="/recipes" element={<RecipesRoute />} />
+          <Route path="/settings" element={<SettingsRoute />} />
           <Route path="/status" element={<StatusRoute />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route
@@ -82,6 +89,11 @@ function Nav() {
    * invalidates — which is exactly the thing `keys.attention` exists to make
    * impossible to forget.
    */
+  const household = useQuery({
+    queryKey: keys.household,
+    queryFn: () => api.get<{ aiEnabled: boolean }>("/api/household"),
+  });
+
   const counts = useQuery({
     queryKey: keys.attention,
     queryFn: () => api.get<AttentionCounts>("/api/attention"),
@@ -91,7 +103,13 @@ function Nav() {
     { to: "/", label: "Огляд", badge: undefined },
     { to: "/items", label: "Запаси", badge: undefined },
     { to: "/shopping", label: "Список", badge: counts.data?.restock },
-    { to: "/status", label: "Стан", badge: undefined },
+    // Feature 32.1 — the tab appears only once the household turns the
+    // helper on. The page and the endpoint both check as well: a hidden link
+    // is presentation, not an access control.
+    ...(household.data?.aiEnabled
+      ? [{ to: "/recipes", label: "Рецепти", badge: undefined }]
+      : []),
+    { to: "/settings", label: "Налаштування", badge: undefined },
   ];
 
   return (

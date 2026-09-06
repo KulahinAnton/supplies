@@ -711,8 +711,8 @@ the phone ever grows a Telegram settings screen, they are two thin wrappers.
 | 2.1 | Vite, React Router, TanStack Query, Tailwind scaffold | done |
 | 2.3 | Auth context, in-memory access token, refresh-cookie recovery | done |
 | 2.5 | Query-key map, written before the screens | done |
-| 2.6 | Login, dashboard, item list, item detail with take/restock, shopping | done |
-| 2.6 | The other 11 screens | **remaining** |
+| 2.6 | Login, dashboard, items, item detail, item form, shopping, settings, recipes | done |
+| 2.6 | Groups, archive, register, invite, password reset | **remaining** |
 | 2.2 | Generate the client from OpenAPI (hand-written types for now) | **remaining** |
 | 2.7 | Barcode scanner | **remaining** |
 | 2.8 | Playwright against the SPA | **remaining** |
