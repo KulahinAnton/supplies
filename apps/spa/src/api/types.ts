@@ -77,3 +77,74 @@ export type ItemDetail = {
   expiry: ExpiryState;
 };
 export type AttentionCounts = { expiring: number; restock: number };
+
+export type ShoppingRow = {
+  id: string;
+  groupId: string | null;
+  itemId: string | null;
+  freeText: string | null;
+  note: string | null;
+  quantity: string | null;
+  isChecked: boolean;
+  archivedAt: string | null;
+  item: { id: string; name: string; unit: Unit } | null;
+};
+
+export type ShoppingCandidate = {
+  itemId: string | null;
+  name: string;
+  state: StockState;
+  quantity: string;
+  minQty: string;
+  unit: Unit;
+};
+
+export type ShoppingView = {
+  rows: ShoppingRow[];
+  candidates: ShoppingCandidate[];
+  groups: { id: string; name: string; sortOrder: number }[];
+};
+
+/**
+ * The same row with its dates revived.
+ *
+ * JSON has no date type, so `archivedAt` arrives as a string — and
+ * `groupShoppingRows` in `@supplies/core` takes a `Date | null`, because on
+ * the server it is handed a Prisma row. The type checker caught the mismatch
+ * rather than letting `new Date(string)` comparisons quietly work by accident,
+ * which is the argument for sharing the engine's types instead of restating
+ * them loosely.
+ */
+export type RevivedShoppingRow = Omit<ShoppingRow, "archivedAt"> & {
+  archivedAt: Date | null;
+};
+
+export function reviveShoppingRow(row: ShoppingRow): RevivedShoppingRow {
+  return { ...row, archivedAt: row.archivedAt ? new Date(row.archivedAt) : null };
+}
+
+export type Category = {
+  id: string;
+  name: string;
+  icon: string;
+  sortOrder: number;
+  expiryWarnDays: number | null;
+  isDefault: boolean;
+};
+
+export type StorageLocation = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isDefault: boolean;
+};
+
+export type Taxonomy = { categories: Category[]; locations: StorageLocation[] };
+
+export type Household = {
+  id: string;
+  name: string;
+  expiryWarnDays: number;
+  digestHour: number;
+  aiEnabled: boolean;
+};

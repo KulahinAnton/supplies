@@ -9,6 +9,7 @@ import { DashboardRoute } from "./routes/dashboard";
 import { ItemDetailRoute } from "./routes/item-detail";
 import { ItemsRoute } from "./routes/items";
 import { LoginRoute } from "./routes/login";
+import { ShoppingRoute } from "./routes/shopping";
 import { StatusRoute } from "./routes/status";
 
 /**
@@ -61,6 +62,7 @@ export function App() {
           <Route path="/" element={<DashboardRoute />} />
           <Route path="/items" element={<ItemsRoute />} />
           <Route path="/items/:id" element={<ItemDetailRoute />} />
+          <Route path="/shopping" element={<ShoppingRoute />} />
           <Route path="/status" element={<StatusRoute />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route
@@ -87,7 +89,8 @@ function Nav() {
 
   const tabs = [
     { to: "/", label: "Огляд", badge: undefined },
-    { to: "/items", label: "Запаси", badge: counts.data?.restock },
+    { to: "/items", label: "Запаси", badge: undefined },
+    { to: "/shopping", label: "Список", badge: counts.data?.restock },
     { to: "/status", label: "Стан", badge: undefined },
   ];
 

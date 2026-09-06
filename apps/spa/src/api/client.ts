@@ -148,6 +148,13 @@ export const api = {
             body: JSON.stringify(body),
           }),
     }),
+  del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
+  patch: <T>(path: string, body: unknown) =>
+    apiFetch<T>(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 };
 
 export type Health = { status: "ok"; uptime: number };
