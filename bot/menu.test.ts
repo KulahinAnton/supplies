@@ -4,7 +4,7 @@ import {
   KEYBOARD_VERSION,
   replyKeyboard,
   shortcutFor,
-} from "@/bot/menu";
+} from "./menu";
 
 /**
  * Feature 30.1 — the reply keyboard's labels are a wire format.

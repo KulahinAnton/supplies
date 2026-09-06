@@ -4,14 +4,14 @@ import { MESSAGES, renderMessage } from "@supplies/core/messages";
 import { verifyLinkToken } from "@supplies/core/telegram-link";
 import { UNIT_SHORT } from "@supplies/core/format";
 import { getItemViews } from "@supplies/db/queries";
-import { botConsume, botAddStock } from "@/bot/actions";
+import { botConsume, botAddStock } from "./actions";
 import {
   clearPending,
   getPending,
   markKeyboardSent,
   setPending,
-} from "@/bot/state";
-import { resolveChat, type BotUser } from "@/bot/auth";
+} from "./state";
+import { resolveChat, type BotUser } from "./auth";
 import {
   CB,
   KEYBOARD_VERSION,
@@ -23,14 +23,14 @@ import {
   shortcutFor,
   type Shortcut,
   type View,
-} from "@/bot/menu";
+} from "./menu";
 import {
   addRow,
   createGroup,
   groupListView,
   groupView,
   toggleRow,
-} from "@/bot/shopping";
+} from "./shopping";
 
 /**
  * Feature 9 + 17 — the bot is a SECOND FRONT END, never a second

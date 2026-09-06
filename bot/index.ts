@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createBot, registerCommands } from "@/bot/bot";
+import { createBot, registerCommands } from "./bot";
 
 /**
  * Development entry point: long polling on this machine. Production uses the

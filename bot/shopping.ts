@@ -6,8 +6,8 @@ import {
   groupIdForStorage,
   groupShoppingRows,
 } from "@supplies/core/shopping-groups";
-import type { BotUser } from "@/bot/auth";
-import { CB, type View } from "@/bot/menu";
+import type { BotUser } from "./auth";
+import { CB, type View } from "./menu";
 
 /**
  * Feature 17.3 — the shopping list inside the chat.

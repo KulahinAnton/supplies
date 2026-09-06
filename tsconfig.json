@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "target": "ES2022",
+    "lib": ["esnext"],
+    "types": ["node"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -11,33 +12,34 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
       "@/*": ["./*"]
     }
   },
+  // What is left at the root once the Next app moved to `apps/web`: the
+  // Telegram bot, the operational scripts, the Prisma config and the shared
+  // packages. All of it is plain Node — no DOM lib, no JSX, no `next` plugin.
+  //
+  // `packages/*` is deliberately compiled here rather than left to whichever
+  // app imports it. That makes this config one of the things keeping the
+  // engine honest: `packages/core` has to typecheck with no React types and
+  // no DOM in `lib`, which is most of what "framework-free by contract" means.
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "bot/**/*.ts",
+    "scripts/**/*.ts",
+    "packages/**/*.ts",
+    "prisma/**/*.ts",
+    "prisma.config.ts",
+    "*.mts"
   ],
   "exclude": [
     "node_modules",
-    // Each app owns its own compiler settings. The API needs
-    // `experimentalDecorators` and `emitDecoratorMetadata`, which this config
-    // must not turn on for the Next app, and `pnpm --filter` runs its
-    // typecheck separately. `packages/core` is deliberately NOT excluded: the
-    // web app compiles it, so this config is one of the things keeping it
-    // honest.
-    "apps/**"
+    // Each app owns its compiler settings. The API needs
+    // `experimentalDecorators` and `emitDecoratorMetadata`, the SPA and the web
+    // app need `jsx` and the DOM lib, and none of that may leak into the
+    // packages above. `pnpm -r --filter "./apps/*" typecheck` runs each.
+    "apps/**",
+    "packages/db/src/generated/**"
   ]
 }

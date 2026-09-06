@@ -57,9 +57,9 @@ Postgres, and a production build. All of it must pass before merge.
   govern.
 - **Ukrainian is the UI language and only that.** Code, comments, commit
   messages, docs and PRs are English.
-- **Business rules go in pure `lib/` functions with colocated tests.** When a
+- **Business rules go in pure `packages/core` functions with colocated tests.** When a
   rule changes, its tests change in the same commit.
-- **One write path.** Stock changes go through `lib/stock-service.ts` — the web
+- **One write path.** Stock changes go through `@supplies/db/stock-service` — the web
   UI, the Telegram bot and the offline replay are all callers of it. A second
   implementation is the bug this rule prevents.
 - **Migrations are reviewed like code.** They run against production data.
@@ -70,7 +70,7 @@ Postgres, and a production build. All of it must pass before merge.
 pnpm test:e2e
 ```
 
-Playwright, in `e2e/`. It builds and serves the app on **port 3100** — not 3000,
+Playwright, in `apps/web/e2e/`. It builds and serves the app on **port 3100** — not 3000,
 so a run can never silently attach to your dev server and prove nothing about
 the build. Needs Docker up and `pnpm db:seed` run first; the specs sign in as
 the demo household, mutate stock, and put back what they changed so the suite
@@ -81,7 +81,7 @@ mobile-first and used standing in a shop, so a layout that only works at 1280px
 is not working.
 
 **Keep the suite small.** FEFO, shortfalls and expiry states are proven in
-`lib/stock.test.ts` in milliseconds without a browser; re-asserting them here
+`packages/core/src/stock.test.ts` in milliseconds without a browser; re-asserting them here
 buys minutes and flakes. What e2e owns is the seam nothing else covers — a form
 in a real browser, a server action, a database write, and the number on screen
 changing to match.

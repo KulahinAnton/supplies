@@ -13,7 +13,7 @@ Domain rules these tables serve: [PROJECT_PROMPT.md §3](../PROJECT_PROMPT.md).
 ## Conventions
 
 - **Quantities are `Decimal(12,3)`.** Three decimals covers 0,5 л and 0,25 кг. Pass values to Prisma as **strings** (`.toFixed(3)`), never JS numbers — floats silently lose precision.
-- **Calendar days are `@db.Date`**, not `DateTime`: `StockBatch.expiresAt`, `StockBatch.openedAt`, `Household.lastDigestOn`. Compare and format them through `lib/period.ts` (UTC getters only).
+- **Calendar days are `@db.Date`**, not `DateTime`: `StockBatch.expiresAt`, `StockBatch.openedAt`, `Household.lastDigestOn`. Compare and format them through `@supplies/core/period` (UTC getters only).
 - **Item stock is never stored.** There is no `quantity` column on `Item` — it is the sum of live `StockBatch` rows, computed at read time (§3.1). Do not add one "for performance"; that is the drift this schema exists to prevent.
 - **`StockMovement` is append-only.** Every batch write inserts one in the *same transaction* (§7). Never update or delete a movement row.
 - **Zeroed batches are kept**, not deleted — they are the history behind a movement. Queries filter with `quantity > 0`.

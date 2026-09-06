@@ -1,5 +1,5 @@
 import { webhookCallback } from "grammy";
-import { createBot } from "@/bot/bot";
+import { createBot } from "@supplies/bot/bot";
 
 /**
  * Production webhook (Feature 9). Node runtime: the bot touches Prisma.

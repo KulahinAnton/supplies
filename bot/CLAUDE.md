@@ -4,7 +4,7 @@ Spec: [PROJECT_PROMPT.md Feature 9](../PROJECT_PROMPT.md).
 
 ## The rule that matters
 
-**The bot is a second front end, never a second implementation.** Every read goes through `lib/queries.ts`; every write goes through `lib/stock-service.ts` — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `lib/`, and both front ends inherit it.
+**The bot is a second front end, never a second implementation.** Every read goes through `@supplies/db/queries`; every write goes through `@supplies/db/stock-service` — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `lib/`, and both front ends inherit it.
 
 `bot/actions.ts` is deliberately three lines per operation. If it ever grows business logic, that logic is in the wrong file.
 
@@ -83,4 +83,4 @@ Where state can be avoided it is. Inline buttons carry what they need in their c
 
 ## Strings
 
-Bot replies come from `lib/messages.ts` (`MESSAGES` / `renderMessage`) or are inline Ukrainian. There is **no** `bot/i18n.ts` here, unlike AquaBill — this app is Ukrainian-only (PROJECT_PROMPT.md §8).
+Bot replies come from `@supplies/core/messages` (`MESSAGES` / `renderMessage`) or are inline Ukrainian. There is **no** `bot/i18n.ts` here, unlike AquaBill — this app is Ukrainian-only (PROJECT_PROMPT.md §8).

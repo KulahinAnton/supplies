@@ -15,12 +15,12 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 | DB | PostgreSQL 17 (Docker, host port **5434** — 5432 is AquaBill's, 5433 is Kvartal's) + Prisma 7 (driver adapter `@prisma/adapter-pg`) |
 | Auth | Auth.js (next-auth v5 beta), Credentials provider, JWT sessions (8h), `id` + `householdId` claims |
 | Forms | react-hook-form + zod v4 + @hookform/resolvers |
-| Bot | grammy (`bot/`) — webhook in prod, long polling in dev |
+| Bot | grammy (`bot/` = `@supplies/bot`) — webhook in prod, long polling in dev |
 | Barcode | native `BarcodeDetector`, `@zxing/browser` fallback; product lookup via Open Food Facts |
-| AI | Claude API via `@anthropic-ai/sdk` — Feature 32 recipe suggestions only. Model `claude-haiku-4-5` (cheapest), overridable with `ANTHROPIC_MODEL`. `lib/claude.ts` is the only module that talks to it |
-| Email | Resend via `lib/email.ts` `sendEmail()` (plain fetch, swappable) |
-| Language | **Ukrainian only — no i18n layer** (no next-intl, no catalogs, no switcher, no `User.locale`). Copy inline in components; `uk-UA` formatting via `lib/format.ts` |
-| Package manager | pnpm **workspace** — the Next.js app is the root package, `packages/core` holds the shared engine. The app stays at the root deliberately so Vercel's Root Directory never changes ([SPA_API_PORT.md](SPA_API_PORT.md) §4.1) |
+| AI | Claude API via `@anthropic-ai/sdk` — Feature 32 recipe suggestions only. Model `claude-haiku-4-5` (cheapest), overridable with `ANTHROPIC_MODEL`. `packages/core/src/claude.ts` is the only module that talks to it |
+| Email | Resend via `apps/web/lib/email.ts` `sendEmail()` (plain fetch, swappable) |
+| Language | **Ukrainian only — no i18n layer** (no next-intl, no catalogs, no switcher, no `User.locale`). Copy inline in components; `uk-UA` formatting via `@supplies/core/format` |
+| Package manager | pnpm **workspace**. Every deployable is an app — `apps/web` (Next), `apps/api` (NestJS), `apps/spa` (Vite) — and every shared thing is a package: `packages/core` (pure engine), `packages/db` (Prisma + the write services), `bot` (`@supplies/bot`). **The root holds no application code**; it is the workspace, the Prisma schema, the scripts and the docs ([SPA_API_PORT.md](SPA_API_PORT.md) §4) |
 
 ## Working on it
 
@@ -34,7 +34,8 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 - `pnpm verify` — lint + typecheck + unit tests, the same gate the pre-commit hook runs
 - `pnpm test:e2e` — Playwright over a production build on port 3100 (needs Docker + `pnpm db:seed`). Desktop and mobile viewports; deliberately small — see [CONTRIBUTING.md](CONTRIBUTING.md)
 - ESLint is **type-aware** (`typescript-eslint` `recommendedTypeChecked`), which is what catches unawaited promises and unsafe `any`. That is why a lint run takes ~15s
-- `pnpm test` / `pnpm test:watch` — vitest over pure `lib/` rules, colocated `lib/*.test.ts` and `bot/*.test.ts`, no DB (`@` alias in `vitest.config.mts`)
+- `pnpm test` / `pnpm test:watch` — vitest from the root over `packages/**/*.test.ts` and `bot/**/*.test.ts`, no DB. The apps run their own suites (`pnpm test:api`), because they need different environments
+- `pnpm typecheck` covers the root — bot, scripts, packages, prisma — and `pnpm -r --filter "./apps/*" typecheck` covers each app under its own compiler settings. `pnpm verify` runs both
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
 - `pnpm db:up` — start Postgres (docker compose, port 5434)
 - `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:studio` → [prisma/CLAUDE.md](prisma/CLAUDE.md)
@@ -52,36 +53,49 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 3. `pnpm db:migrate` — applies the existing migrations.
 4. `pnpm db:seed` — demo household, login `anton@example.com` / `supplies123`.
 
-## Gotcha: `server-only` breaks the scripts
+## Gotcha: `server-only` breaks everything that is not Next
 
-`lib/queries.ts` and `lib/stock-service.ts` deliberately do **not** `import "server-only"`. That package throws unconditionally outside a React Server Component build, and both modules have legitimate plain-Node consumers — `pnpm bot:start` and `pnpm digest:run`. Adding the import back kills both entry points at startup with "This module cannot be imported from a Client Component module". Client-safety is enforced instead by the Prisma import, which fails a browser build loudly (see the `node:module` note in components/CLAUDE.md).
+Nothing in `packages/db` may `import "server-only"`. That package throws unconditionally outside a React Server Component build, and its consumers now include `pnpm bot:start`, `pnpm digest:run`, `pnpm test:db` **and the whole NestJS API**. Adding the import back kills all of them at startup with "This module cannot be imported from a Client Component module". Client-safety is enforced instead by the Prisma import, which fails a browser build loudly (see the `node:module` note in apps/web/components/CLAUDE.md). `server-only` belongs in `apps/web/lib/queries.rsc.ts`, which is genuinely Next-only, and nowhere else.
 
 ## Domain in one paragraph
 
-An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a concrete lot of it with its own quantity, expiry date and (Feature 22) its own optional storage location — null meaning "wherever the item says", so the same product can sit in the kitchen fridge and the basement fridge at once — the same product is batched as many times as it has distinct expiry dates (10 bottles of water as 2 + 1 + 7 across three dates is one item, three batches, entered in one submit via the multi-row add form). Item quantity is **never stored** — it is the sum of its live batches at read time. Consumption is **FEFO** (soonest expiry first, then undated oldest-first) and **skips expired batches**, which must be discarded explicitly as `WASTE`. Stock state is `OUT` / `LOW` (at or below `minQty`) / `OK`; expiry state is `EXPIRED` / `SOON` (within the household's `expiryWarnDays`) / `FRESH` / `NONE`, and an item takes the worst state of its batches. `OUT` and `LOW` items are shopping-list candidates. PROJECT_PROMPT.md §3 has the rules; §3.6 is the worked example that `lib/stock.test.ts` reproduces verbatim.
+An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a concrete lot of it with its own quantity, expiry date and (Feature 22) its own optional storage location — null meaning "wherever the item says", so the same product can sit in the kitchen fridge and the basement fridge at once — the same product is batched as many times as it has distinct expiry dates (10 bottles of water as 2 + 1 + 7 across three dates is one item, three batches, entered in one submit via the multi-row add form). Item quantity is **never stored** — it is the sum of its live batches at read time. Consumption is **FEFO** (soonest expiry first, then undated oldest-first) and **skips expired batches**, which must be discarded explicitly as `WASTE`. Stock state is `OUT` / `LOW` (at or below `minQty`) / `OK`; expiry state is `EXPIRED` / `SOON` (within the household's `expiryWarnDays`) / `FRESH` / `NONE`, and an item takes the worst state of its batches. `OUT` and `LOW` items are shopping-list candidates. PROJECT_PROMPT.md §3 has the rules; §3.6 is the worked example that `packages/core/src/stock.test.ts` reproduces verbatim.
 
 ## Layout
 
+Four clients, one engine. **Nothing under `apps/` may import from another app** — if two need it, it moves into a package.
+
+### Shared
+
+- **`packages/core/` — the pure engine, colocated tests, no DB, no framework** → [packages/core/CLAUDE.md](packages/core/CLAUDE.md). Imported as `@supplies/core/<module>` (subpaths only, no barrel): `decimal` (decimal.js + `ZERO`/`toDbQuantity`), `units` (`Unit`, `MovementReason`), `stock` (`itemQuantity`, `availableQuantity`, `stockState`, `fefoOrder`, `planConsume`, `planCorrection`, `planDiscard`), `expiry` (batch/item states, urgency, `splitExpiring`), `shopping` (candidates), `period` (date-only, UTC), `format` (uk-UA, plurals), `messages`, `action-result`, `telegram-link` (signed link tokens), `barcode-source` (`parseOffProduct`, `needsLocalName` — whether OFF answered in Ukrainian), `gepir` (GS1 Ukraine fallback — manufacturer only, 482 prefixes only), `metro` (METRO Ukraine — product names for own-label goods, and for anything OFF holds only in English), `item-group` (Feature 26 sets: combined total, derived unit, one-unit rule), `item-filter` / `item-sort` / `item-list-params` / `pagination` (Feature 27 list view state as URL params), `ordering`, `duplicates`, `shopping-groups`, `off-contribute`, `claude` + `recipes` (Feature 32), and `validation/` (zod schemas)
+- **`packages/db/` — everything that touches Postgres** → [packages/db/CLAUDE.md](packages/db/CLAUDE.md). `prisma` (the singleton, pg adapter), `generated/prisma/` (gitignored), `queries` (the only place the DB meets the pure engine — pages never compute states themselves; sets have two readers, cheap `getItemGroups` for pickers and `getItemGroupViews` where a combined total is shown), and the write services: `stock-service` (**the single stock write path**, taking an `Actor` rather than reading a session, which is what makes "one implementation, four front ends" real), `item-service`, `shopping-service`, `settings-service`, `barcode-service`, `recipes-service`. Cross-package imports here are **relative** (`../../core/src/x`), not aliased
+- `bot/` — `@supplies/bot`, the Telegram bot and `digest.ts` (`kyivHour`, DST-correct scheduling) → [bot/CLAUDE.md](bot/CLAUDE.md). A package rather than a folder because `apps/web`'s cron route sends the digest
+- `prisma/` → [prisma/CLAUDE.md](prisma/CLAUDE.md) — one schema, one seed, shared by all of the above
+
+### `apps/web` — the Next.js app
+
 - `app/login|register|join/[token]|forgot-password|reset-password` — public auth pages; each bounces a signed-in visitor via `validSessionOrNull()` (NOT the raw JWT)
-- `hooks/use-collapsed-groups.ts` — per-device collapse state for shopping groups (localStorage via `useSyncExternalStore`, so no setState-in-effect and no hydration mismatch)
-- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `shopping/`, `recipes/` (Feature 32 — hidden unless `Household.aiEnabled`), `settings/`
-- `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified)
+- `app/(app)/` — authed shell (session-guarded layout + `AppNav`): `dashboard/` (expired · expiring soon · running low · recent activity), `items/` (+ `new/`, `[id]/`, `[id]/edit/`, `archive/`), `groups/`, `shopping/`, `recipes/` (Feature 32 — hidden unless `Household.aiEnabled`), `settings/`
+- `app/api/auth/[...nextauth]/` — Auth.js handlers; `app/api/telegram/` — bot webhook (Node runtime, secret-token verified); `app/api/cron/digest/` — Vercel Cron
 - `app/manifest.ts` + `app/icon.svg` + `public/icon*.svg` — installable PWA
-- `auth.ts` (root) — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation
-- `lib/prisma.ts` — Prisma singleton (pg adapter); `lib/generated/prisma/` — generated client (gitignored)
-- **`packages/core/` — the pure engine, colocated tests, no DB** → [packages/core/CLAUDE.md](packages/core/CLAUDE.md). Imported as `@supplies/core/<module>` (subpaths only, no barrel): `decimal` (decimal.js + `ZERO`/`toDbQuantity`), `units` (`Unit`, `MovementReason`), `stock` (`itemQuantity`, `availableQuantity`, `stockState`, `fefoOrder`, `planConsume`, `planCorrection`, `planDiscard`), `expiry` (batch/item states, urgency, `splitExpiring`), `shopping` (candidates), `period` (date-only, UTC), `format` (uk-UA, plurals), `messages`, `action-result`, `telegram-link` (signed link tokens), `barcode-source` (`parseOffProduct`, `needsLocalName` — whether OFF answered in Ukrainian), `gepir` (GS1 Ukraine fallback — manufacturer only, 482 prefixes only), `metro` (METRO Ukraine — product names for own-label goods, and for anything OFF holds only in English), `item-group` (Feature 26 sets: combined total, derived unit, one-unit rule), `item-filter` / `item-sort` / `item-list-params` / `pagination` (Feature 27 list view state as URL params), `ordering`, `duplicates`, `shopping-groups`, `off-contribute`, and `validation/` (zod schemas)
-- `lib/digest.ts` (`kyivHour`, DST-correct scheduling) — stays in the app: it reads the database and talks to grammy
-- `lib/stock-service.ts` — **the single stock write path**, called by both the server actions and the bot. Takes an `Actor` instead of reading a session, which is what makes "one implementation, two front ends" real
-- `lib/shopping-groups.ts` — pure grouping (Feature 11): `null` groupId means «Загальна група»
-- `lib/actions/` — server actions (session guard + validation + `revalidatePath`); the zod schemas they validate against are `@supplies/core/validation/*`, so the API and the other clients can share them
-- `lib/queries.rsc.ts` — the same hot readers wrapped in `React.cache` for server components. Feature 33: the layout and the page beneath it were each scanning the whole household; measured 6 loader calls per dashboard render, now 2. `server-only`, so the bot and digest keep importing the uncached `lib/queries.ts`
-- `lib/queries.ts` — the only place the DB meets the pure engine; pages never compute states themselves. Sets have two readers: `getItemGroups` (cheap — name, unit, count) for the pickers, `getItemGroupViews` (loads members' batches) for the two views that show a combined total
+- `auth.ts` — NextAuth config; `types/next-auth.d.ts` — session/JWT augmentation
+- `lib/actions/` — server actions (session guard + validation + `revalidatePath`), thin over `packages/db`; the zod schemas they validate against are `@supplies/core/validation/*`, so the API and the other clients share them
+- `lib/queries.rsc.ts` — the same hot readers wrapped in `React.cache` for server components. Feature 33: the layout and the page beneath it were each scanning the whole household; measured 6 loader calls per dashboard render, now 2. `server-only`, so the bot and the digest keep importing the uncached `@supplies/db/queries`
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
-- `lib/messages.ts` — Ukrainian strings for everything produced outside React
-- `bot/` → [bot/CLAUDE.md](bot/CLAUDE.md) · `prisma/` → [prisma/CLAUDE.md](prisma/CLAUDE.md) · `components/` → [components/CLAUDE.md](components/CLAUDE.md)
+- `hooks/use-collapsed-groups.ts` — per-device collapse state for shopping groups (localStorage via `useSyncExternalStore`, so no setState-in-effect and no hydration mismatch)
+- `components/` → [apps/web/components/CLAUDE.md](apps/web/components/CLAUDE.md) · `e2e/` — Playwright, run from here
+- **Env comes from the repo root.** Next only reads env files in its own directory, so `next.config.ts` loads `../../.env` explicitly with `override: false` — one file for the app, the Prisma CLI, the bot and the scripts, and a real environment variable (Vercel) always wins
+
+### `apps/api` and `apps/spa`
+
+→ [apps/api/CLAUDE.md](apps/api/CLAUDE.md) · [apps/spa/CLAUDE.md](apps/spa/CLAUDE.md). The API is a **third front end, never a third implementation**: it calls the same `packages/db` services the server actions do. See [SPA_API_PORT.md](SPA_API_PORT.md).
+
+### `scripts/`
+
 - `scripts/set-telegram-webhook.ts` — register/remove the production webhook; refuses a non-HTTPS `APP_URL` or a missing `TELEGRAM_WEBHOOK_SECRET`
 - `scripts/smoke.ts` — `pnpm test:db`, the live-database integration test
 - `scripts/run-daily-digest.ts` — hourly cron entry; picks households whose `digestHour` has arrived, skips any already sent today (`lastDigestOn`)
+- `scripts/check-dev-ports.mjs` — the `dev:all` preflight; names the process holding 3000/3200/5173 instead of failing with `EADDRINUSE`
 
 ## Auth model
 
@@ -93,17 +107,17 @@ An **Item** is a kind of thing ("Молоко 2,5%"); a **StockBatch** is a conc
 
 ## Conventions
 
-- Quantities are `Decimal(12,3)` in the column and **decimal.js** in the engine (`lib/decimal.ts`) — never float math; pass values to Prisma as strings via `toDbQuantity()`; round to 3 dp. The engine does **not** import `Prisma.Decimal`: the generated client opens with `node:process`/`node:path`/`node:url`, so a value import of it poisons any browser or Metro bundle. `Prisma.Decimal` *is* decimal.js, so the two interoperate — `lib/decimal.test.ts` pins that, because if it ever stopped being true the symptom would be wrong quantities rather than a crash.
-- Units live in `lib/units.ts`, not in the generated enums, so schemas and formatting can be shared with clients that have no database. `lib/units.test.ts` compares the two lists and fails if the schema gains a unit this one lacks.
-- Expiry and "opened" dates are **date-only** (`@db.Date`); compare/format via `lib/period.ts` (UTC getters — no timezone math anywhere).
-- Business rules live in pure `lib/` functions with colocated vitest tests; when a rule changes, its tests change in the same commit.
+- Quantities are `Decimal(12,3)` in the column and **decimal.js** in the engine (`@supplies/core/decimal`) — never float math; pass values to Prisma as strings via `toDbQuantity()`; round to 3 dp. The engine does **not** import `Prisma.Decimal`: the generated client opens with `node:process`/`node:path`/`node:url`, so a value import of it poisons any browser or Metro bundle. `Prisma.Decimal` *is* decimal.js, so the two interoperate — `packages/db/src/prisma-decimal.test.ts` pins that, because if it ever stopped being true the symptom would be wrong quantities rather than a crash.
+- Units live in `@supplies/core/units`, not in the generated enums, so schemas and formatting can be shared with clients that have no database. `packages/db/src/prisma-units.test.ts` compares the two lists and fails if the schema gains a unit this one lacks.
+- Expiry and "opened" dates are **date-only** (`@db.Date`); compare/format via `@supplies/core/period` (UTC getters — no timezone math anywhere).
+- Business rules live in pure `packages/core` functions with colocated vitest tests; when a rule changes, its tests change in the same commit.
 - Every batch mutation writes its `StockMovement` in the **same transaction** — no exceptions. The movement log is the audit trail ("who used the last of it").
 - Household settings (`expiryWarnDays`, `digestHour`) are **data**, not constants — pure functions take them as input.
 - **Documentation-first**: any new feature/rule lands in PROJECT_PROMPT.md (+ this file) before code.
 - **Ukrainian is the UI language, and ONLY that.** Docs (README, every CLAUDE.md, PROJECT_PROMPT.md), code, comments, identifiers and commit messages are **English**. Where English prose quotes a literal UI label — «Загальна група» — the Ukrainian stays, because the doc is naming what the user sees on screen; translating it would make the doc disagree with the app.
-- **Ukrainian only** (PROJECT_PROMPT.md §8): UI copy is written in Ukrainian **directly in the components** — no `t()`, no keys, no catalogs. Do not add an i18n library. Strings generated outside React (pure-engine rule errors, server-action/zod errors, bot replies, digest text) live in `lib/messages.ts` as a typed key → Ukrainian map with `{param}` interpolation; **pure functions return the key + params, never a formatted sentence**, so tests assert on keys, not prose. All dates and numbers format through `lib/format.ts` (`uk-UA`, `DD.MM.YYYY`, decimal comma, `Intl.PluralRules` for `one/few/many` — "1 пляшка / 2 пляшки / 5 пляшок"); never call `toLocaleString()` ad hoc. `<html lang="uk">`, manifest `"lang": "uk"`, Ukrainian seed data.
-- The **bot is a second front end, never a second implementation** — it calls `lib/stock-service.ts` and `lib/queries.ts`, same as the web UI.
-- `lib/format.ts` is deliberately **Prisma-free** — client components import it, and the generated client pulls `node:module` into the browser bundle and breaks the build.
+- **Ukrainian only** (PROJECT_PROMPT.md §8): UI copy is written in Ukrainian **directly in the components** — no `t()`, no keys, no catalogs. Do not add an i18n library. Strings generated outside React (pure-engine rule errors, server-action/zod errors, bot replies, digest text) live in `@supplies/core/messages` as a typed key → Ukrainian map with `{param}` interpolation; **pure functions return the key + params, never a formatted sentence**, so tests assert on keys, not prose. All dates and numbers format through `@supplies/core/format` (`uk-UA`, `DD.MM.YYYY`, decimal comma, `Intl.PluralRules` for `one/few/many` — "1 пляшка / 2 пляшки / 5 пляшок"); never call `toLocaleString()` ad hoc. `<html lang="uk">`, manifest `"lang": "uk"`, Ukrainian seed data.
+- The **bot is a second front end, never a second implementation** — it calls `@supplies/db/stock-service` and `@supplies/db/queries`, same as the web UI — and so does the API.
+- `@supplies/core/format` is deliberately **Prisma-free** — client components import it, and the generated client pulls `node:module` into the browser bundle and breaks the build.
 - Env (`.env`, gitignored; template `.env.example`): `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`; optional `OFF_BASE_URL` and `GEPIR_BASE_URL` (barcode source overrides), `ANTHROPIC_API_KEY` + optional `ANTHROPIC_MODEL` (Feature 32 — without the key the Recipes page loads and says so).
 
 <!-- BEGIN:nextjs-agent-rules -->

@@ -1,4 +1,4 @@
-import { DIGEST_HOUR_KYIV, kyivHour, sendDigests } from "@/lib/digest";
+import { DIGEST_HOUR_KYIV, kyivHour, sendDigests } from "@supplies/bot/digest";
 
 /**
  * Feature 19 — the endpoint Vercel Cron calls.

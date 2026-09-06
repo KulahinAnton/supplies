@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   MovementReason as PrismaMovementReason,
   Unit as PrismaUnit,
-} from "@supplies/db/generated/prisma/enums";
-import { MOVEMENT_REASONS, UNITS } from "@supplies/core/units";
+} from "./generated/prisma/enums";
+import { MOVEMENT_REASONS, UNITS } from "../../core/src/units";
 
 /**
  * The seam that keeps `lib/units.ts` honest.

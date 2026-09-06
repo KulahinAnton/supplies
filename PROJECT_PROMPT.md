@@ -27,10 +27,19 @@ The UI must look like a modern, polished household dashboard (Linear/Stripe-leve
 | Barcode | `BarcodeDetector` where available, `@zxing/browser` fallback; product lookup via Open Food Facts |
 | Email (password reset, invites) | Resend via a thin swappable `sendEmail()` wrapper |
 | Language | **Ukrainian only — no i18n layer.** No next-intl, no message catalogs, no locale switcher. UI copy is written in Ukrainian directly in the components (§8) |
-| Unit tests | vitest — pure business rules in `lib/`, colocated `*.test.ts`, no DB |
+| Unit tests | vitest — pure business rules in `packages/core`, colocated `*.test.ts`, no DB |
 | Package manager | pnpm (allow build scripts in `pnpm-workspace.yaml`) |
 
-Do not introduce a separate backend service — a single full-stack Next.js app plus the bot process. Keep every business rule (stock math, FEFO, expiry states, low-stock detection) in pure `lib/` functions so the web UI, the bot, and any future native app share one implementation.
+Keep every business rule (stock math, FEFO, expiry states, low-stock detection) in pure `packages/core` functions so the web UI, the bot, and any future native app share one implementation.
+
+> **Amended by Feature 34.** This paragraph used to open "do not introduce a
+> separate backend service", and `apps/api` is exactly that. The sentence was
+> right about what it was protecting and wrong about how: what must not be
+> duplicated is the *rules*, and a second HTTP surface duplicates them only if
+> it reimplements them. `apps/api` does not — it is a third front end over the
+> same `packages/core` and `packages/db`, which is the same standing the
+> Telegram bot has had since Feature 9. The constraint that survives is the
+> one in the sentence below: one implementation, many clients.
 
 ## 3. Domain: Household Stock
 
@@ -83,7 +92,7 @@ Household-level setting `expiryWarnDays` (default **7**). Given a batch with `ex
 | `FRESH` | `expiresAt > today + expiryWarnDays` |
 | `NONE` | `expiresAt is null` |
 
-An item's expiry state is the **worst** state among its non-empty batches. Dates are date-only (`@db.Date`) and compared with UTC getters via `lib/period.ts` — no timezone math anywhere.
+An item's expiry state is the **worst** state among its non-empty batches. Dates are date-only (`@db.Date`) and compared with UTC getters via `packages/core/src/period.ts` — no timezone math anywhere.
 
 ### 3.6 Worked example (acceptance test for the engine)
 
@@ -145,12 +154,12 @@ Before writing feature code, create and continuously maintain:
 - Password reset by email: no user enumeration, hashed single-use token, 1h expiry.
 - Route protection is layout-based: `app/(app)/layout.tsx` requires a session. **Every server action guards itself** with `requireSession()` and scopes every query by the session `householdId` — layouts protect pages only.
 
-### Feature 2 — Stock engine (pure `lib/`, test-first)
+### Feature 2 — Stock engine (pure `packages/core`, test-first)
 Written and tested **before** any UI touches it.
-- `lib/stock.ts` — `itemQuantity(batches)`, `availableQuantity(batches, today)`, `stockState(item, batches)`, `planConsume(batches, qty, today)` returning a FEFO draw-down plan or a `RuleMessage` shortfall error (§3.3).
-- `lib/expiry.ts` — `batchExpiryState(batch, today, warnDays)`, `itemExpiryState(batches, ...)`, `daysUntil(date, today)`.
-- `lib/shopping.ts` — `shoppingCandidates(items, batchesByItem)` returning items in `OUT`/`LOW` not already on an unchecked list row.
-- `lib/period.ts` — date-only helpers (UTC getters, no TZ math).
+- `packages/core/src/stock.ts` — `itemQuantity(batches)`, `availableQuantity(batches, today)`, `stockState(item, batches)`, `planConsume(batches, qty, today)` returning a FEFO draw-down plan or a `RuleMessage` shortfall error (§3.3).
+- `packages/core/src/expiry.ts` — `batchExpiryState(batch, today, warnDays)`, `itemExpiryState(batches, ...)`, `daysUntil(date, today)`.
+- `packages/core/src/shopping.ts` — `shoppingCandidates(items, batchesByItem)` returning items in `OUT`/`LOW` not already on an unchecked list row.
+- `packages/core/src/period.ts` — date-only helpers (UTC getters, no TZ math).
 - Colocated vitest tests covering the **§3.6 worked example end to end**, plus: expired batches excluded from FEFO, shortfall rejection, `minQty = 0` opting out, zeroed batches excluded from sums, `null` expiry ordering, and rounding to 3 decimals.
 
 ### Feature 3 — Items, categories, locations
@@ -183,18 +192,18 @@ Written and tested **before** any UI touches it.
 The app is **Ukrainian-only**. There is no next-intl, no `messages/` catalogs, no locale cookie, no language switcher, and no `User.locale`. Do not add an i18n layer "just in case" — if English is ever wanted, it is a deliberate project of its own.
 
 - **UI copy is written in Ukrainian directly in the components.** No key indirection, no `t()` wrapper. What you read in the JSX is what the user sees.
-- **Strings produced outside React keep a keyed map** — `lib/messages.ts`, a plain typed constant object (`RuleMessage` keys → Ukrainian text, with `{param}` interpolation). This covers exactly three cases, all of which must stay React-free and unit-testable:
+- **Strings produced outside React keep a keyed map** — `packages/core/src/messages.ts`, a plain typed constant object (`RuleMessage` keys → Ukrainian text, with `{param}` interpolation). This covers exactly three cases, all of which must stay React-free and unit-testable:
   1. rule errors returned by the pure engine functions (`planConsume` shortfall, unit-change rejection, …),
   2. server-action / zod validation errors,
   3. bot replies and digest text.
-  Pure functions return the **key plus params**, never a formatted sentence; the caller renders it. This is what makes `lib/*.test.ts` assert on stable keys instead of on prose.
-- **Formatting is `uk-UA` everywhere**: dates `DD.MM.YYYY` via `Intl.DateTimeFormat("uk-UA")`, numbers with the Ukrainian decimal comma and space group separator via `Intl.NumberFormat("uk-UA")`. Formatting helpers live in `lib/format.ts` — never call `toLocaleString()` ad hoc in a component.
-- **Ukrainian plurals are real**: "1 пляшка / 2 пляшки / 5 пляшок". Quantity and day-count strings go through an `Intl.PluralRules("uk-UA")` helper in `lib/format.ts` (`one | few | many` forms), not string concatenation. Unit labels and the "expires in N days" chips are the main consumers.
+  Pure functions return the **key plus params**, never a formatted sentence; the caller renders it. This is what makes the engine tests assert on stable keys instead of on prose.
+- **Formatting is `uk-UA` everywhere**: dates `DD.MM.YYYY` via `Intl.DateTimeFormat("uk-UA")`, numbers with the Ukrainian decimal comma and space group separator via `Intl.NumberFormat("uk-UA")`. Formatting helpers live in `packages/core/src/format.ts` — never call `toLocaleString()` ad hoc in a component.
+- **Ukrainian plurals are real**: "1 пляшка / 2 пляшки / 5 пляшок". Quantity and day-count strings go through an `Intl.PluralRules("uk-UA")` helper in `packages/core/src/format.ts` (`one | few | many` forms), not string concatenation. Unit labels and the "expires in N days" chips are the main consumers.
 - `<html lang="uk">` in the root layout; the PWA manifest declares `"lang": "uk"` and `"dir": "ltr"`.
 - Seeded data (categories, storage locations, demo items) is Ukrainian.
 
 ### Feature 9 — Telegram bot (grammy, `bot/`)
-Mirrors AquaBill's bot layout (`bot/index.ts`, `bot.ts`, `auth.ts`, `session.ts`, `state.ts`) — **minus** its `i18n.ts`, since replies come from `lib/messages.ts` (§8).
+Mirrors AquaBill's bot layout (`bot/index.ts`, `bot.ts`, `auth.ts`, `session.ts`, `state.ts`) — **minus** its `i18n.ts`, since replies come from `packages/core/src/messages.ts` (§8).
 - **Linking**: `/start <token>` binds the chat to a user via a short-lived link token generated in the web app, stored as `TelegramLink`. Unlinked chats can do nothing but link.
 - Commands: `/low` (what's running low), `/expiring` (what's about to go off), `/list` (shopping list), `/add` (guided: item, quantity, expiry), `/took` (consume: item, quantity), `/bought` (check items off the list).
 - **Notifications**: a daily digest at the household's `digestHour` listing items expiring within `expiryWarnDays` and items that went `OUT` since yesterday. Sent via `scripts/run-daily-digest.ts` (`pnpm digest:run`), safe to re-run — it never sends twice for the same day.
@@ -203,7 +212,7 @@ Mirrors AquaBill's bot layout (`bot/index.ts`, `bot.ts`, `auth.ts`, `session.ts`
 
 ### Feature 10 — Barcode scanning
 - "Scan" button on add-item and add-stock opens the camera (`<input capture="environment">` / `getUserMedia`), decodes with the native `BarcodeDetector` when the browser has it, `@zxing/browser` otherwise.
-- A known barcode jumps straight to that item's add-stock form. An unknown one opens item-create **pre-filled from Open Food Facts** (`lib/barcode-source.ts`: pure `parseOffProduct(json)` tested against a captured fixture, plus `fetchProduct(barcode)`; override `OFF_BASE_URL`). Lookup failure is never blocking — the form just opens empty.
+- A known barcode jumps straight to that item's add-stock form. An unknown one opens item-create **pre-filled from Open Food Facts** (`packages/core/src/barcode-source.ts`: pure `parseOffProduct(json)` tested against a captured fixture, plus `fetchProduct(barcode)`; override `OFF_BASE_URL`). Lookup failure is never blocking — the form just opens empty.
 - **No images are stored.** Decoding happens in the browser; only the digits are sent to the server.
 - In the bot, a photo of a barcode goes through the same decode path server-side, then into the existing `/add` flow.
 
@@ -234,7 +243,7 @@ Both kinds gain a **`note`** — a short free-text line for the things a shoppin
 - **Спочатку нові** — newest `createdAt` first, for reviewing what was added recently.
 - **Спочатку старі** — the reverse, which surfaces long-forgotten items.
 
-Sorting is a **pure, tested function** over the already-fetched rows (`lib/item-sort.ts`), not an extra query: the list is small, the filters are already client-side, and re-sorting must not cost a round trip. Every mode breaks ties by name so the order is total and stable — two items added in the same second must not shuffle between renders.
+Sorting is a **pure, tested function** over the already-fetched rows (`packages/core/src/item-sort.ts`), not an extra query: the list is small, the filters are already client-side, and re-sorting must not cost a round trip. Every mode breaks ties by name so the order is total and stable — two items added in the same second must not shuffle between renders.
 
 The chosen mode is a **per-person, per-device preference** (localStorage), like the group collapse state: how one person likes to scan the list is not household data.
 
@@ -242,7 +251,7 @@ The chosen mode is a **per-person, per-device preference** (localStorage), like 
 
 Feature 9 described a daily digest and shipped it as a CLI script, which Vercel cannot schedule: its cron calls an HTTP endpoint, not a command. The digest therefore never ran in production.
 
-- The logic moves to `lib/digest.ts`, called by **both** `pnpm digest:run` and a new `GET /api/cron/digest`, so the two cannot drift.
+- The logic moves to `bot/digest.ts`, called by **both** `pnpm digest:run` and a new `GET /api/cron/digest`, so the two cannot drift.
 - The route is guarded by **`CRON_SECRET`** — Vercel sends it as `Authorization: Bearer …`. Without the guard, anyone who found the URL could spam the family's Telegram.
 - `Household.lastDigestOn` still makes it **safe to call repeatedly**: a second run on the same day sends nothing.
 
@@ -285,7 +294,7 @@ Screens are **edited in place** rather than appended, so the chat does not fill 
 
 Two people adding "Сіль" without noticing the other did is the normal failure of a shared inventory. Barcode uniqueness already prevents it when someone scans; typed items had nothing.
 
-Three parts, all driven by one pure matcher (`lib/duplicates.ts`) so they cannot disagree about what "similar" means.
+Three parts, all driven by one pure matcher (`packages/core/src/duplicates.ts`) so they cannot disagree about what "similar" means.
 
 **16.0 What counts as similar.** Names are normalised — `toLocaleLowerCase("uk-UA")`, trimmed, punctuation dropped, whitespace collapsed — and then compared three ways, strongest first:
 
@@ -347,7 +356,7 @@ Ordering within a group puts **unticked rows first, then ticked**, each by `adde
 One warning window for the whole household is wrong in practice. Yoghurt needs a few days' notice; medicine, cleaning products and tinned food are worth flagging weeks ahead, because replacing them is a planned errand rather than a trip to the corner shop.
 
 - **`Category.expiryWarnDays` is nullable, and null means "inherit"** — the household's `expiryWarnDays` is used. It is deliberately not a copy of the household value: a category set to "inherit" must *follow* the household default when that default changes, and a copied number would silently stop tracking it.
-- **Resolution is a pure function** (`resolveWarnDays(category, household)`), so the fallback is stated once. Every place that computes an expiry state resolves it **per item, via that item's category** — the item list, the dashboard, the item detail page, the Telegram bot and the daily digest all go through `lib/queries.ts`, so they cannot disagree.
+- **Resolution is a pure function** (`resolveWarnDays(category, household)`), so the fallback is stated once. Every place that computes an expiry state resolves it **per item, via that item's category** — the item list, the dashboard, the item detail page, the Telegram bot and the daily digest all go through `@supplies/db/queries`, so they cannot disagree.
 - **Range 0–365**, same as the household setting. 0 is meaningful: it means "only warn me on the day itself".
 - The dashboard header shows the **household default**, with a note when any category overrides it — claiming a single number applies to everything would be a lie once overrides exist.
 - Settings lists each category with its own days field, blank meaning inherit. Clearing the field returns the category to inheriting, rather than setting 0.
@@ -355,12 +364,12 @@ One warning window for the whole household is wrong in practice. Yoghurt needs a
 ## 7. Conventions
 
 - Quantities are Prisma `Decimal(12,3)` — never float math; pass values to Prisma as strings; round to 3 dp.
-- Expiry and "opened" dates are **date-only** (`@db.Date`); compare/format via `lib/period.ts` (UTC getters).
-- Business rules live in pure `lib/` functions with colocated vitest tests; when a rule changes, its tests change in the same commit.
+- Expiry and "opened" dates are **date-only** (`@db.Date`); compare/format via `packages/core/src/period.ts` (UTC getters).
+- Business rules live in pure `packages/core` functions with colocated vitest tests; when a rule changes, its tests change in the same commit.
 - Every mutation writes its `StockMovement` in the **same transaction** as the batch change — no exceptions.
 - Server actions guard with `requireSession()` and scope **every** query by `householdId`. A household must never be able to read or write another household's rows.
 - Household settings (`expiryWarnDays`, `digestHour`) are **data**, not constants — the engine takes them as input.
-- **Ukrainian only** (§8): copy inline in components; rule/action/bot strings keyed in `lib/messages.ts`; all date and number formatting through `lib/format.ts` (`uk-UA`, plural rules). No English in the UI, no i18n library.
+- **Ukrainian only** (§8): copy inline in components; rule/action/bot strings keyed in `packages/core/src/messages.ts`; all date and number formatting through `packages/core/src/format.ts` (`uk-UA`, plural rules). No English in the UI, no i18n library.
 - Env (`.env`, gitignored; template `.env.example`): `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`; optional `OFF_BASE_URL` (barcode source override).
 
 ## 8. Implementation notes
@@ -374,19 +383,19 @@ Recorded per §5.6 as features landed. Deviations from the spec above, and the r
 - `pnpm-workspace.yaml` uses pnpm 11's `allowBuilds:` map, matching Kvartal.
 
 ### Feature 2
-- The engine is Prisma-typed but Prisma-runtime-light: it imports `Prisma.Decimal` for arithmetic only. §3.6 is reproduced verbatim in `lib/stock.test.ts` — 110 tests pass across the seven `lib/*.test.ts` files.
+- The engine is Prisma-typed but Prisma-runtime-light: it imports `Prisma.Decimal` for arithmetic only. §3.6 is reproduced verbatim in `packages/core/src/stock.test.ts` — 110 tests pass across the seven engine test files.
 - `stockState` reads **total** stock, not available (§3.4 as written): an item whose only stock is expired reads OK/LOW while the expiry dashboard flags it separately. The two axes stay independent so neither can hide the other.
 
 ### Feature 4
 - **Added: multi-batch add form.** One purchase with several expiry dates is one submit — see the Feature 4 bullet above. Rows naming the same date are merged into one batch rather than creating two the FEFO planner has to tie-break.
-- **Refactor:** the stock write path lives in `lib/stock-service.ts`, which takes an `Actor` (`{userId, householdId}`) instead of reading a session. Server actions call it after `requireSession()`, the bot after resolving a linked chat. Without this, Feature 9 would have been a second implementation of the same rules — exactly what that feature forbids.
+- **Refactor:** the stock write path lives in `@supplies/db/stock-service`, which takes an `Actor` (`{userId, householdId}`) instead of reading a session. Server actions call it after `requireSession()`, the bot after resolving a linked chat. Without this, Feature 9 would have been a second implementation of the same rules — exactly what that feature forbids.
 
 ### Feature 8
-- `lib/format.ts` is deliberately **Prisma-free**. Client components import it for unit labels, and importing the generated client into a browser bundle drags `node:module` in, which fails the Turbopack build ("the chunking context does not support external modules"). It accepts any `Numeric` (anything with `toString()`), so a `Decimal` still works.
-- `lib/generated/prisma/enums.ts` has no imports of its own and is safe client-side — that is how `Unit` reaches the forms.
+- `packages/core/src/format.ts` is deliberately **Prisma-free**. Client components import it for unit labels, and importing the generated client into a browser bundle drags `node:module` in, which fails the Turbopack build ("the chunking context does not support external modules"). It accepts any `Numeric` (anything with `toString()`), so a `Decimal` still works.
+- `packages/db/src/generated/prisma/enums.ts` has no imports of its own and is safe client-side — that is how `Unit` reaches the forms.
 
 ### Feature 9
-- **Link tokens are stateless**: a signed `userId.expiry.signature` triple (`lib/telegram-link.ts`, HMAC over `AUTH_SECRET`, 15 min). No table, no cleanup job, no replay after expiry. Rotating `AUTH_SECRET` invalidates outstanding link tokens — intended.
+- **Link tokens are stateless**: a signed `userId.expiry.signature` triple (`packages/core/src/telegram-link.ts`, HMAC over `AUTH_SECRET`, 15 min). No table, no cleanup job, no replay after expiry. Rotating `AUTH_SECRET` invalidates outstanding link tokens — intended.
 - Conversation state is an in-memory `Map` (`bot/state.ts`), so it is per-process and lost on restart. Acceptable: a half-finished `/add` costs one retyped word. Revisit only if the webhook is ever load-balanced.
 - **Added:** `Household.lastDigestOn` (`@db.Date`) so `pnpm digest:run` is safe to re-run — a second run on the same day is a no-op.
 
@@ -395,8 +404,8 @@ Recorded per §5.6 as features landed. Deviations from the spec above, and the r
 The schema was written before Docker was available. Migrating and running it surfaced three defects that every static check (types, lint, unit tests, production build) had passed straight over:
 
 1. **The seed was not idempotent.** `User.householdId` had no `onDelete: Cascade`, so the seed's own "delete the demo household and rebuild it" step failed with `P2003` on any *second* run — the first run passed only because there was nothing to delete. Fixed by the `cascade_household_delete` migration, which cascades `Household → User` and onward through every row referencing a user. Verified with three consecutive seeds.
-2. **`import "server-only"` killed both scripts.** `lib/queries.ts` and `lib/stock-service.ts` carried it; that package throws unconditionally outside a React Server Component build, so **`pnpm bot:start` and `pnpm digest:run` both died at startup** — two documented entry points that could never have run. Removed from those two modules, with a comment explaining why they are the exception. Browser-bundle safety is already enforced by their Prisma import.
-3. **Double period in the shortfall message**: the compact unit labels end in a dot, so the template rendered "Не вистачає 5 шт.. Доступно…". The message now uses the declined long form ("5 штук") and carries no trailing period of its own; `lib/stock.test.ts` asserts the rendered sentence so it cannot regress.
+2. **`import "server-only"` killed both scripts.** `@supplies/db/queries` and `@supplies/db/stock-service` carried it; that package throws unconditionally outside a React Server Component build, so **`pnpm bot:start` and `pnpm digest:run` both died at startup** — two documented entry points that could never have run. Removed from those two modules, with a comment explaining why they are the exception. Browser-bundle safety is already enforced by their Prisma import.
+3. **Double period in the shortfall message**: the compact unit labels end in a dot, so the template rendered "Не вистачає 5 шт.. Доступно…". The message now uses the declined long form ("5 штук") and carries no trailing period of its own; `packages/core/src/stock.test.ts` asserts the rendered sentence so it cannot regress.
 
 ### Verified against a live database
 `pnpm test:db` (`scripts/smoke.ts`, 25 checks) covers what unit tests structurally cannot: the multi-batch add landing 3 batches + 3 movements in one transaction, same-date rows merging, FEFO drawing from the soonest non-expired batch while leaving the expired one alone, all-or-nothing shortfall rejection writing nothing, and **household scoping** — a second household is refused on read and write. The web app was driven end to end: auth, dashboard, item detail (the water item reading 10 шт. across its three batches), items list, shopping list, settings, invite creation (stored SHA-256 only — confirmed the raw token appears nowhere), `/join` accepting a valid token and rejecting a forged one, and `/dashboard` 307-ing to `/login` without a session.
@@ -426,7 +435,7 @@ Typing a barcode triggers the same lookup on blur — the camera is a convenienc
 
 ### Expiry phrasing carries its own verb
 
-`lib/format.ts` exposes `formatExpiryLabel(date, today)`, which returns a
+`packages/core/src/format.ts` exposes `formatExpiryLabel(date, today)`, which returns a
 complete phrase — «придатне ще 7 днів», «спливає сьогодні», «прострочено 3 дні
 тому». It replaced `formatExpiryRelative`, which returned only *when the date
 fell* («через 7 днів») and left each caller to supply the verb.
@@ -472,7 +481,7 @@ The prefix gate is what keeps the 6s timeout from being load-bearing.
 **There is no API.** The flow is a Symfony form — GET for a session cookie and
 a CSRF token, then POST. That makes it scraping, with scraping's lifespan:
 every failure path returns "no hint" rather than an error, and the parser is
-pure and tested against **real captured HTML** in `lib/__fixtures__/`, because
+pure and tested against **real captured HTML** in `packages/core/src/__fixtures__/`, because
 invented markup would hide the exact failure this feature is exposed to.
 
 **Answers are cached in `GepirLookup`, misses included.** Global, not
@@ -531,7 +540,7 @@ Two defects, found by the first real use of the items-page scan.
 and no digit at all, so every scan from the items list was rejected as
 malformed while the identical scan in the item form worked. The two screens
 contradicted each other about the same barcode. There is now a single
-`BARCODE_PATTERN` in `lib/validation/shared.ts`, used by the item schema and
+`BARCODE_PATTERN` in `packages/core/src/validation/shared.ts`, used by the item schema and
 both actions, with tests that assert real GTIN-8/12/13/14 codes pass.
 
 **The handler reported a failure as an answer.** `onScan` mapped any
@@ -643,7 +652,7 @@ different facts and the movement log is the only place that distinction
 survives, so the per-batch take is deliberately *not* implemented as a
 discard.
 
-**`consumeBatch` lives in `lib/stock-service.ts`**, not in the action, like
+**`consumeBatch` lives in `@supplies/db/stock-service`**, not in the action, like
 every other stock write: one implementation, two front ends. The bot will want
 it the first time someone tries to finish an expired carton from their phone.
 
@@ -817,7 +826,7 @@ state is seeded from the page's `searchParams` props instead.
 
 **Defaults are never written**, so an untouched list stays at plain `/items`
 rather than carrying four parameters that all say "nothing is set".
-`lib/item-list-params.ts` holds that rule and the parsers, tested — a
+`packages/core/src/item-list-params.ts` holds that rule and the parsers, tested — a
 hand-edited value falls back instead of producing an empty list.
 
 **localStorage and the URL do not conflict.** localStorage is "how I like lists
@@ -863,7 +872,7 @@ sends only that page.
 
 **Filtering and sorting had to move server-side with it.** They cannot be
 split: filtering one page in the browser filters the wrong set, and the result
-looks entirely plausible. `lib/item-filter.ts` now holds the predicate the
+looks entirely plausible. `packages/core/src/item-filter.ts` now holds the predicate the
 component used to own, so the rule is applied once, in one place, and tested.
 
 **The server still loads every item, and that is not laziness.** `stock` and
@@ -984,7 +993,7 @@ But a badge is read one row at a time, and the two halves ask for opposite
 actions: bin the first, cook the second. In Telegram there was not even a
 badge — the only thing separating them was the tail of each line.
 
-**One rule, three surfaces.** `splitExpiring` in `lib/expiry.ts` divides the
+**One rule, three surfaces.** `splitExpiring` in `packages/core/src/expiry.ts` divides the
 attention list into `expired` and `soon`; the dashboard card, the daily digest
 and the bot's `/expiring` all use it. `needsAttention` still decides what
 enters the list at all — one rule each, and no third opinion about which half
@@ -1036,7 +1045,7 @@ nobody remembers starting.
 forever, so renaming one silently breaks a button in someone's chat.
 `bot/menu.test.ts` pins every label, including the three shipped in `5fd1e8c`,
 so a rename fails in CI instead. It is also why `vitest.config.mts` now looks
-in `bot/` as well as `lib/`.
+in `bot/` as well as `packages/core`.
 
 #### 30.2 — the Android back button was trapped in the chat
 
@@ -1233,16 +1242,16 @@ because the conflict branch is injectable and therefore testable.
 **Movement timestamps are Kyiv time**, not the server's. `formatDateTime` had no
 `timeZone`, so Vercel's UTC made every «Останні дії» entry read 2–3 hours early
 — and an instant at 23:30Z rendered as the *previous day*. Hardcoded next to a
-comment naming the `Household.timezone` upgrade path; `lib/digest.ts` already
+comment naming the `Household.timezone` upgrade path; `bot/digest.ts` already
 hardcodes the same zone to decide when noon is, and the two change together.
 
-**Server components read through `lib/queries.rsc.ts`.** The authed layout and
+**Server components read through `apps/web/lib/queries.rsc.ts`.** The authed layout and
 the page beneath it each scanned the whole household. Wrapping the exported
 readers in `React.cache` fixes nothing on its own — the scan happens *inside*
 `getAttentionCounts` and `getDashboard` — so both take their inputs as optional
 arguments and the cached module threads them through. Measured on a dashboard
 render: six loader calls became two. The bot and the digest keep importing the
-uncached `lib/queries.ts`, because `server-only` would kill them.
+uncached `@supplies/db/queries`, because `server-only` would kill them.
 
 **End-to-end tests exist now** (`e2e/`, `pnpm test:e2e`) and are deliberately
 small: a form in a real browser, a server action, a database write, and the

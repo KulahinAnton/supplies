@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIGEST_HOUR_KYIV, kyivHour } from "@/lib/digest";
+import { DIGEST_HOUR_KYIV, kyivHour } from "./digest";
 
 /**
  * Feature 19 — the DST arithmetic behind the scheduled digest.

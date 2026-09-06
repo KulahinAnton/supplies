@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@supplies/db/generated/prisma/client";
-import { Decimal, ZERO, toDbQuantity, toDecimal } from "@supplies/core/decimal";
+import { Prisma } from "./generated/prisma/client";
+import { Decimal, ZERO, toDbQuantity, toDecimal } from "../../core/src/decimal";
 
 /**
  * Phase 0.2 left two copies of decimal.js in a server process: the engine's

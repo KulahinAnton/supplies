@@ -17,7 +17,7 @@ import {
 } from "@supplies/db/queries";
 import { itemQuantity } from "@supplies/core/stock";
 import { renderMessage } from "@supplies/core/messages";
-import { digestText } from "@/lib/digest";
+import { digestText } from "@supplies/bot/digest";
 import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 import { formatQuantityWithUnit } from "@supplies/core/format";
 

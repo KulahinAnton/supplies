@@ -1,0 +1,13 @@
+{
+  "name": "@supplies/bot",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./*.ts"
+  },
+  "dependencies": {
+    "@supplies/core": "workspace:*",
+    "@supplies/db": "workspace:*",
+    "grammy": "^1.44.0"
+  }
+}

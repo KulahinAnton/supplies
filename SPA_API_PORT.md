@@ -882,6 +882,46 @@ and three cards just copies the gaps somewhere more expensive to fix.
 
 ### Phase 4.1 — `apps/web`, moved early · done, 2026-09-06
 
+The Next app is now `apps/web` and the root holds no application code. Verified
+by running it, not only by building it: `pnpm dev`, sign in as the demo
+household, dashboard renders from the real database; `pnpm build`; all 8
+Playwright checks across desktop and mobile; lint, both typechecks, 351 unit
+tests, 20 API tests.
+
+**One Vercel setting changes: Root Directory `.` → `apps/web`.** The Build
+Command does not, because `apps/web` grew its own `build` and `migrate:deploy`
+that delegate to the repo root through `pnpm -C ../..` — Prisma has to run
+where `prisma.config.ts` and the schema are. The setting and the merge have to
+happen in the same window; deployment-instructions.md §2 says so at the point
+someone would need to know.
+
+Four things the move forced, each worth more than the tidiness:
+
+- **`bot/` became `@supplies/bot`.** `apps/web`'s cron route sends the digest,
+  and the digest imports the bot's reply keyboard, so `lib/digest.ts` could not
+  come along to `apps/web` and could not go to `packages/db` either. Making the
+  bot a package was the answer, and it removed the last `@/`-alias import
+  crossing a boundary — those were the imports that would have broken silently
+  on the next move rather than loudly on this one.
+- **The two drift guards moved to `packages/db`.** `prisma-decimal.test.ts` and
+  `prisma-units.test.ts` compare the engine's types against the generated
+  client's, a comparison `packages/core` is forbidden by lint to make. They
+  were in `lib/` because that was the only other place with Prisma; now they
+  are where Prisma actually lives.
+- **Next reads the repo-root `.env`.** Next only looks in its own project
+  directory, which is now `apps/web`, while the Prisma CLI, the bot, the
+  scripts and the API all read the root file. `next.config.ts` loads it
+  explicitly with `override: false`, so a real environment variable — which is
+  how Vercel supplies every one of these — still wins. The alternative was two
+  env files and an afternoon, one day, wondering why migrations ran against a
+  different database than the app.
+- **Two ESLint warnings that had been hiding.** `eslint-plugin-react`'s version
+  detection found no React at the root (correctly — it is in the two clients
+  now), and `no-html-link-for-pages` looked for a `pages/` directory. The
+  second had been dead the whole time: it is a Pages Router rule and this is an
+  App Router app. Both are now settled explicitly rather than by coincidence of
+  layout.
+
 ### Phases 3–5 — not started
 
 React Native, the deploy, iOS. **Phase 3 is blocked on the Phase 2.9 parity

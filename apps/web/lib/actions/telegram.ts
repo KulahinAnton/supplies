@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth-guard";
 import { actionError, actionOk, type ActionResult } from "@supplies/core/action-result";
 import { ruleMessage } from "@supplies/core/messages";
 import { createLinkToken } from "@supplies/core/telegram-link";
-import { sendDigestToHousehold } from "@/lib/digest";
+import { sendDigestToHousehold } from "@supplies/bot/digest";
 import { todayUTC } from "@supplies/core/period";
 
 /**

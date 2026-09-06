@@ -11,7 +11,7 @@ Installed: alert, avatar, badge, button, card, checkbox, dialog, dropdown-menu, 
 
 ## Client/server boundary
 
-- **`lib/format.ts` must stay Prisma-free.** Client components import it for unit labels and quantity formatting; importing the generated Prisma client into a browser bundle drags `node:module` in and the Turbopack build fails with *"the chunking context does not support external modules"*. It takes a `Numeric` (anything with `toString()`), so a `Prisma.Decimal` still works without the import.
+- **`@supplies/core/format` must stay Prisma-free.** Client components import it for unit labels and quantity formatting; importing the generated Prisma client into a browser bundle drags `node:module` in and the Turbopack build fails with *"the chunking context does not support external modules"*. It takes a `Numeric` (anything with `toString()`), so a `Prisma.Decimal` still works without the import.
 - `lib/generated/prisma/enums.ts` has no imports of its own and **is** safe to import from client components (that is how `Unit` reaches them).
 - **`Decimal` does not cross the server/client boundary.** Server pages format values into strings first — see `ItemRow` in `items-list.tsx`.
 

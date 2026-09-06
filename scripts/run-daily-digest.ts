@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { prisma } from "@supplies/db/prisma";
-import { sendDigests } from "@/lib/digest";
+import { sendDigests } from "@supplies/bot/digest";
 
 /**
  * Feature 19 — the digest from the command line.

@@ -13,7 +13,7 @@ phone does not have.** That is the entire contract, and it is what makes the
 package worth having — the moment one module reaches for a database client,
 every consumer inherits it.
 
-`lib/queries.ts` and `lib/stock-service.ts` deliberately stayed behind for
+`@supplies/db/queries` and `@supplies/db/stock-service` deliberately stayed behind for
 exactly this reason. They are where the database meets these rules, and that
 seam belongs to whoever owns the database, not to the rules.
 
@@ -52,7 +52,7 @@ with values computed here — decimal.js identifies instances by a prototype
 `toStringTag` rather than `instanceof`, precisely so a value from a second copy
 of the library still counts.
 
-That property is load-bearing and invisible. `lib/decimal.test.ts` — in the
+That property is load-bearing and invisible. `packages/db/src/prisma-decimal.test.ts` — in the
 app, where importing Prisma is free — pins it, because a regression would be
 silently wrong quantities rather than a crash.
 
@@ -62,7 +62,7 @@ Values reach the database as strings, through `toDbQuantity()`.
 
 `src/units.ts` declares the six units rather than importing the generated Prisma
 enum, so a consumer can typecheck without having run `prisma generate`.
-`lib/units.test.ts` compares the two lists and fails if the schema gains a unit
+`packages/db/src/prisma-units.test.ts` compares the two lists and fails if the schema gains a unit
 this package lacks.
 
 ## Tests

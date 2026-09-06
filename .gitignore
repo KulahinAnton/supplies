@@ -15,8 +15,8 @@ node_modules/
 /coverage
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
 /build
@@ -52,10 +52,10 @@ backups/
 .env.backup
 
 # Playwright output. The report is worth reading and never worth committing.
-/test-results/
-/playwright-report/
-/blob-report/
-/.playwright/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 
 # Compiler output (apps/api). `nest build` emits the API and the core sources
 # it pulls in, which is a lot of files that are already tracked as source.

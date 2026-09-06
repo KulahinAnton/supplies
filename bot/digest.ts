@@ -4,8 +4,8 @@ import { getItemViews, getRestockEntries } from "@supplies/db/queries";
 import { needsAttention, splitExpiring } from "@supplies/core/expiry";
 // Feature 30.3 — the digest is the one message that reaches a chat without
 // anyone opening the bot, so it doubles as the keyboard's delivery route.
-import { KEYBOARD_VERSION, replyKeyboard } from "@/bot/menu";
-import { markKeyboardSent } from "@/bot/state";
+import { KEYBOARD_VERSION, replyKeyboard } from "./menu";
+import { markKeyboardSent } from "./state";
 
 import { formatExpiryLabel, formatQuantityWithUnit } from "@supplies/core/format";
 import { formatDateKey, todayUTC } from "@supplies/core/period";

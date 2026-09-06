@@ -56,7 +56,7 @@ Postgres runs in Docker on host port **5434**. Docker Desktop must be running, a
 |---|---|
 | `pnpm dev` | Development server |
 | `pnpm build` / `pnpm start` | Production build and run |
-| `pnpm test` | vitest over the pure rules in `lib/`, no database |
+| `pnpm test` | vitest over the pure rules in `packages/core` and the data layer, no database |
 | `pnpm test:db` | Integration smoke test against a live seeded database |
 | `pnpm lint` / `pnpm typecheck` | ESLint / TypeScript |
 | `pnpm db:up` / `db:migrate` / `db:seed` / `db:studio` | Database |
@@ -66,6 +66,24 @@ Postgres runs in Docker on host port **5434**. Docker Desktop must be running, a
 | `pnpm db:prod-copy` | Load a production dump into a local database and point the app at it |
 | `pnpm migrate:deploy` | Apply migrations against the direct (unpooled) endpoint — the deploy build command |
 | `pnpm digest:run` | Daily expiry and out-of-stock digest (also runs via Vercel Cron, and on demand from Settings) |
+
+`pnpm dev:all` runs all three clients together — the Next app on :3000, the API on :3200, the SPA on :5173 — against one database, which is the arrangement worth seeing: take a bottle in one and watch the number change in the others. `pnpm dev:stop` frees the ports.
+
+## Repository
+
+A pnpm workspace. Every deployable is an app, every shared thing is a package, and the root holds no application code.
+
+```
+apps/web/      Next.js 16 — the app in production
+apps/api/      NestJS + Fastify — REST + OpenAPI at /docs
+apps/spa/      Vite + React Router — the same app without a framework
+bot/           @supplies/bot — Telegram bot and the daily digest
+packages/core/ the engine: stock, FEFO, expiry, formatting, zod schemas. No DB, no framework, no React
+packages/db/   Prisma client, the read queries and every write service
+prisma/        one schema, one seed — shared by all of them
+```
+
+The point of the split is a single sentence: **the rules have one implementation and four callers.** A stock write from the web app, the bot, the API or a phone runs the same `packages/db/stock-service`, over the same `packages/core` engine, in the same transaction. An ESLint boundary enforces the part that types cannot — `packages/core` may not import Prisma, React, Next or Node builtins, because a React Native bundle has none of them. [SPA_API_PORT.md](SPA_API_PORT.md) is the plan and the reasoning.
 
 ## How the domain works
 
@@ -79,15 +97,15 @@ Stock state is `OUT` / `LOW` / `OK`; expiry state is `EXPIRED` / `SOON` / `FRESH
 
 A minimum of **0 means no reminders at all** — not even when the item runs out. The state still reads `OUT` and the badge still says so; what stops is the nagging.
 
-[PROJECT_PROMPT.md](PROJECT_PROMPT.md) §3 has the full rules; §3.6 is a worked example that `lib/stock.test.ts` reproduces verbatim.
+[PROJECT_PROMPT.md](PROJECT_PROMPT.md) §3 has the full rules; §3.6 is a worked example that `packages/core/src/stock.test.ts` reproduces verbatim.
 
 ## Language
 
 Ukrainian is the **interface language**, and only that:
 
 - **UI copy is written in Ukrainian directly in the components** — no i18n library, no message catalogs, no locale switcher. What you read in the JSX is what the user sees.
-- Strings produced outside React (engine rule errors, validation messages, bot replies, the digest) live in `lib/messages.ts` as a typed key → Ukrainian map. Pure functions return the key and its params, never a formatted sentence, so tests assert on stable keys instead of prose.
-- Dates and numbers format through `lib/format.ts` (`uk-UA`, `DD.MM.YYYY`, decimal comma, and real `one/few/many` plurals — "1 пляшка / 2 пляшки / 5 пляшок").
+- Strings produced outside React (engine rule errors, validation messages, bot replies, the digest) live in `@supplies/core/messages` as a typed key → Ukrainian map. Pure functions return the key and its params, never a formatted sentence, so tests assert on stable keys instead of prose.
+- Dates and numbers format through `@supplies/core/format` (`uk-UA`, `DD.MM.YYYY`, decimal comma, and real `one/few/many` plurals — "1 пляшка / 2 пляшки / 5 пляшок").
 - Seed data is Ukrainian, since it is content rather than code.
 
 **Everything else is English:** this README, `CLAUDE.md` and the per-area docs, `PROJECT_PROMPT.md`, code, comments, identifiers, and commit messages. Where English prose quotes a literal UI label — «Загальна група», for instance — the Ukrainian stays, because the doc is naming something the user actually sees on screen.
@@ -100,7 +118,8 @@ Ukrainian is the **interface language**, and only that:
 
 - [PROJECT_PROMPT.md](PROJECT_PROMPT.md) — the full specification: domain rules, data model, every feature, and implementation notes recording what changed and why.
 - [CLAUDE.md](CLAUDE.md) — stack, layout, auth model, conventions.
-- [prisma/CLAUDE.md](prisma/CLAUDE.md) · [components/CLAUDE.md](components/CLAUDE.md) · [bot/CLAUDE.md](bot/CLAUDE.md)
+- [SPA_API_PORT.md](SPA_API_PORT.md) — the plan for the API, the SPA and the phone app.
+- [prisma/CLAUDE.md](prisma/CLAUDE.md) · [apps/web/components/CLAUDE.md](apps/web/components/CLAUDE.md) · [bot/CLAUDE.md](bot/CLAUDE.md) · [packages/core/CLAUDE.md](packages/core/CLAUDE.md) · [packages/db/CLAUDE.md](packages/db/CLAUDE.md) · [apps/api/CLAUDE.md](apps/api/CLAUDE.md) · [apps/spa/CLAUDE.md](apps/spa/CLAUDE.md)
 
 ## Status
 

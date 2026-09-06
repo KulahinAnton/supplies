@@ -1,12 +1,15 @@
-# The Next.js app is the ROOT package, deliberately — not `apps/web`.
+# The root is the workspace and nothing else. Every deployable is under
+# `apps/`, including the Next.js app, which moved out of the root on
+# 2026-09-06 (SPA_API_PORT.md decision 8).
 #
-# Moving it would change Vercel's Root Directory, and SPA_API_PORT.md Phase 0
-# is meant to be additive: nothing before Phase 4.1 touches the running
-# deployment. The clean `apps/*` layout arrives once the API, SPA and mobile
-# app are proven, not before.
+# `bot` is a package rather than a loose folder because `apps/web` imports the
+# digest from it — the cron route sends it — and a relative path out of an app
+# and back into a sibling directory is the kind of import that survives one
+# refactor and not two.
 packages:
   - packages/*
   - apps/*
+  - bot
 
 allowBuilds:
   sharp: true
