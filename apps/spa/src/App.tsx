@@ -1,10 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { NavLink, Navigate, Route, Routes } from "react-router";
+import { Package } from "lucide-react";
+import { Link, Navigate, Route, Routes } from "react-router";
 import { api } from "./api/client";
 import { keys } from "./api/keys";
-import type { AttentionCounts } from "./api/types";
+import type { AttentionCounts, Household } from "./api/types";
 import { useAuth } from "./auth/auth-context";
-import { Button, Spinner } from "./components/ui";
+import { AppNav } from "./components/app-nav";
+import { Spinner } from "./components/feedback";
+import { ThemeToggle } from "./components/theme";
+import { UserMenu } from "./components/user-menu";
 import { DashboardRoute } from "./routes/dashboard";
 import { ItemDetailRoute } from "./routes/item-detail";
 import { ItemFormRoute } from "./routes/item-form";
@@ -16,19 +20,23 @@ import { ShoppingRoute } from "./routes/shopping";
 import { StatusRoute } from "./routes/status";
 
 /**
- * The authed shell, ported from `app/(app)/layout.tsx`.
+ * The authed shell, ported from `apps/web/app/(app)/layout.tsx`.
  *
  * That layout is a server component that guards the session and loads the nav
- * badge counts in the same render. Here the guard is a branch on auth state and
- * the counts are their own query — which is the shape of the whole Phase 2
+ * badge counts in the same render. Here the guard is a branch on auth state
+ * and the counts are their own query — which is the shape of the whole Phase 2
  * translation: one server render becomes a guard plus a fetch.
+ *
+ * The markup is otherwise the same file, down to the `max-w-5xl` and the
+ * `pb-24` that keeps the last row clear of the mobile bottom bar. Phase 2.9:
+ * where the two differ, this one moves.
  */
 export function App() {
   const auth = useAuth();
 
   if (auth.status === "loading") {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-10">
         <Spinner label="Перевіряємо сесію…" />
       </div>
     );
@@ -36,33 +44,42 @@ export function App() {
 
   if (auth.status === "anonymous") {
     return (
-      <div className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
-        <Routes>
-          <Route path="/login" element={<LoginRoute />} />
-          <Route path="/status" element={<StatusRoute />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<LoginRoute />} />
+        <Route path="/status" element={<StatusRoute />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     );
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-2xl px-4 py-6">
-      <header className="mb-5 flex items-baseline justify-between gap-4">
-        <h1 className="text-xl font-semibold tracking-tight">Запаси</h1>
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-neutral-500">{auth.user.name}</span>
-          <Button variant="ghost" onClick={() => void auth.signOut()}>
-            Вийти
-          </Button>
+    <div className="flex min-h-dvh flex-col bg-background">
+      <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3">
+          <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <Package className="size-4" />
+            </span>
+            <span className="hidden sm:inline">Запаси</span>
+          </Link>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <ThemeToggle />
+            <UserMenu
+              name={auth.user.name}
+              email={auth.user.email}
+              onSignOut={() => void auth.signOut()}
+            />
+          </div>
         </div>
+
+        <Nav />
       </header>
 
-      <Nav />
-
-      <main>
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-24 sm:pb-8">
         <Routes>
-          <Route path="/" element={<DashboardRoute />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<DashboardRoute />} />
           <Route path="/items" element={<ItemsRoute />} />
           <Route path="/items/new" element={<ItemFormRoute />} />
           <Route path="/items/:id" element={<ItemDetailRoute />} />
@@ -71,10 +88,12 @@ export function App() {
           <Route path="/recipes" element={<RecipesRoute />} />
           <Route path="/settings" element={<SettingsRoute />} />
           <Route path="/status" element={<StatusRoute />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<Navigate to="/dashboard" replace />} />
           <Route
             path="*"
-            element={<p className="text-sm text-neutral-500">Сторінку не знайдено.</p>}
+            element={
+              <p className="text-sm text-muted-foreground">Сторінку не знайдено.</p>
+            }
           />
         </Routes>
       </main>
@@ -91,7 +110,7 @@ function Nav() {
    */
   const household = useQuery({
     queryKey: keys.household,
-    queryFn: () => api.get<{ aiEnabled: boolean }>("/api/household"),
+    queryFn: () => api.get<Household>("/api/household"),
   });
 
   const counts = useQuery({
@@ -99,38 +118,14 @@ function Nav() {
     queryFn: () => api.get<AttentionCounts>("/api/attention"),
   });
 
-  const tabs = [
-    { to: "/", label: "Огляд", badge: undefined },
-    { to: "/items", label: "Запаси", badge: undefined },
-    { to: "/shopping", label: "Список", badge: counts.data?.restock },
-    // Feature 32.1 — the tab appears only once the household turns the
-    // helper on. The page and the endpoint both check as well: a hidden link
-    // is presentation, not an access control.
-    ...(household.data?.aiEnabled
-      ? [{ to: "/recipes", label: "Рецепти", badge: undefined }]
-      : []),
-    { to: "/settings", label: "Налаштування", badge: undefined },
-  ];
-
   return (
-    <nav className="mb-5 flex gap-4 border-b border-neutral-200 pb-2 text-sm">
-      {tabs.map((tab) => (
-        <NavLink
-          key={tab.to}
-          to={tab.to}
-          end={tab.to === "/"}
-          className={({ isActive }) =>
-            isActive ? "font-medium text-emerald-700" : "text-neutral-500"
-          }
-        >
-          {tab.label}
-          {tab.badge ? (
-            <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">
-              {tab.badge}
-            </span>
-          ) : null}
-        </NavLink>
-      ))}
-    </nav>
+    <AppNav
+      expiring={counts.data?.expiring ?? 0}
+      restock={counts.data?.restock ?? 0}
+      // Feature 32.1 — the tab appears only once the household turns the
+      // helper on. The page and the endpoint both check as well: a hidden link
+      // is presentation, not an access control.
+      aiEnabled={household.data?.aiEnabled ?? false}
+    />
   );
 }

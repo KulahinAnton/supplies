@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Star, X } from "lucide-react";
+import { Button } from "@supplies/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
+import { Input } from "@supplies/ui/input";
+import { Switch } from "@supplies/ui/switch";
+import { cn } from "@supplies/ui/utils";
 import { api } from "../api/client";
 import { keys } from "../api/keys";
 import type { Household, Taxonomy } from "../api/types";
-import { Button, Card, ErrorNote, Spinner } from "../components/ui";
+import { ErrorNote, Spinner } from "../components/feedback";
 
 /**
  * «Налаштування».
@@ -16,6 +22,11 @@ import { Button, Card, ErrorNote, Spinner } from "../components/ui";
  * part rather than an inconvenience. A category with items in it cannot go,
  * because the items would silently lose it — so the refusal is shown as an
  * explanation, not as a failure.
+ *
+ * Phase 2.9 — the Next page also has: adding categories and locations, per
+ * category warn-day overrides, drag-to-reorder, household members and
+ * invites, the Telegram link, and «Надіслати дайджест». Reading and changing
+ * is here; creating is not, yet.
  */
 export function SettingsRoute() {
   const queryClient = useQueryClient();
@@ -58,84 +69,76 @@ export function SettingsRoute() {
   });
 
   if (household.isPending || taxonomy.isPending) return <Spinner />;
+  if (household.isError) return <ErrorNote error={household.error} />;
+  if (taxonomy.isError) return <ErrorNote error={taxonomy.error} />;
   if (!household.data || !taxonomy.data) return null;
+
+  const settings = household.data;
 
   return (
     <div className="space-y-6">
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Господарство</h2>
-        <Card className="space-y-3">
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              Попереджати за (днів)
-              <span className="block text-xs text-neutral-500">
-                Скільки днів наперед вважається «скоро зіпсується»
-              </span>
-            </span>
-            <input
+      <h1 className="text-2xl font-semibold tracking-tight">Налаштування</h1>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Господарство</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0">
+          <Row
+            label="Попереджати за (днів)"
+            hint="Скільки днів наперед вважається «скоро зіпсується»"
+          >
+            <Input
               type="number"
               min={1}
               max={365}
-              defaultValue={household.data.expiryWarnDays}
+              defaultValue={settings.expiryWarnDays}
               onBlur={(e) => {
                 const value = Number(e.target.value);
-                if (value !== household.data?.expiryWarnDays) {
+                if (value !== settings.expiryWarnDays) {
                   saveHousehold.mutate({ expiryWarnDays: value });
                 }
               }}
-              className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              className="w-20"
             />
-          </label>
+          </Row>
 
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              Година щоденного дайджесту
-              <span className="block text-xs text-neutral-500">
-                За київським часом — Telegram-бот надсилає підсумок
-              </span>
-            </span>
-            <input
+          <Row
+            label="Година щоденного дайджесту"
+            hint="За київським часом — Telegram-бот надсилає підсумок"
+          >
+            <Input
               type="number"
               min={0}
               max={23}
-              defaultValue={household.data.digestHour}
+              defaultValue={settings.digestHour}
               onBlur={(e) => {
                 const value = Number(e.target.value);
-                if (value !== household.data?.digestHour) {
+                if (value !== settings.digestHour) {
                   saveHousehold.mutate({ digestHour: value });
                 }
               }}
-              className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              className="w-20"
             />
-          </label>
+          </Row>
 
-          <label className="flex items-center justify-between gap-4">
-            <span className="text-sm">
-              Помічник зі стравами
-              <span className="block text-xs text-neutral-500">
-                Feature 32.1 — вимкнено за замовчуванням, бо кожне натискання
-                коштує грошей
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={household.data.aiEnabled}
-              onChange={(e) => saveHousehold.mutate({ aiEnabled: e.target.checked })}
-              className="size-4"
+          <Row
+            label="Помічник зі стравами"
+            hint="Feature 32.1 — вимкнено за замовчуванням, бо кожне натискання коштує грошей"
+          >
+            <Switch
+              checked={settings.aiEnabled}
+              onCheckedChange={(checked) => saveHousehold.mutate({ aiEnabled: checked })}
             />
-          </label>
+          </Row>
 
           <ErrorNote error={saveHousehold.error} />
-        </Card>
-      </section>
+        </CardContent>
+      </Card>
 
       <TaxonomySection
         title="Категорії"
-        rows={taxonomy.data.categories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          isDefault: c.isDefault,
-        }))}
+        rows={taxonomy.data.categories}
         onRemove={(id) => removeCategory.mutate(id)}
         onStar={(id) => starCategory.mutate(id)}
         error={removeCategory.error ?? starCategory.error}
@@ -143,15 +146,31 @@ export function SettingsRoute() {
 
       <TaxonomySection
         title="Місця зберігання"
-        rows={taxonomy.data.locations.map((l) => ({
-          id: l.id,
-          name: l.name,
-          isDefault: l.isDefault,
-        }))}
+        rows={taxonomy.data.locations}
         onRemove={(id) => removeLocation.mutate(id)}
         error={removeLocation.error}
       />
     </div>
+  );
+}
+
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex items-center justify-between gap-4">
+      <span className="text-sm">
+        {label}
+        <span className="block text-xs text-muted-foreground">{hint}</span>
+      </span>
+      {children}
+    </label>
   );
 }
 
@@ -169,37 +188,51 @@ function TaxonomySection({
   error: unknown;
 }) {
   return (
-    <section className="space-y-2">
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {/* The refusal is the interesting case: a row still in use cannot be
-          deleted, and saying so is more useful than hiding the button. */}
-      <ErrorNote error={error} />
-      <ul className="space-y-2">
-        {rows.map((row) => (
-          <li key={row.id}>
-            <Card className="flex items-center justify-between gap-3 py-2">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 pt-0">
+        {/* The refusal is the interesting case: a row still in use cannot be
+            deleted, and saying so is more useful than hiding the button. */}
+        <ErrorNote error={error} />
+        <ul className="divide-y">
+          {rows.map((row) => (
+            <li key={row.id} className="flex items-center justify-between gap-3 py-1.5">
               <span className="text-sm">
                 {row.name}
                 {row.isDefault ? (
-                  <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                     за замовчуванням
                   </span>
                 ) : null}
               </span>
               <span className="flex gap-1">
                 {onStar ? (
-                  <Button variant="ghost" onClick={() => onStar(row.id)}>
-                    ★
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Зробити типовою"
+                    onClick={() => onStar(row.id)}
+                  >
+                    <Star
+                      className={cn("size-4", row.isDefault && "fill-current text-primary")}
+                    />
                   </Button>
                 ) : null}
-                <Button variant="ghost" onClick={() => onRemove(row.id)}>
-                  ✕
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Видалити"
+                  onClick={() => onRemove(row.id)}
+                >
+                  <X className="size-4" />
                 </Button>
               </span>
-            </Card>
-          </li>
-        ))}
-      </ul>
-    </section>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
   );
 }

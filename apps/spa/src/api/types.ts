@@ -10,7 +10,7 @@
  * JSON has no decimal type. Never `Number()` one for arithmetic — only for
  * display, and only after `@supplies/core/format` has had it.
  */
-import type { Unit } from "@supplies/core/units";
+import type { MovementReason, Unit } from "@supplies/core/units";
 
 export type StockState = "OUT" | "LOW" | "OK";
 export type ExpiryState = "EXPIRED" | "SOON" | "FRESH" | "NONE";
@@ -148,3 +148,66 @@ export type Household = {
   digestHour: number;
   aiEnabled: boolean;
 };
+
+/**
+ * `/api/dashboard` — one request for one screen.
+ *
+ * Everything below the first two fields was already on the wire and the first
+ * pass ignored it, which is how the SPA dashboard ended up with three plain
+ * lists where the Next app shows badges, a warn-days caption and the activity
+ * log. See SPA_API_PORT.md Phase 2.9.
+ */
+export type RestockEntry =
+  | {
+      kind: "item";
+      id: string;
+      name: string;
+      state: StockState;
+      quantity: string;
+      unit: Unit;
+      minQty: string;
+    }
+  | {
+      kind: "group";
+      id: string;
+      name: string;
+      state: StockState;
+      quantity: string;
+      unit: Unit | null;
+      minQty: string;
+      memberCount: number;
+    };
+
+export type Movement = {
+  id: string;
+  reason: MovementReason;
+  delta: string;
+  occurredAt: string;
+  item: { id: string; name: string; unit: Unit };
+  user: { name: string };
+};
+
+export type Dashboard = {
+  /** Feature 13 — the household default, and whether a category overrides it. */
+  expiryWarnDays: number;
+  hasCategoryOverrides: boolean;
+  expiring: ItemView[];
+  restock: RestockEntry[];
+  recent: Movement[];
+};
+
+/**
+ * The same item with `nextExpiry` revived.
+ *
+ * `formatExpiryLabel` and `ExpiryBadge` take a `Date`, because on the server
+ * they are handed a Prisma row. Same argument as `reviveShoppingRow`: sharing
+ * the engine's types means JSON's missing date type shows up as a type error
+ * here rather than as `new Date(undefined)` somewhere downstream.
+ */
+export type RevivedItemView = Omit<ItemView, "nextExpiry"> & {
+  nextExpiry: Date | null;
+};
+
+export function reviveItemView(item: ItemView): RevivedItemView {
+  return { ...item, nextExpiry: item.nextExpiry ? new Date(item.nextExpiry) : null };
+}

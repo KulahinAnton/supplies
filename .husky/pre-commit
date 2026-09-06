@@ -17,6 +17,6 @@ set -e
 
 pnpm exec lint-staged
 pnpm typecheck
-pnpm -r --filter "./apps/*" typecheck
+pnpm -r typecheck
 pnpm test
 pnpm test:api

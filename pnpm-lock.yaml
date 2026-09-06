@@ -160,9 +160,15 @@ importers:
       '@supplies/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@supplies/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.90.2
         version: 5.102.8(react@19.2.8)
+      lucide-react:
+        specifier: ^1.24.0
+        version: 1.32.0(react@19.2.8)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -197,9 +203,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@base-ui/react':
-        specifier: ^1.6.0
-        version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -221,18 +224,15 @@ importers:
       '@supplies/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@supplies/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@zxing/browser':
         specifier: ^0.1.5
         version: 0.1.5(@zxing/library@0.21.3)
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
-      class-variance-authority:
-        specifier: ^0.7.1
-        version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0
@@ -266,12 +266,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
-      tw-animate-css:
-        specifier: ^1.4.0
-        version: 1.4.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -339,6 +333,49 @@ importers:
       '@supplies/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/ui:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.6.0
+        version: 1.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@supplies/core':
+        specifier: workspace:*
+        version: link:../core
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^1.24.0
+        version: 1.32.0(react@19.2.8)
+      react-dom:
+        specifier: ^19
+        version: 19.2.8(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+      tailwindcss:
+        specifier: ^4
+        version: 4.3.3
+      tw-animate-css:
+        specifier: ^1.4.0
+        version: 1.4.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.4(@types/react@19.2.18)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
 packages:
 

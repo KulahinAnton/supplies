@@ -3,7 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Supplies</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Запаси</title>
+    <script>
+      /*
+        Sets `.dark` before the first paint.
+
+        Without it a dark-mode visitor gets one white frame on every load,
+        because React cannot run until the bundle has. This is what
+        `next-themes` injects into the Next app's document for the same
+        reason; `src/components/theme.tsx` keeps it in step afterwards.
+
+        Inline and blocking on purpose — deferring it is the flash.
+      */
+      (function () {
+        try {
+          var stored = localStorage.getItem("supplies-theme");
+          var dark =
+            stored === "dark" ||
+            ((stored === "system" || stored === null) &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* Storage blocked; light is the correct fallback. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

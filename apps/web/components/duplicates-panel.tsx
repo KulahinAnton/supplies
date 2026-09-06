@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Copy } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
 import type { NamedItem } from "@supplies/core/duplicates";
 
 /**

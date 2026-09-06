@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "./utils";
 import type { ExpiryState } from "@supplies/core/expiry";
 import type { StockState } from "@supplies/core/stock";
 import { formatExpiryLabel } from "@supplies/core/format";

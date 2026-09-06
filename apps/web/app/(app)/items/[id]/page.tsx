@@ -8,9 +8,9 @@ import { sanitizeListSearch } from "@supplies/core/item-list-params";
 import { todayUTC } from "@supplies/core/period";
 import { formatDate, formatDateTime, formatQuantityWithUnit } from "@supplies/core/format";
 import { fefoOrder } from "@supplies/core/stock";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExpiryBadge, StockBadge } from "@/components/state-badges";
+import { Button } from "@supplies/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
+import { ExpiryBadge, StockBadge } from "@supplies/ui/state-badges";
 import { BatchActions, ItemActions } from "@/components/item-actions";
 import { ItemArchiveButton } from "@/components/item-archive-button";
 

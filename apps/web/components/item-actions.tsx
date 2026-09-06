@@ -4,16 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Minus, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@supplies/ui/dialog";
 import { AddStockForm } from "@/components/add-stock-form";
 import {
   consumeAction,

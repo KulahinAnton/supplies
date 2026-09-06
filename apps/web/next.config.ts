@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
    * build step in between and no chance of a stale artefact. The cost is this
    * line: Next has to be told to compile them like first-party code.
    */
-  transpilePackages: ["@supplies/core", "@supplies/db", "@supplies/bot"],
+  transpilePackages: ["@supplies/core", "@supplies/db", "@supplies/bot", "@supplies/ui"],
 };
 
 export default nextConfig;

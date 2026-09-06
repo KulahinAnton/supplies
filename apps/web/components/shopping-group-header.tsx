@@ -4,20 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@supplies/ui/dropdown-menu";
 import {
   deleteShoppingGroupAction,
   renameShoppingGroupAction,
 } from "@/lib/actions/shopping-groups";
 import { renderMessage } from "@supplies/core/messages";
-import { cn } from "@/lib/utils";
+import { cn } from "@supplies/ui/utils";
 
 /**
  * Feature 11 — a group heading: collapse toggle, count, and (for named groups)

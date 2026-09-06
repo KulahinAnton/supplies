@@ -1,10 +1,13 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { ChefHat } from "lucide-react";
 import { Link } from "react-router";
+import { formatUsd } from "@supplies/core/format";
+import { Button } from "@supplies/ui/button";
+import { Card, CardContent } from "@supplies/ui/card";
 import { api, type ApiError } from "../api/client";
 import { keys } from "../api/keys";
 import type { Household } from "../api/types";
-import { formatUsd } from "@supplies/core/format";
-import { Button, Card, ErrorNote, Spinner } from "../components/ui";
+import { ErrorNote, Spinner } from "../components/feedback";
 
 type RecipeSuggestion = {
   text: string;
@@ -37,15 +40,17 @@ export function RecipesRoute() {
 
   if (!household.data?.aiEnabled) {
     return (
-      <Card className="space-y-2">
-        <p className="text-sm">Помічник зі стравами вимкнено.</p>
-        <p className="text-sm text-neutral-500">
-          Увімкніть його в{" "}
-          <Link to="/settings" className="text-emerald-700 hover:underline">
-            налаштуваннях
-          </Link>
-          .
-        </p>
+      <Card>
+        <CardContent className="space-y-2">
+          <p className="text-sm">Помічник зі стравами вимкнено.</p>
+          <p className="text-sm text-muted-foreground">
+            Увімкніть його в{" "}
+            <Link to="/settings" className="text-primary hover:underline">
+              налаштуваннях
+            </Link>
+            .
+          </p>
+        </CardContent>
       </Card>
     );
   }
@@ -56,17 +61,18 @@ export function RecipesRoute() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Рецепти</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Одна страва з того, що є вдома. Прострочене не пропонується.
         </p>
       </div>
 
       <Button onClick={() => suggest.mutate()} disabled={suggest.isPending}>
+        <ChefHat className="size-4" />
         {suggest.isPending ? "Думаємо…" : "Що приготувати?"}
       </Button>
 
       {rateLimited ? (
-        <p className="text-sm text-amber-700">
+        <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground dark:text-warning">
           Забагато запитів поспіль — спробуйте за хвилину.
         </p>
       ) : (
@@ -74,19 +80,21 @@ export function RecipesRoute() {
       )}
 
       {suggest.data ? (
-        <Card className="space-y-3">
-          {/* The model's own layout, kept as it came. A recipe is prose with a
-              shape, and every parser for that shape is wrong eventually. */}
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {suggest.data.text}
-          </p>
-          <p className="text-xs text-neutral-500">
-            Надіслано {suggest.data.usage.input} токенів (ваш список), отримано{" "}
-            {suggest.data.usage.output} (рецепт)
-            {suggest.data.costUsd !== null
-              ? ` · приблизно ${formatUsd(suggest.data.costUsd)}`
-              : null}
-          </p>
+        <Card>
+          <CardContent className="space-y-3">
+            {/* The model's own layout, kept as it came. A recipe is prose with
+                a shape, and every parser for that shape is wrong eventually. */}
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+              {suggest.data.text}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Надіслано {suggest.data.usage.input} токенів (ваш список), отримано{" "}
+              {suggest.data.usage.output} (рецепт)
+              {suggest.data.costUsd !== null
+                ? ` · приблизно ${formatUsd(suggest.data.costUsd)}`
+                : null}
+            </p>
+          </CardContent>
         </Card>
       ) : null}
     </div>

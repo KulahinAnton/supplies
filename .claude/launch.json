@@ -2,10 +2,22 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "supplies-dev",
+      "name": "supplies-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev"],
       "port": 3000
+    },
+    {
+      "name": "supplies-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["api:dev"],
+      "port": 3200
+    },
+    {
+      "name": "supplies-spa",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["spa:dev"],
+      "port": 5173
     }
   ]
 }

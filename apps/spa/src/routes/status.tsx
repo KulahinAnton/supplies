@@ -36,8 +36,8 @@ export function StatusRoute() {
     <div className="space-y-6">
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Стан API</h2>
-        <p className="text-sm text-neutral-500">
-          <code className="rounded bg-neutral-100 px-1.5 py-0.5">{API_URL}</code>
+        <p className="text-sm text-muted-foreground">
+          <code className="rounded bg-muted px-1.5 py-0.5">{API_URL}</code>
         </p>
 
         <dl className="grid gap-2 sm:grid-cols-2">
@@ -60,7 +60,7 @@ export function StatusRoute() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Одиниці з API</h2>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           Список приходить з <code>@supplies/core/units</code> — той самий, який
           валідують zod-схеми.
         </p>
@@ -71,7 +71,7 @@ export function StatusRoute() {
             {(meta.data?.units ?? []).map((unit) => (
               <li
                 key={unit}
-                className="rounded-full border border-neutral-200 px-3 py-1 text-sm"
+                className="rounded-full border border-border px-3 py-1 text-sm"
               >
                 {unit}
               </li>
@@ -82,7 +82,7 @@ export function StatusRoute() {
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Рушій у браузері</h2>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           Відформатовано через <code>@supplies/core/format</code>, без Prisma в
           бандлі:
         </p>
@@ -106,15 +106,15 @@ function Row({
   detail?: string;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-200 p-3">
-      <dt className="text-xs uppercase tracking-wide text-neutral-500">{label}</dt>
+    <div className="rounded-lg border border-border p-3">
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-1 flex items-baseline gap-2">
         <span
-          className={`inline-block size-2 rounded-full ${ok ? "bg-emerald-500" : "bg-neutral-300"}`}
+          className={`inline-block size-2 rounded-full ${ok ? "bg-success" : "bg-muted-foreground/40"}`}
           aria-hidden
         />
         <span className="font-medium">{state}</span>
-        {detail ? <span className="text-sm text-neutral-500">{detail}</span> : null}
+        {detail ? <span className="text-sm text-muted-foreground">{detail}</span> : null}
       </dd>
     </div>
   );

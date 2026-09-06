@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
 import {
   SettingsListPanel,
   type SettingsRow,

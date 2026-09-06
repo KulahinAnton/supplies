@@ -3,7 +3,7 @@ import { Boxes, ChevronRight } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getItemGroupViews } from "@supplies/db/queries";
 import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
-import { Button } from "@/components/ui/button";
+import { Button } from "@supplies/ui/button";
 
 export default async function GroupsPage() {
   const session = await requireSession();

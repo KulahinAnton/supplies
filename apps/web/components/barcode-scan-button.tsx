@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ScanLine, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@supplies/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@supplies/ui/dialog";
 
 /**
  * Feature 10 — decoding happens entirely in the browser. Only the digits ever

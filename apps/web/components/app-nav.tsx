@@ -9,7 +9,7 @@ import {
   Settings,
   ShoppingCart,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@supplies/ui/utils";
 
 /**
  * The attention counts ride in the nav so the family can see from any page

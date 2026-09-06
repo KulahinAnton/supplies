@@ -1,13 +1,17 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
+import { MESSAGES, type MessageKey } from "@supplies/core/messages";
+import { UNITS, type Unit } from "@supplies/core/units";
+import { itemSchema } from "@supplies/core/validation/item";
+import { Button } from "@supplies/ui/button";
+import { Card, CardContent } from "@supplies/ui/card";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
 import { api } from "../api/client";
 import { keys, stockWriteInvalidates } from "../api/keys";
 import type { ItemDetail, Taxonomy } from "../api/types";
-import { UNITS, type Unit } from "@supplies/core/units";
-import { itemSchema } from "@supplies/core/validation/item";
-import { MESSAGES, type MessageKey } from "@supplies/core/messages";
-import { Button, Card, ErrorNote, Spinner } from "../components/ui";
+import { ErrorNote, Spinner } from "../components/feedback";
 
 /**
  * Create and edit, one form.
@@ -30,6 +34,18 @@ const UNIT_LABELS: Record<Unit, string> = {
   MILLILITRE: "мл",
   LITRE: "л",
 };
+
+/**
+ * A plain `<select>`, not the `Select` primitive.
+ *
+ * The Next form uses shadcn's, and matching it is on the Phase 2.9 list — but
+ * `select` was one of the twelve primitives deleted when `packages/ui` was
+ * extracted, and re-adding it belongs in the commit that actually aligns this
+ * screen rather than in the one that moves the files. Styled with the same
+ * tokens meanwhile, so it does not look like a different app.
+ */
+const SELECT_CLASS =
+  "h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
 
 type FormState = {
   name: string;
@@ -166,110 +182,113 @@ function ItemForm({
     }
     save.mutate(payload);
   }
+
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight">
         {editing ? "Редагувати товар" : "Новий товар"}
       </h1>
 
-      <Card className="space-y-4">
-        <Field label="Назва">
-          <input
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </Field>
+      <Card>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Назва</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </div>
 
-        <Field label="Категорія">
-          <select
-            value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          >
-            {taxonomy.categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <Field label="Місце зберігання">
-          <select
-            value={form.locationId}
-            onChange={(e) => setForm({ ...form, locationId: e.target.value })}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          >
-            <option value="">—</option>
-            {taxonomy.locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Одиниця">
-            {/* §3.2 — locked once the item has batches, because changing it
-                would silently reinterpret every quantity already recorded. The
-                API refuses it; disabling it here means nobody is invited to
-                make a change that cannot be saved. */}
+          <div className="space-y-2">
+            <Label htmlFor="category">Категорія</Label>
             <select
-              value={form.unit}
-              disabled={unitLocked}
-              onChange={(e) => setForm({ ...form, unit: e.target.value as Unit })}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100"
+              id="category"
+              value={form.categoryId}
+              onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+              className={SELECT_CLASS}
             >
-              {UNITS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {UNIT_LABELS[unit]}
+              {taxonomy.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
                 </option>
               ))}
             </select>
-          </Field>
+          </div>
 
-          <Field label="Мінімум (0 — не нагадувати)">
-            <input
-              inputMode="decimal"
-              value={form.minQty}
-              onChange={(e) => setForm({ ...form, minQty: e.target.value })}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          <div className="space-y-2">
+            <Label htmlFor="location">Місце зберігання</Label>
+            <select
+              id="location"
+              value={form.locationId}
+              onChange={(e) => setForm({ ...form, locationId: e.target.value })}
+              className={SELECT_CLASS}
+            >
+              <option value="">—</option>
+              {taxonomy.locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="unit">Одиниця</Label>
+              {/* §3.2 — locked once the item has batches, because changing it
+                  would silently reinterpret every quantity already recorded.
+                  The API refuses it; disabling it here means nobody is invited
+                  to make a change that cannot be saved. */}
+              <select
+                id="unit"
+                value={form.unit}
+                disabled={unitLocked}
+                onChange={(e) => setForm({ ...form, unit: e.target.value as Unit })}
+                className={SELECT_CLASS}
+              >
+                {UNITS.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {UNIT_LABELS[unit]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="minQty">Мінімум (0 — не нагадувати)</Label>
+              <Input
+                id="minQty"
+                inputMode="decimal"
+                value={form.minQty}
+                onChange={(e) => setForm({ ...form, minQty: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="barcode">Штрихкод</Label>
+            <Input
+              id="barcode"
+              inputMode="numeric"
+              value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
             />
-          </Field>
-        </div>
+          </div>
 
-        <Field label="Штрихкод">
-          <input
-            inputMode="numeric"
-            value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </Field>
+          {issue ? <p className="text-sm text-destructive">{MESSAGES[issue]}</p> : null}
+          <ErrorNote error={save.error} />
 
-        {issue ? <p className="text-sm text-red-600">{MESSAGES[issue]}</p> : null}
-        <ErrorNote error={save.error} />
-
-        <div className="flex gap-2">
-          <Button onClick={submit} disabled={save.isPending}>
-            Зберегти
-          </Button>
-          <Button variant="ghost" onClick={() => void navigate(-1)}>
-            Скасувати
-          </Button>
-        </div>
+          <div className="flex gap-2">
+            <Button onClick={submit} disabled={save.isPending}>
+              Зберегти
+            </Button>
+            <Button variant="outline" onClick={() => void navigate(-1)}>
+              Скасувати
+            </Button>
+          </div>
+        </CardContent>
       </Card>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium">{label}</span>
-      {children}
-    </label>
   );
 }

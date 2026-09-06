@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Copy, ExternalLink, Send } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
+import { Switch } from "@supplies/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
 import { changePasswordAction, createInviteAction } from "@/lib/actions/auth";
 import {
   createTelegramLinkAction,

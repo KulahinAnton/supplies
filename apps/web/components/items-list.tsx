@@ -13,16 +13,16 @@ import {
 } from "lucide-react";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { findItemByBarcodeAction } from "@/lib/actions/barcode";
-import { Button } from "@/components/ui/button";
+import { Button } from "@supplies/ui/button";
 import { renderMessage } from "@supplies/core/messages";
-import { Input } from "@/components/ui/input";
+import { Input } from "@supplies/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ExpiryBadge, StockBadge } from "@/components/state-badges";
+} from "@supplies/ui/dropdown-menu";
+import { ExpiryBadge, StockBadge } from "@supplies/ui/state-badges";
 import { useItemSort } from "@/hooks/use-item-sort";
 import {
   itemListSearch,
@@ -35,7 +35,7 @@ import {
 import { ITEM_SORTS, ITEM_SORT_LABELS } from "@supplies/core/item-sort";
 import type { ExpiryState } from "@supplies/core/expiry";
 import type { StockState } from "@supplies/core/stock";
-import { cn } from "@/lib/utils";
+import { cn } from "@supplies/ui/utils";
 
 /**
  * Serialised `ItemView` — Decimal does not survive the server/client boundary,

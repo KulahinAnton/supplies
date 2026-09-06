@@ -1,32 +1,65 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
+import { MESSAGES, type MessageKey } from "@supplies/core/messages";
+import { loginSchema } from "@supplies/core/validation/auth";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
 import { useAuth } from "../auth/auth-context";
-import { Button, ErrorNote } from "../components/ui";
+import { AuthPageShell } from "../components/auth-page-shell";
+import { ErrorNote } from "../components/feedback";
 
 /**
- * The web app's login form, ported. What changed is the submit: a server action
- * became a mutation against `/api/auth/login`, and the redirect is React
- * Router's rather than Next's.
+ * «Вхід» — ported from `apps/web/components/login-form.tsx` inside
+ * `AuthPageShell`.
  *
- * The copy is unchanged, and deliberately so — «Невірна пошта або пароль»
- * arrives from the API as a message key and renders identically here, because
- * both read one catalogue (PROJECT_PROMPT.md §8).
+ * Validated with `loginSchema` from `@supplies/core/validation/auth`, the same
+ * object the Next form resolves against and the same one the API checks the
+ * request with. Its messages are KEYS, so they render through `MESSAGES` here
+ * exactly as they do there — one catalogue, three clients (§8).
+ *
+ * `useState` rather than react-hook-form: the SPA has two fields and no reason
+ * to carry a form library for them. That is a dependency difference, not a
+ * behavioural one — the schema, the messages and the copy are identical.
  */
+function messageFor(key?: string): string | undefined {
+  if (!key) return undefined;
+  return MESSAGES[key as MessageKey] ?? key;
+}
+
 export function LoginRoute() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [issues, setIssues] = useState<{ email?: string; password?: string }>({});
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
     setError(null);
+
+    // Checked here as well as on the server, with the same schema, so a typo
+    // in an address is answered next to the field instead of after a round trip.
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      const next: { email?: string; password?: string } = {};
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (field === "email" || field === "password") {
+          next[field] ??= messageFor(issue.message);
+        }
+      }
+      setIssues(next);
+      return;
+    }
+
+    setIssues({});
+    setBusy(true);
     try {
-      await signIn(email, password);
-      void navigate("/", { replace: true });
+      await signIn(parsed.data.email, parsed.data.password);
+      void navigate("/dashboard", { replace: true });
     } catch (cause) {
       setError(cause);
     } finally {
@@ -35,43 +68,46 @@ export function LoginRoute() {
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="mx-auto max-w-sm space-y-4 pt-10">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Вхід</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Той самий акаунт, що й у вебзастосунку та Telegram-боті.
-        </p>
-      </div>
+    <AuthPageShell
+      title="Вхід"
+      subtitle="Той самий акаунт, що й у вебзастосунку та Telegram-боті."
+    >
+      <form onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
+        <div className="space-y-2">
+          <Label htmlFor="email">Пошта</Label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            inputMode="email"
+          />
+          {issues.email ? (
+            <p className="text-sm text-destructive">{issues.email}</p>
+          ) : null}
+        </div>
 
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Пошта</span>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-          required
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        />
-      </label>
+        <div className="space-y-2">
+          <Label htmlFor="password">Пароль</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+          />
+          {issues.password ? (
+            <p className="text-sm text-destructive">{issues.password}</p>
+          ) : null}
+        </div>
 
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Пароль</span>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          required
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        />
-      </label>
+        <ErrorNote error={error} />
 
-      <ErrorNote error={error} />
-
-      <Button type="submit" disabled={busy}>
-        {busy ? "Входимо…" : "Увійти"}
-      </Button>
-    </form>
+        <Button type="submit" className="w-full" disabled={busy}>
+          {busy ? "Входимо…" : "Увійти"}
+        </Button>
+      </form>
+    </AuthPageShell>
   );
 }

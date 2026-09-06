@@ -4,9 +4,9 @@ import { ArrowLeft } from "lucide-react";
 import { requireSession } from "@/lib/auth-guard";
 import { getItemGroupDetail } from "@supplies/db/queries";
 import { formatQuantityWithUnit, UNIT_SHORT } from "@supplies/core/format";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { StockBadge } from "@/components/state-badges";
+import { Button } from "@supplies/ui/button";
+import { Card, CardContent } from "@supplies/ui/card";
+import { StockBadge } from "@supplies/ui/state-badges";
 import { GroupMembers } from "@/components/group-members";
 
 export default async function GroupDetailPage({

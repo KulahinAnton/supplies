@@ -7,10 +7,10 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import type { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
+import { Textarea } from "@supplies/ui/textarea";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import { createItemAction, updateItemAction } from "@/lib/actions/items";
 import {

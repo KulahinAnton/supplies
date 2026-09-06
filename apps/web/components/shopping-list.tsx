@@ -28,23 +28,23 @@ import {
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Label } from "@supplies/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@supplies/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+} from "@supplies/ui/dropdown-menu";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
 import { ShoppingGroupHeader } from "@/components/shopping-group-header";
 import { ShoppingRowEditDialog } from "@/components/shopping-row-edit";
 import {
@@ -70,7 +70,7 @@ import { renderMessage } from "@supplies/core/messages";
 import { UNIT_SHORT } from "@supplies/core/format";
 import { useCollapsedGroups } from "@/hooks/use-collapsed-groups";
 import { useShownArchived } from "@/hooks/use-shown-archived";
-import { cn } from "@/lib/utils";
+import { cn } from "@supplies/ui/utils";
 import type { Unit } from "@supplies/core/units";
 
 export type ListRow = {

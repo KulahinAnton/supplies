@@ -2,7 +2,7 @@
 
 import { signOut } from "next-auth/react";
 import { LogOut, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@supplies/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +11,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@supplies/ui/dropdown-menu";
 
 export function UserMenu({ name, email }: { name: string; email: string }) {
   return (

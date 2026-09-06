@@ -443,25 +443,26 @@ Two rules for the work, because they change what "aligned" means:
   second implementation of a rule, and it is the exact failure this whole plan
   exists to prevent — it just slipped in through the view layer.
 
-| # | Screen | Gap |
-|---|---|---|
-| — | *design system* | SPA has 4 hand-rolled components and a bare palette against 22 primitives + tokens + dark mode → `packages/ui` (§4.3) |
-| — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` |
-| 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows link to a page that does not exist; no minimum shown |
-| 2 | items | to audit |
-| 3 | item detail | to audit |
-| 4 | item form | to audit |
-| 5 | shopping | to audit |
-| 6 | settings | to audit |
-| 7 | recipes | to audit |
-| 8 | groups + group detail | **missing entirely** |
-| 9 | items archive | **missing entirely** |
-| 10 | register · join · forgot · reset | **missing entirely** — 4 public routes |
+| # | Screen | Gap | State |
+|---|---|---|---|
+| — | *design system* | SPA had 4 hand-rolled components and a bare palette against 22 primitives + tokens + dark mode | **done** — `packages/ui` (§4.3) |
+| — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` | **done** |
+| 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
+| 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
+| 3 | items | on the design system, with dated badges and «Новий товар». Still missing: sort control, barcode scan, archive toggle, pagination controls | partial |
+| 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
+| 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
+| 6 | shopping | on the design system. Still missing: drag-to-reorder, per-row quantity edit, archived view | partial |
+| 7 | settings | on the design system, with `Switch`. Still missing: adding categories and locations, per-category warn-day overrides, reorder, members, invites, Telegram link, «Надіслати дайджест» | partial |
+| 8 | recipes | matched | **done** |
+| 9 | groups + group detail | **missing entirely** | to do |
+| 10 | items archive | **missing entirely** | to do |
+| 11 | register · join · forgot · reset | **missing entirely** — 4 public routes | to do |
 
-Screens 2–7 say "to audit" rather than guessing: each is read against its Next
-counterpart when its turn comes, and the row is filled in with what was
-actually found. A checklist written from memory is a checklist that misses
-things.
+Rows 3–7 were audited against their Next counterparts rather than guessed, and
+what is listed is what was actually found. They are on the shared design system
+and read as the same product; the remainder is content, and each gets its own
+pass.
 
 ### Phase 3 — React Native, Android · 3–4 weeks
 
@@ -921,6 +922,37 @@ Four things the move forced, each worth more than the tidiness:
   second had been dead the whole time: it is a Pages Router rule and this is an
   App Router app. Both are now settled explicitly rather than by coincidence of
   layout.
+
+### Phase 2.9 — `packages/ui`, the shell, the dashboard · 2026-09-06
+
+Twenty-one primitives moved out of `apps/web/components/ui` unchanged, plus
+`state-badges` and `cn`. Twelve that `shadcn add` had installed and nothing
+ever imported were deleted rather than carried — `alert`, `avatar`, `badge`,
+`checkbox`, `field`, `popover`, `select`, `sheet`, `skeleton`, `table`, `tabs`,
+`tooltip`. `sonner` stayed in the Next app because it reads `next-themes`.
+
+Both apps now `@import "@supplies/ui/theme.css"`. The SPA's stylesheet before
+this was one line: `@import "tailwindcss"`.
+
+Verified by running all three against one database — sign in on the SPA, the
+dashboard renders the same words the Next app renders, «Взяли» takes 130 to
+129, «Поповнити» puts it back. Dark mode works in both.
+
+Three things worth keeping:
+
+- **A CSS import needs a `style` condition.** `"./theme.css": "./src/theme.css"`
+  does not resolve; Tailwind resolves `@import`s itself and looks for `style`.
+  The failure is loud, which is lucky — the neighbouring failure mode is a
+  stylesheet that compiles, is valid, and has no tokens in it.
+- **`@source "."` belongs in the package.** Tailwind's content detection skips
+  `node_modules`, which is where a linked workspace package lives. Declared in
+  `theme.css`, every consumer gets it by importing the theme.
+- **`Button render={<Link/>}` needs `nativeButton={false}`.** Found by reading
+  the browser console after the screens rendered, not by any test. The Next app
+  already does this in eight places; the port had dropped it.
+
+The SPA bundle went from 400 kB to 590 kB (127 → 192 kB gzipped) — Base UI and
+lucide. Worth a code-split before the deploy in Phase 4, not before.
 
 ### Phases 3–5 — not started
 

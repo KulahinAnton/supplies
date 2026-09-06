@@ -20,12 +20,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@supplies/ui/card";
 import { moveIdInList } from "@supplies/core/ordering";
 import { renderMessage, type RuleMessage } from "@supplies/core/messages";
-import { cn } from "@/lib/utils";
+import { cn } from "@supplies/ui/utils";
 
 export type SettingsRow = {
   id: string;

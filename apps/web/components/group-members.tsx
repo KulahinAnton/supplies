@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@supplies/ui/button";
+import { Input } from "@supplies/ui/input";
 import { BarcodeScanButton } from "@/components/barcode-scan-button";
 import {
   addItemToGroupAction,
