@@ -34,8 +34,27 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
+    /*
+      `suppressHydrationWarning` on BOTH elements, for two different reasons.
+
+      On <html> it is ours: next-themes writes `class="dark"` before React
+      hydrates, which is the whole point of it — the alternative is a white
+      flash on every load for anyone using dark mode.
+
+      On <body> it is not ours. Browser extensions attach their own attributes
+      to <body> before React runs — ColorZilla's `cz-shortcut-listen`, Grammarly's
+      `data-gr-*`, and others — and every one of them reports as a hydration
+      mismatch that no change to this codebase can fix.
+
+      This is narrower than it looks: the flag covers an element's OWN
+      attributes and text, one level deep. It does not extend to children, so a
+      real mismatch anywhere inside the app is still reported.
+    */
     <html lang="uk" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        suppressHydrationWarning
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <ThemeProvider>
           {children}
           <Toaster position="top-center" richColors />
