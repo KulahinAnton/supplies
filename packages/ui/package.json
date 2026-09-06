@@ -11,7 +11,10 @@
       "default": "./src/theme.css"
     },
     "./utils": "./src/utils.ts",
+    "./id-set-store": "./src/id-set-store.ts",
+    "./use-collapsed-groups": "./src/use-collapsed-groups.ts",
     "./use-item-sort": "./src/use-item-sort.ts",
+    "./use-shown-archived": "./src/use-shown-archived.ts",
     "./*": "./src/*.tsx"
   },
   "dependencies": {

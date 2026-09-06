@@ -68,8 +68,8 @@ import {
 } from "@supplies/core/shopping-groups";
 import { renderMessage } from "@supplies/core/messages";
 import { UNIT_SHORT } from "@supplies/core/format";
-import { useCollapsedGroups } from "@/hooks/use-collapsed-groups";
-import { useShownArchived } from "@/hooks/use-shown-archived";
+import { useCollapsedGroups } from "@supplies/ui/use-collapsed-groups";
+import { useShownArchived } from "@supplies/ui/use-shown-archived";
 import { cn } from "@supplies/ui/utils";
 import type { Unit } from "@supplies/core/units";
 

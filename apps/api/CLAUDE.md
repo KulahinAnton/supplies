@@ -95,3 +95,21 @@ it is plugged in.
 
 It mutates the demo household and puts back what it changed, so it runs twice in
 a row.
+
+**It also signs you out.** The refresh-replay check revokes every session for
+`anton@example.com` on purpose — that is Feature 34's theft response — so a
+browser logged in as the demo user is logged out whenever the suite runs. Log
+back in; nothing is broken.
+
+## No handler sees an undefined body
+
+`EmptyBodyPipe` is registered globally and turns an absent request body into
+`{}`. Several endpoints take a body whose fields are all optional, so a client
+with nothing to say sends nothing — and Fastify hands that to Nest as
+`undefined`, which made `body.archived` a `TypeError` and a **500** for a
+perfectly valid request. Nine handlers had that shape; ticking a free-text row
+off in the SPA is what found it.
+
+It is scoped to `body`. A missing `@Param` or `@Query` is a different situation
+with different right answers, and quietly turning either into `{}` would hide a
+routing mistake rather than a client's silence.

@@ -90,3 +90,11 @@ export {
   suggestRecipe,
   type RecipeSuggestion,
 } from "../../../packages/db/src/recipes-service";
+
+export {
+  createShoppingGroup,
+  deleteShoppingGroup,
+  moveListRowToGroup,
+  renameShoppingGroup,
+  reorderShoppingGroups,
+} from "../../../packages/db/src/shopping-groups-service";

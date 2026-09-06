@@ -7,6 +7,7 @@ import {
 import cookie from "@fastify/cookie";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
+import { EmptyBodyPipe } from "./common/empty-body.pipe";
 import { RuleErrorFilter } from "./common/rule-error.filter";
 
 /**
@@ -53,6 +54,7 @@ beforeAll(async () => {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
   await app.register(cookie, { secret: process.env.API_JWT_SECRET ?? "test-secret" });
+  app.useGlobalPipes(new EmptyBodyPipe());
   app.useGlobalFilters(new RuleErrorFilter());
   app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
   await app.init();
@@ -421,5 +423,197 @@ describe("the items list URL", () => {
     const page = body as unknown as { page: number; rows: unknown[] };
     expect(page.page).toBe(1);
     expect(page.rows.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Feature 11 — the shopping groups, which had lived only in the Next app's
+ * server actions until the SPA needed them.
+ *
+ * The interesting rules are the two that are easy to get wrong in a second
+ * implementation: «Загальна група» is `groupId = null` and not a row, and
+ * deleting a group returns its rows to that default rather than destroying
+ * them. Both are now in `@supplies/db/shopping-groups-service`, and these
+ * check them over HTTP.
+ */
+
+/**
+ * `addListRow` answers `{ ok: true }` and no id — the web form never needed
+ * one, because the page re-renders the whole list afterwards. A client that
+ * wants the row it just created reads the list back, which is what this does.
+ */
+async function addRowAndFind(
+  token: string,
+  body: { freeText: string; groupId?: string },
+): Promise<{ id: string; groupId: string | null }> {
+  await request("POST", "/api/shopping", { token, body });
+
+  const { body: list } = await request("GET", "/api/shopping", { token });
+  const rows = (list as unknown as {
+    rows: { id: string; freeText: string | null; groupId: string | null }[];
+  }).rows;
+
+  // Last match wins: these run against a shared demo household that may
+  // already hold a row with the same text from an earlier run.
+  const found = [...rows].reverse().find((row) => row.freeText === body.freeText);
+  if (!found) throw new Error(`row not found after adding: ${body.freeText}`);
+  return { id: found.id, groupId: found.groupId };
+}
+
+describe("shopping groups, over HTTP", () => {
+  it("creates, refuses the duplicate name, renames, and deletes", async () => {
+    const { accessToken } = await signIn();
+    const name = `Тест ${Date.now()}`;
+
+    const created = await request("POST", "/api/shopping-groups", {
+      token: accessToken,
+      body: { name },
+    });
+    expect(created.status).toBe(201);
+    const { id } = created.body as unknown as { id: string };
+
+    const clash = await request("POST", "/api/shopping-groups", {
+      token: accessToken,
+      body: { name },
+    });
+    // A rule refusal, not a crash: well-formed request, declined.
+    expect(clash.status).toBe(422);
+    expect(clash.body).toMatchObject({ key: "shoppingGroup.nameTaken" });
+
+    const blank = await request("POST", "/api/shopping-groups", {
+      token: accessToken,
+      body: { name: "   " },
+    });
+    expect(blank.body).toMatchObject({ key: "shoppingGroup.nameRequired" });
+
+    const renamed = await request("PATCH", `/api/shopping-groups/${id}`, {
+      token: accessToken,
+      body: { name: `${name} (2)` },
+    });
+    expect(renamed.status).toBe(200);
+
+    const removed = await request("DELETE", `/api/shopping-groups/${id}`, {
+      token: accessToken,
+    });
+    expect(removed.status).toBe(200);
+  });
+
+  it("returns a deleted group's rows to «Загальна група» rather than losing them", async () => {
+    const { accessToken } = await signIn();
+    const name = `Тест ${Date.now()}`;
+
+    const created = await request("POST", "/api/shopping-groups", {
+      token: accessToken,
+      body: { name },
+    });
+    const { id: groupId } = created.body as unknown as { id: string };
+
+    const { id: rowId } = await addRowAndFind(accessToken, {
+      freeText: "Свічки",
+      groupId,
+    });
+
+    await request("DELETE", `/api/shopping-groups/${groupId}`, { token: accessToken });
+
+    const after = await request("GET", "/api/shopping", { token: accessToken });
+    const rows = (after.body as unknown as { rows: { id: string; groupId: string | null }[] })
+      .rows;
+    const survivor = rows.find((r) => r.id === rowId);
+
+    // The row is still there, and back in the default group — which is null,
+    // not an id. That is the whole of Feature 11 in one assertion.
+    expect(survivor).toBeDefined();
+    expect(survivor?.groupId).toBeNull();
+
+    await request("DELETE", `/api/shopping/${rowId}`, { token: accessToken });
+  });
+
+  it("routes /shopping-groups/rows/:id/move to the move handler, not to :id", async () => {
+    const { accessToken } = await signIn();
+    const name = `Тест ${Date.now()}`;
+
+    const created = await request("POST", "/api/shopping-groups", {
+      token: accessToken,
+      body: { name },
+    });
+    const { id: groupId } = created.body as unknown as { id: string };
+
+    const { id: rowId } = await addRowAndFind(accessToken, { freeText: "Батарейки" });
+
+    const moved = await request("POST", `/api/shopping-groups/rows/${rowId}/move`, {
+      token: accessToken,
+      body: { groupId },
+    });
+    expect(moved.status).toBe(201);
+
+    const after = await request("GET", "/api/shopping", { token: accessToken });
+    const rows = (after.body as unknown as { rows: { id: string; groupId: string | null }[] })
+      .rows;
+    expect(rows.find((r) => r.id === rowId)?.groupId).toBe(groupId);
+
+    await request("DELETE", `/api/shopping/${rowId}`, { token: accessToken });
+    await request("DELETE", `/api/shopping-groups/${groupId}`, { token: accessToken });
+  });
+
+  it("refuses to file a row into another household's group", async () => {
+    const { accessToken } = await signIn();
+
+    const { id: rowId } = await addRowAndFind(accessToken, { freeText: "Скотч" });
+
+    const forged = await request("POST", `/api/shopping-groups/rows/${rowId}/move`, {
+      token: accessToken,
+      body: { groupId: "00000000-0000-0000-0000-000000000000" },
+    });
+    expect(forged.body).toMatchObject({ key: "shoppingGroup.notFound" });
+
+    await request("DELETE", `/api/shopping/${rowId}`, { token: accessToken });
+  });
+});
+
+/**
+ * A POST with no body at all must never be a 500.
+ *
+ * Several endpoints take a body whose fields are all optional, so a client
+ * with nothing to say sends nothing. Fastify hands Nest `undefined` for that,
+ * and `body.archived` on `undefined` throws — a server error for a request
+ * that was perfectly valid. `EmptyBodyPipe` normalises it to `{}` globally;
+ * these are the two that were actually reachable from a screen.
+ */
+describe("a POST with no body", () => {
+  it("ticks a free-text row off and back, rather than erroring", async () => {
+    const { accessToken } = await signIn();
+    const { id } = await addRowAndFind(accessToken, { freeText: "Сірники" });
+
+    // The SPA sends no body here: a one-off has no stock to record.
+    const checked = await request("POST", `/api/shopping/${id}/check`, {
+      token: accessToken,
+    });
+    expect(checked.status).toBe(201);
+
+    const unchecked = await request("POST", `/api/shopping/${id}/uncheck`, {
+      token: accessToken,
+    });
+    expect(unchecked.status).toBe(201);
+
+    await request("DELETE", `/api/shopping/${id}`, { token: accessToken });
+  });
+
+  it("archives a row on the handler's default rather than throwing", async () => {
+    const { accessToken } = await signIn();
+    const { id } = await addRowAndFind(accessToken, { freeText: "Губка" });
+
+    // No body means `archived !== false`, i.e. archive it — the handler's
+    // stated default, which it can only apply if the body is an object.
+    const archived = await request("POST", `/api/shopping/${id}/archive`, {
+      token: accessToken,
+    });
+    expect(archived.status).toBe(201);
+
+    const list = await request("GET", "/api/shopping", { token: accessToken });
+    const rows = (list.body as unknown as { rows: { id: string; archivedAt: string | null }[] })
+      .rows;
+    expect(rows.find((row) => row.id === id)?.archivedAt).not.toBeNull();
+
+    await request("DELETE", `/api/shopping/${id}`, { token: accessToken });
   });
 });

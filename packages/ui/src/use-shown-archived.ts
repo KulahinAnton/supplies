@@ -1,6 +1,6 @@
 "use client";
 
-import { createIdSetStore } from "@/hooks/use-id-set";
+import { createIdSetStore } from "./id-set-store";
 
 /**
  * Feature 14.2 — which shopping groups are currently showing their archived

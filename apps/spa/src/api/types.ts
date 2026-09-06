@@ -99,6 +99,13 @@ export type ShoppingRow = {
   isChecked: boolean;
   archivedAt: string | null;
   item: { id: string; name: string; unit: Unit } | null;
+  /**
+   * Who wrote it down, and who ticked it off. A shared list needs both: the
+   * row says «додав Антон» until someone buys it and then «купив Оксана», so
+   * nobody buys the same thing twice on the way home.
+   */
+  addedBy: { name: string };
+  checkedBy: { name: string } | null;
 };
 
 export type ShoppingCandidate = {

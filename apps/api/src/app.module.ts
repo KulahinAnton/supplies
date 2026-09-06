@@ -13,6 +13,7 @@ import { ItemsController } from "./items/items.controller";
 import { RecipesController } from "./recipes/recipes.controller";
 import { SettingsController } from "./settings/settings.controller";
 import { ShoppingController } from "./shopping/shopping.controller";
+import { ShoppingGroupsController } from "./shopping/shopping-groups.controller";
 import { StockController } from "./stock/stock.controller";
 
 @Module({
@@ -51,6 +52,7 @@ import { StockController } from "./stock/stock.controller";
     RecipesController,
     SettingsController,
     ShoppingController,
+    ShoppingGroupsController,
     StockController,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

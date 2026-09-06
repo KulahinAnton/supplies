@@ -452,7 +452,7 @@ Two rules for the work, because they change what "aligned" means:
 | 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: the «Створити ‹query›» affordance (Feature 16.2), the archive link | **done** |
 | 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
 | 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
-| 6 | shopping | on the design system. Still missing: drag-to-reorder, per-row quantity edit, archived view | partial |
+| 6 | shopping | full port: drag between groups, the move menu, group create/rename/delete, per-group add, the buy dialog with its stock-in, check/uncheck, archive and its reveal toggle, row editing, candidates with their detail lines, and who added or bought each row | **done** |
 | 7 | settings | on the design system, with `Switch`. Still missing: adding categories and locations, per-category warn-day overrides, reorder, members, invites, Telegram link, «Надіслати дайджест» | partial |
 | 8 | recipes | matched | **done** |
 | 9 | groups + group detail | both screens, with the membership editor and its barcode scan | **done** |
@@ -1025,6 +1025,53 @@ as it always has been for the Next app.
 
 `?name=` and `?barcode=` now carry into the SPA's item form, so «Створити»
 under a fruitless scan is not a dead end.
+
+### Phase 2.9 — «Покупки», and two API bugs · 2026-09-07
+
+The shopping screen is the biggest one in the app — 800 lines in the Next
+version across three components — and it ports whole: drag between groups, the
+move menu for when drag is impossible, group create/rename/delete, per-group
+add fields, the buy dialog and its stock-in, check and uncheck, archive and its
+reveal toggle, row editing, the candidate suggestions with their detail lines,
+and «додав Антон» / «купив Оксана» on every row.
+
+**Feature 11's rules had never left `apps/web`.** Creating, renaming, deleting
+and moving between shopping groups lived only in `lib/actions/shopping-groups.ts`
+— five functions the API had no route for. Writing them again in a controller
+would have been the third copy of "a group name is unique within a household"
+and the second of "deleting a group returns its rows to «Загальна група»
+rather than destroying them", so they moved to
+`packages/db/shopping-groups-service` first and both front ends now call them.
+`ShoppingGroupsController` is new, under `/shopping-groups` rather than more
+routes on `/shopping/:id/…`, where a future `/shopping/groups` would collide
+with the row routes.
+
+**A POST with no body was a 500.** Ticking a free-text row off sends nothing —
+a one-off has no stock to record — and Fastify hands Nest `undefined` for that
+body, so `body.rows` threw. Nine handlers had the same shape. `EmptyBodyPipe`
+normalises an absent body to `{}` globally, because fixing it per handler means
+writing `body?.x` in nine places and forgetting it in the tenth. Two e2e checks
+pin it, and both were run against the un-piped app first to confirm they fail
+there.
+
+Also shared rather than copied: `id-set-store` with `use-collapsed-groups` and
+`use-shown-archived` — the per-device collapse and archive-reveal preferences —
+moved into `packages/ui`. The SPA gained a toaster, because the web app reports
+refusals that way on this screen and inline notes would be a different
+interaction for the same events.
+
+Verified against all three running on one database: created «Аптека», moved a
+row into it with the move menu (the default group went 8 → 7, «Аптека» 0 → 1),
+renamed it, deleted it and watched the row come back to 8 with the toast that
+says so; ticked a free-text row off and back; archived it and revealed it
+again; opened the buy dialog on «Хліб житній» and used «Без запасу», which
+flipped the row to «купив Антон» without touching stock. The list was put back
+to its seeded two rows and no groups afterwards.
+
+One thing worth knowing for next time: **`pnpm test:api:e2e` signs you out.**
+The refresh-replay check deliberately revokes every session for
+`anton@example.com`, so a browser logged in as the demo user is logged out by
+the suite. That is the theft response working, not a bug.
 
 ### Phases 3–5 — not started
 

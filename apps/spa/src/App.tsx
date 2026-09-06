@@ -8,6 +8,7 @@ import { useAuth } from "./auth/auth-context";
 import { AppNav } from "./components/app-nav";
 import { Spinner } from "./components/feedback";
 import { ThemeToggle } from "./components/theme";
+import { Toaster } from "./components/toaster";
 import { UserMenu } from "./components/user-menu";
 import { DashboardRoute } from "./routes/dashboard";
 import { GroupDetailRoute } from "./routes/group-detail";
@@ -101,6 +102,10 @@ export function App() {
           />
         </Routes>
       </main>
+
+      {/* Refusals on the shopping screen arrive as toasts, the same way the
+          Next app reports them. */}
+      <Toaster />
     </div>
   );
 }

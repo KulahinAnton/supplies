@@ -1,6 +1,6 @@
 "use client";
 
-import { createIdSetStore } from "@/hooks/use-id-set";
+import { createIdSetStore } from "./id-set-store";
 
 /**
  * Feature 11 — which shopping groups this person has folded away.
