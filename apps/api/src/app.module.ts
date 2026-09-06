@@ -7,8 +7,10 @@ import { HealthController } from "./health/health.controller";
 import { MetaController } from "./meta/meta.controller";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
+import { BarcodeController } from "./barcode/barcode.controller";
 import { DashboardController } from "./dashboard/dashboard.controller";
 import { ItemsController } from "./items/items.controller";
+import { RecipesController } from "./recipes/recipes.controller";
 import { SettingsController } from "./settings/settings.controller";
 import { ShoppingController } from "./shopping/shopping.controller";
 import { StockController } from "./stock/stock.controller";
@@ -43,8 +45,10 @@ import { StockController } from "./stock/stock.controller";
   controllers: [
     HealthController,
     MetaController,
+    BarcodeController,
     DashboardController,
     ItemsController,
+    RecipesController,
     SettingsController,
     ShoppingController,
     StockController,

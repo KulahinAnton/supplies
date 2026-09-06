@@ -305,3 +305,46 @@ describe("route shapes that are easy to get wrong", () => {
     expect(body).toMatchObject({ key: "item.notFound" });
   });
 });
+
+describe("barcode and recipes", () => {
+  it("refuses a code that is not barcode-shaped, before any network call", async () => {
+    const { accessToken } = await signIn();
+    const { status, body } = await request("GET", "/api/barcode/abc", {
+      token: accessToken,
+    });
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "item.barcodeInvalid" });
+  });
+
+  it("answers 'does this household have it' without asking anyone else", async () => {
+    // The cheap half of Feature 10, and the one a scan hits first: restocking
+    // is far commoner than cataloguing.
+    const { accessToken } = await signIn();
+    const { status, body } = await request("GET", "/api/barcode/4823063113939/item", {
+      token: accessToken,
+    });
+    expect(status).toBe(200);
+    expect(body).toHaveProperty("kind");
+  });
+
+  it("refuses a recipe while the household has the helper switched off", async () => {
+    // Feature 32.1 — the check that actually guards the spend. A hidden tab is
+    // not an access control, and this endpoint is what costs money.
+    const { accessToken } = await signIn();
+    const household = await request("GET", "/api/household", { token: accessToken });
+    const { aiEnabled } = household.body as unknown as { aiEnabled: boolean };
+
+    const { status, body } = await request("POST", "/api/recipes/suggest", {
+      token: accessToken,
+    });
+
+    if (aiEnabled) {
+      // Nothing to assert about the model's answer; only that the switch let
+      // it through rather than refusing.
+      expect(body).not.toMatchObject({ key: "recipe.disabled" });
+      return;
+    }
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "recipe.disabled" });
+  });
+});

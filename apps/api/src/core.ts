@@ -80,3 +80,5 @@ export {
   itemGroupSchema,
   locationSchema,
 } from "../../../packages/core/src/validation/settings";
+
+export { createLinkToken } from "../../../packages/core/src/telegram-link";

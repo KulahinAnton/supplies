@@ -1,5 +1,23 @@
-import { formatQuantityWithUnit } from "@supplies/core/format";
-import type { ItemView } from "@supplies/db/queries";
+import { formatQuantityWithUnit } from "./format";
+import type { Decimal } from "./decimal";
+import type { Unit } from "./units";
+
+/**
+ * What this module needs of an item, and no more.
+ *
+ * It used to import `PantryItem` from the queries module, which meant a pure
+ * function about prompt text depended on the database layer's shape — and
+ * kept it out of `packages/core` when Feature 34 needed it there. A real
+ * `PantryItem` satisfies this structurally, so nothing at the call sites
+ * changed.
+ */
+export type PantryItem = {
+  name: string;
+  unit: Unit;
+  quantity: Decimal;
+  expiry: "EXPIRED" | "SOON" | "FRESH" | "NONE";
+  nextExpiry: Date | null;
+};
 
 /**
  * Feature 32 — what Claude is told about the pantry, and what to do with it.
@@ -16,7 +34,7 @@ import type { ItemView } from "@supplies/db/queries";
 /** Item names alone would strip the two facts that make the answer useful. */
 export type PantryLine = string;
 
-const EXPIRY_NOTE: Record<ItemView["expiry"], string> = {
+const EXPIRY_NOTE: Record<PantryItem["expiry"], string> = {
   EXPIRED: "прострочено",
   SOON: "скоро зіпсується",
   FRESH: "",
@@ -38,7 +56,7 @@ const EXPIRY_NOTE: Record<ItemView["expiry"], string> = {
  * model is told the list is sorted that way and to favour the top of it, which
  * is cheaper and more reliable than restating priorities per line.
  */
-export function pantryLines(items: readonly ItemView[]): PantryLine[] {
+export function pantryLines(items: readonly PantryItem[]): PantryLine[] {
   return items
     .filter((item) => item.expiry !== "EXPIRED")
     .filter((item) => item.quantity.greaterThan(0))
@@ -51,8 +69,8 @@ export function pantryLines(items: readonly ItemView[]): PantryLine[] {
     });
 }
 
-function byUrgencyThenName(a: ItemView, b: ItemView): number {
-  const urgency = (item: ItemView) => (item.expiry === "SOON" ? 0 : 1);
+function byUrgencyThenName(a: PantryItem, b: PantryItem): number {
+  const urgency = (item: PantryItem) => (item.expiry === "SOON" ? 0 : 1);
   const byUrgency = urgency(a) - urgency(b);
   if (byUrgency !== 0) return byUrgency;
 

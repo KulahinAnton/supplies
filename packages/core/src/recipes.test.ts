@@ -1,32 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { Decimal } from "@supplies/core/decimal";
-import type { ItemView } from "@supplies/db/queries";
+import { Decimal } from "./decimal";
 import {
   MAX_PANTRY_LINES,
   RECIPE_SYSTEM_PROMPT,
   buildRecipePrompt,
   estimateCostUsd,
   pantryLines,
-} from "@/lib/recipes";
+  type PantryItem,
+} from "./recipes";
 
 const dec = (n: string) => new Decimal(n);
 
-function item(over: Partial<ItemView> & { name: string }): ItemView {
+/**
+ * `PantryItem` is a structural subset of `ItemView`, so this fixture only
+ * names the five fields the module actually reads. It used to build a whole
+ * `ItemView` — fifteen fields, ten of which no assertion here has ever
+ * touched.
+ */
+function item(over: Partial<PantryItem> & { name: string }): PantryItem {
   return {
-    id: over.name,
     unit: "PIECE",
-    minQty: dec("0"),
     quantity: dec("1"),
-    stock: "OK",
     expiry: "FRESH",
-    categoryName: "Продукти",
-    locationName: null,
     nextExpiry: null,
-    batchCount: 1,
-    createdAt: new Date("2026-01-01"),
-    warnDays: 7,
-    groupId: null,
-    groupName: null,
     ...over,
     name: over.name,
   };
@@ -47,7 +43,7 @@ describe("pantryLines", () => {
 
   it("leaves out what the household does not have", () => {
     const lines = pantryLines([
-      item({ name: "Хліб", quantity: dec("0"), stock: "OUT" }),
+      item({ name: "Хліб", quantity: dec("0") }),
       item({ name: "Яйця" }),
     ]);
     expect(lines.join("\n")).not.toContain("Хліб");

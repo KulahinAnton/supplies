@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { ruleMessage, type RuleMessage } from "@supplies/core/messages";
+import { ruleMessage, type RuleMessage } from "./messages";
 
 /**
  * Feature 32 — the only place this app talks to the Claude API.

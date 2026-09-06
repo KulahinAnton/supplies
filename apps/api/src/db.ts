@@ -78,3 +78,15 @@ export {
   setDefaultLocation,
   updateHousehold,
 } from "../../../packages/db/src/settings-service";
+
+export {
+  findItemByBarcode,
+  lookupBarcode,
+  type BarcodeLookup,
+  type BarcodeSearch,
+} from "../../../packages/db/src/barcode-service";
+
+export {
+  suggestRecipe,
+  type RecipeSuggestion,
+} from "../../../packages/db/src/recipes-service";

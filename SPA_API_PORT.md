@@ -672,9 +672,10 @@ Documented as **Feature 34** in PROJECT_PROMPT.md before any of it was written.
 | 1.5 | zod pipe over `@supplies/core/validation` | done |
 | 1.6 | Error envelope carrying message keys + params | done |
 | 1.7 | CORS allowlist, helmet, throttler | done |
-| 1.8 | 16 e2e checks against a live database | done |
+| 1.8 | 19 e2e checks against a live database | done |
 | — | Items, shopping and settings writes | done |
-| — | Barcode, recipes, telegram endpoints | **remaining** |
+| — | Barcode and recipes endpoints | done |
+| — | Telegram link/digest endpoints | **skipped** — see below |
 
 **`packages/db` arrived here, and it had to.** Feature 34 makes the API a third
 front end, and one that wrote its own queries would be a third implementation.
@@ -695,6 +696,13 @@ reach them.
 - **tsc does not rewrite module specifiers**, so anything `nest build` compiles
   must import across packages relatively. This bit three times before it was
   written down.
+
+**The Telegram endpoints are deliberately not built.** `createTelegramLinkAction`
+mints a deep-link token and `sendDigestNowAction` triggers the daily digest —
+both are settings-page conveniences that only make sense next to a bot the web
+app already links. Adding them to the API would mean pulling grammy and
+`lib/digest.ts` into it to serve a button no other client has. If the SPA or
+the phone ever grows a Telegram settings screen, they are two thin wrappers.
 
 ### Phase 2 — the SPA · in progress, 2026-09-05
 

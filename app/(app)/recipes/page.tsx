@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth-guard";
 import { getHousehold, getItemViews } from "@/lib/queries.rsc";
-import { pantryLines } from "@/lib/recipes";
+import { pantryLines } from "@supplies/core/recipes";
 import { RecipePanel } from "@/components/recipe-panel";
 
 /**
