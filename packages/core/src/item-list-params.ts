@@ -88,15 +88,46 @@ export function itemListSearch(state: ItemListState): string {
  * result can only ever describe a list this app can render.
  */
 export function sanitizeListSearch(raw: string | undefined): string {
-  if (!raw) return "";
+  return raw ? itemListSearch(parseItemListSearch(raw)) : "";
+}
 
-  const incoming = new URLSearchParams(raw);
-  return itemListSearch({
-    query: incoming.get("q") ?? "",
-    filter: parseFilter(incoming.get("filter")),
-    category: incoming.get("cat") ?? "all",
-    sort: parseSort(incoming.get("sort"), "name"),
-    page: parsePage(incoming.get("page")),
-    perPage: parsePerPage(incoming.get("per")),
-  });
+/**
+ * The inverse of `itemListSearch` — a list URL back into the state it describes.
+ *
+ * This exists because the parameters were being read in three places and
+ * written in one, and the readings had already drifted: the API had settled on
+ * `category` and `perPage` while `itemListSearch` writes `cat` and `per`. The
+ * effect was that a filtered list from the Next app was a link you could send
+ * to another person, and the identical query string sent to the API quietly
+ * fell back to "all categories, 25 per page" — a list that looked plausible
+ * and was not the one asked for.
+ *
+ * Every unknown or malformed value falls back rather than throwing. These
+ * arrive from URLs, which means from anywhere, and a hand-edited `?per=9999`
+ * should show the default list rather than an error page.
+ *
+ * Accepts what each caller actually holds: a raw query string (`location.
+ * search`), a parsed `URLSearchParams`, or the plain object Next hands a page
+ * and Nest hands a controller.
+ */
+export function parseItemListSearch(
+  source: string | URLSearchParams | Record<string, string | string[] | undefined>,
+): ItemListState {
+  const get = (key: string): string | undefined => {
+    if (typeof source === "string") return new URLSearchParams(source).get(key) ?? undefined;
+    if (source instanceof URLSearchParams) return source.get(key) ?? undefined;
+    const value = source[key];
+    // A repeated parameter (`?cat=a&cat=b`) is a URL nobody meant to write.
+    // Taking the first is arbitrary but stable, and beats `"a,b"`.
+    return Array.isArray(value) ? value[0] : value;
+  };
+
+  return {
+    query: get("q")?.trim() ?? "",
+    filter: parseFilter(get("filter")),
+    category: get("cat") ?? "all",
+    sort: parseSort(get("sort"), "name"),
+    page: parsePage(get("page")),
+    perPage: parsePerPage(get("per")),
+  };
 }

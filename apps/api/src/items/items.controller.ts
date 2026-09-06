@@ -13,14 +13,7 @@ import {
   updateItem,
   type ItemInput,
 } from "../db";
-import {
-  itemSchema,
-  parseFilter,
-  parsePage,
-  parsePerPage,
-  parseSort,
-  updateItemSchema,
-} from "../core";
+import { itemSchema, parseItemListSearch, updateItemSchema } from "../core";
 import { zodBody } from "../common/zod.pipe";
 import { unwrap } from "../common/unwrap";
 
@@ -41,20 +34,23 @@ import { unwrap } from "../common/unwrap";
 @ApiTags("items")
 @Controller("items")
 export class ItemsController {
+  /**
+   * The query string is the one `itemListSearch` writes — `q`, `filter`,
+   * `cat`, `sort`, `page`, `per` — so a filtered list in any client is the
+   * same URL here.
+   *
+   * This used to spell two of them itself, `category` and `perPage`, which
+   * meant the link the web app puts in the address bar asked this endpoint for
+   * a different list than it displayed: all categories, default page size, no
+   * error anywhere. `parseItemListSearch` is now the only reader.
+   */
   @Get()
   @ApiOperation({ summary: "Paged, filtered, sorted items for this household." })
   async list(
     @CurrentUser() caller: Caller,
-    @Query() query: Record<string, string | undefined>,
+    @Query() query: Record<string, string | string[] | undefined>,
   ) {
-    return getItemsPage(caller.householdId, {
-      query: query.q?.trim() ?? "",
-      filter: parseFilter(query.filter),
-      category: query.category ?? "all",
-      sort: parseSort(query.sort, "name"),
-      page: parsePage(query.page),
-      perPage: parsePerPage(query.perPage),
-    });
+    return getItemsPage(caller.householdId, parseItemListSearch(query));
   }
 
   @Get("names")

@@ -25,6 +25,11 @@
   // app imports it. That makes this config one of the things keeping the
   // engine honest: `packages/core` has to typecheck with no React types and
   // no DOM in `lib`, which is most of what "framework-free by contract" means.
+  //
+  // `packages/ui` is the one package that legitimately needs the DOM and JSX,
+  // so it is excluded below and typechecked under its own tsconfig instead.
+  // That exclusion is the boundary working, not a hole in it: the moment
+  // something in `core` or `db` reaches for `window`, this config says so.
   "include": [
     "bot/**/*.ts",
     "scripts/**/*.ts",
@@ -38,8 +43,9 @@
     // Each app owns its compiler settings. The API needs
     // `experimentalDecorators` and `emitDecoratorMetadata`, the SPA and the web
     // app need `jsx` and the DOM lib, and none of that may leak into the
-    // packages above. `pnpm -r --filter "./apps/*" typecheck` runs each.
+    // packages above. `pnpm -r typecheck` runs each of them under its own.
     "apps/**",
+    "packages/ui/**",
     "packages/db/src/generated/**"
   ]
 }

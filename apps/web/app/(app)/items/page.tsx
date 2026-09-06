@@ -10,12 +10,7 @@ import { formatQuantityWithUnit } from "@supplies/core/format";
 import { todayUTC } from "@supplies/core/period";
 import { Button } from "@supplies/ui/button";
 import { ItemsList, type ItemRow } from "@/components/items-list";
-import {
-  parseFilter,
-  parsePage,
-  parsePerPage,
-  parseSort,
-} from "@supplies/core/item-list-params";
+import { parseItemListSearch } from "@supplies/core/item-list-params";
 
 /**
  * Feature 27 + 28 — the list's whole view state travels in the URL: what is
@@ -40,14 +35,10 @@ export default async function ItemsPage({
   const session = await requireSession();
   const params = await searchParams;
 
-  const view = {
-    query: params.q ?? "",
-    filter: parseFilter(params.filter),
-    category: params.cat ?? "all",
-    sort: parseSort(params.sort, "name"),
-    page: parsePage(params.page),
-    perPage: parsePerPage(params.per),
-  };
+  // One reader for the list URL, shared with the API — see
+  // `parseItemListSearch`. Spelling these out here is how the API came to read
+  // `category` while this page wrote `cat`.
+  const view = parseItemListSearch(params);
 
   const [page, archived, groups] = await Promise.all([
     getItemsPage(session.householdId, view),

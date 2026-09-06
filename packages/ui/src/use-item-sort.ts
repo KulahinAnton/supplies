@@ -10,6 +10,11 @@ import { isItemSort, type ItemSort } from "@supplies/core/item-sort";
  * reading preference, not household data. Read through `useSyncExternalStore`
  * so the server snapshot ("name") matches the first client render — setting it
  * from an effect would flash the wrong order and trip the lint rule.
+ *
+ * Shared rather than app-local: both web clients offer the same sort menu, and
+ * a second copy of this would be a second answer to "what did this person
+ * choose last time". The `"use client"` above is a no-op under Vite and load
+ * bearing under Next, which is why it stays.
  */
 
 const KEY = "supplies.items.sort";

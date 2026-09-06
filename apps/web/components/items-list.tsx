@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@supplies/ui/dropdown-menu";
 import { ExpiryBadge, StockBadge } from "@supplies/ui/state-badges";
-import { useItemSort } from "@/hooks/use-item-sort";
+import { useItemSort } from "@supplies/ui/use-item-sort";
 import {
   itemListSearch,
   parseFilter,

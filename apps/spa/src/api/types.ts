@@ -31,11 +31,22 @@ export type ItemView = {
   groupName: string | null;
 };
 
+/**
+ * `getItemsPage` — Feature 28's slice, plus what the controls need to describe
+ * it. `from`/`to` are 1-based and inclusive, and both are 0 when the list is
+ * empty, so «0–0 з 0» never appears as «1–0 з 0».
+ *
+ * `categories` is every category in the household, not only those on this
+ * page: the chips have to offer the ones that would filter to something else.
+ */
 export type ItemsPage = {
   rows: ItemView[];
   total: number;
   page: number;
   pageCount: number;
+  from: number;
+  to: number;
+  categories: string[];
 };
 
 export type Batch = {

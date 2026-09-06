@@ -348,3 +348,78 @@ describe("barcode and recipes", () => {
     expect(body).toMatchObject({ key: "recipe.disabled" });
   });
 });
+
+/**
+ * Feature 27 + 28 — the list URL is a contract between three clients.
+ *
+ * `itemListSearch` in `@supplies/core` writes it; the Next page, this API and
+ * the SPA all read it back with `parseItemListSearch`. This endpoint used to
+ * spell two of the six itself — `category` and `perPage` against the written
+ * `cat` and `per` — which meant the link in the web app's address bar asked
+ * for a different list than the one on screen, with no error anywhere. These
+ * check the two that had drifted, and one that had not, so a future rename
+ * cannot pass by only being consistent with itself.
+ */
+describe("the items list URL", () => {
+  it("filters by the category name the URL actually carries", async () => {
+    const { accessToken } = await signIn();
+
+    const all = await request("GET", "/api/items?per=all", { token: accessToken });
+    const categories = (all.body as unknown as { categories: string[] }).categories;
+    expect(categories.length).toBeGreaterThan(1);
+
+    const [first] = categories;
+    const filtered = await request(
+      "GET",
+      `/api/items?per=all&cat=${encodeURIComponent(first ?? "")}`,
+      { token: accessToken },
+    );
+
+    const rows = (filtered.body as unknown as { rows: { categoryName: string }[] }).rows;
+    expect(rows.length).toBeGreaterThan(0);
+    // The bug this replaces: `cat` was ignored, so this came back as the whole
+    // household and looked like a category that happened to hold everything.
+    expect(rows.every((row) => row.categoryName === first)).toBe(true);
+    expect(rows.length).toBeLessThan(
+      (all.body as unknown as { total: number }).total,
+    );
+  });
+
+  it("pages with `per`, and reports the slice it sent", async () => {
+    const { accessToken } = await signIn();
+
+    const { body } = await request("GET", "/api/items?per=10&page=2", {
+      token: accessToken,
+    });
+    const page = body as unknown as {
+      rows: unknown[];
+      page: number;
+      from: number;
+      to: number;
+      total: number;
+    };
+
+    expect(page.page).toBe(2);
+    expect(page.rows.length).toBeLessThanOrEqual(10);
+    // 1-based and inclusive, which is what the «11–20 з 42» label reads from.
+    expect(page.from).toBe(11);
+    expect(page.to).toBe(10 + page.rows.length);
+  });
+
+  it("falls back on a hand-edited parameter rather than failing", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request(
+      "GET",
+      "/api/items?filter=nonsense&sort=by-price&per=9999&page=-4",
+      { token: accessToken },
+    );
+
+    // A URL is untrusted input from anywhere. The default list is the right
+    // answer; a 500 or an empty list would both be worse.
+    expect(status).toBe(200);
+    const page = body as unknown as { page: number; rows: unknown[] };
+    expect(page.page).toBe(1);
+    expect(page.rows.length).toBeGreaterThan(0);
+  });
+});

@@ -449,7 +449,7 @@ Two rules for the work, because they change what "aligned" means:
 | — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` | **done** |
 | 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
 | 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
-| 3 | items | on the design system, with dated badges and «Новий товар». Still missing: sort control, barcode scan, archive toggle, pagination controls | partial |
+| 3 | items | search, sort menu, filter and category chips, pagination and page size, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: barcode scan (Phase 2.7), the «Створити ‹query›» affordance, the archive link | **done** |
 | 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
 | 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
 | 6 | shopping | on the design system. Still missing: drag-to-reorder, per-row quantity edit, archived view | partial |
@@ -953,6 +953,42 @@ Three things worth keeping:
 
 The SPA bundle went from 400 kB to 590 kB (127 → 192 kB gzipped) — Base UI and
 lucide. Worth a code-split before the deploy in Phase 4, not before.
+
+### Phase 2.9 — «Запаси», and a list URL that meant two things · 2026-09-06
+
+The items list is done: search, the sort menu, filter and category chips,
+pagination and page size, the group badge, location and minimum.
+
+**Aligning it turned up a real bug, in the API rather than the SPA.** Feature
+27 says the list's whole view state travels in the URL, and `itemListSearch`
+in `@supplies/core` writes that URL. It was only ever being written in one
+place and read in three — and the readings had drifted: the API had settled on
+`category` and `perPage` where the writer emits `cat` and `per`.
+
+The effect was quiet, which is what makes it worth recording. A filtered list
+in the Next app is a link you can send to someone. Hand that identical query
+string to the API and it answered with a *different* list — all categories,
+default page size — with no error, no warning, and a perfectly plausible
+result. Nothing failed; it was just the wrong answer.
+
+`parseItemListSearch` is now the inverse of `itemListSearch` and the only
+reader, used by the Next page, the API and the SPA. Six unit tests pin the
+round trip, and three e2e checks pin it over HTTP; the category one was run
+against the old controller first and fails there, so it has teeth.
+
+The proof that mattered: `/items?per=10&page=2` open in both clients returns
+byte-identical rows, badges and «11–15 з 15».
+
+Two smaller things:
+
+- **`use-item-sort` moved into `packages/ui`.** Feature 12.2's per-device sort
+  preference is presentation state that both web clients now offer. A second
+  copy would be a second answer to "what did this person choose last time".
+- **`packages/ui` is excluded from the root tsconfig.** It is the one package
+  that legitimately needs the DOM and JSX, and it has its own config. The
+  exclusion is the boundary working rather than a hole in it — the root config
+  still has no DOM lib, so the moment `core` or `db` reaches for `window` it
+  says so. `pnpm -r typecheck` covers every package under its own settings.
 
 ### Phases 3–5 — not started
 

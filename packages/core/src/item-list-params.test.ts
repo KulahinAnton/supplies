@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   itemListSearch,
+  parseItemListSearch,
   parseFilter,
   parseSort,
   DEFAULT_PER_PAGE,
@@ -125,5 +126,75 @@ describe("paging parameters", () => {
     expect(parsePage("1.5")).toBe(1);
     expect(parsePage("тест")).toBe(1);
     expect(parsePage(undefined)).toBe(1);
+  });
+});
+
+describe("parseItemListSearch", () => {
+  /**
+   * The property that matters: whatever `itemListSearch` writes,
+   * `parseItemListSearch` reads back as the same state. A drift between the
+   * two is not a crash — it is a list that renders plausibly and is not the
+   * one the URL asked for, which is how the API ended up reading `category`
+   * while the web app wrote `cat`.
+   */
+  it("round-trips every field", () => {
+    const full = state({
+      query: "молоко",
+      filter: "LOW",
+      category: "Побутова хімія",
+      sort: "expiring",
+      page: 3,
+      perPage: 50,
+    });
+
+    expect(parseItemListSearch(itemListSearch(full))).toEqual(full);
+  });
+
+  it("round-trips the default as the default", () => {
+    expect(parseItemListSearch(itemListSearch(state()))).toEqual(state());
+  });
+
+  it("reads the three shapes a caller can be holding", () => {
+    const search = "q=сік&filter=OUT&cat=Напої&sort=expiring&per=10&page=2";
+    const expected = state({
+      query: "сік",
+      filter: "OUT",
+      category: "Напої",
+      sort: "expiring",
+      page: 2,
+      perPage: 10,
+    });
+
+    // A raw query string, as `location.search` gives it.
+    expect(parseItemListSearch(search)).toEqual(expected);
+    // Already parsed, as React Router's `useSearchParams` gives it.
+    expect(parseItemListSearch(new URLSearchParams(search))).toEqual(expected);
+    // A plain object, as Next hands a page and Nest hands a controller.
+    expect(
+      parseItemListSearch({
+        q: "сік",
+        filter: "OUT",
+        cat: "Напої",
+        sort: "expiring",
+        per: "10",
+        page: "2",
+      }),
+    ).toEqual(expected);
+  });
+
+  it("falls back on anything hand-edited rather than throwing", () => {
+    expect(
+      parseItemListSearch("filter=nonsense&sort=by-price&per=9999&page=-4"),
+    ).toEqual(state());
+  });
+
+  it("trims the query, so Back restores the same list the URL described", () => {
+    expect(parseItemListSearch("q=%20%20молоко%20%20").query).toBe("молоко");
+  });
+
+  it("takes the first of a repeated parameter", () => {
+    // `?cat=a&cat=b` is a URL nobody meant to write. Arbitrary but stable
+    // beats the string "a,b", which matches no category.
+    expect(parseItemListSearch({ cat: ["Напої", "Продукти"] }).category).toBe("Напої");
   });
 });
