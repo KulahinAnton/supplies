@@ -672,8 +672,9 @@ Documented as **Feature 34** in PROJECT_PROMPT.md before any of it was written.
 | 1.5 | zod pipe over `@supplies/core/validation` | done |
 | 1.6 | Error envelope carrying message keys + params | done |
 | 1.7 | CORS allowlist, helmet, throttler | done |
-| 1.8 | 11 e2e checks against a live database | done |
-| — | Settings CRUD, shopping writes, barcode, recipes, telegram | **remaining** |
+| 1.8 | 16 e2e checks against a live database | done |
+| — | Items, shopping and settings writes | done |
+| — | Barcode, recipes, telegram endpoints | **remaining** |
 
 **`packages/db` arrived here, and it had to.** Feature 34 makes the API a third
 front end, and one that wrote its own queries would be a third implementation.
@@ -702,8 +703,8 @@ reach them.
 | 2.1 | Vite, React Router, TanStack Query, Tailwind scaffold | done |
 | 2.3 | Auth context, in-memory access token, refresh-cookie recovery | done |
 | 2.5 | Query-key map, written before the screens | done |
-| 2.6 | Login, dashboard, item list, item detail with take/restock | done |
-| 2.6 | The other 12 screens | **remaining** |
+| 2.6 | Login, dashboard, item list, item detail with take/restock, shopping | done |
+| 2.6 | The other 11 screens | **remaining** |
 | 2.2 | Generate the client from OpenAPI (hand-written types for now) | **remaining** |
 | 2.7 | Barcode scanner | **remaining** |
 | 2.8 | Playwright against the SPA | **remaining** |

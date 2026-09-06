@@ -31,7 +31,7 @@ const LOGIN = { email: "anton@example.com", password: "supplies123" };
 let app: NestFastifyApplication;
 
 async function request(
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "DELETE" | "PATCH",
   url: string,
   options: { token?: string; body?: unknown } = {},
 ) {
@@ -214,6 +214,93 @@ describe("stock, through HTTP", () => {
       // which is the correct thing for a caller to be told.
       body: { itemId: "00000000-0000-4000-8000-000000000000", quantity: "1" },
     });
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "item.notFound" });
+  });
+});
+
+describe("settings rules, over HTTP", () => {
+  it("refuses to delete a category that still has items", async () => {
+    // Cascading would silently strip the category off every item using it.
+    const { accessToken } = await signIn();
+    const taxonomy = await request("GET", "/api/taxonomy", { token: accessToken });
+    const { categories } = taxonomy.body as unknown as {
+      categories: { id: string; name: string }[];
+    };
+    const inUse = categories[0];
+
+    const { status, body } = await request(
+      "DELETE",
+      `/api/settings/categories/${inUse.id}`,
+      { token: accessToken },
+    );
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "settings.categoryInUse" });
+  });
+
+  it("refuses a reorder containing an id the household does not own", async () => {
+    // Feature 15.1 — every id is proved first, or a forged list reorders
+    // another family's categories.
+    const { accessToken } = await signIn();
+    const { status, body } = await request("POST", "/api/settings/categories/reorder", {
+      token: accessToken,
+      body: { ids: ["00000000-0000-4000-8000-000000000000"] },
+    });
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "auth.forbidden" });
+  });
+
+  it("creates a location, refuses the duplicate, then removes it", async () => {
+    const { accessToken } = await signIn();
+    const name = `E2E ${Date.now()}`;
+
+    const created = await request("POST", "/api/settings/locations", {
+      token: accessToken,
+      body: { name },
+    });
+    expect(created.status).toBe(201);
+
+    const duplicate = await request("POST", "/api/settings/locations", {
+      token: accessToken,
+      body: { name },
+    });
+    expect(duplicate.status).toBe(422);
+    expect(duplicate.body).toMatchObject({ key: "settings.locationNameTaken" });
+
+    // Put the household back the way it was found.
+    const taxonomy = await request("GET", "/api/taxonomy", { token: accessToken });
+    const { locations } = taxonomy.body as unknown as { locations: { id: string; name: string }[] };
+    const mine = locations.find((l) => l.name === name);
+    expect(mine).toBeDefined();
+    if (mine) {
+      const removed = await request("DELETE", `/api/settings/locations/${mine.id}`, {
+        token: accessToken,
+      });
+      expect(removed.status).toBe(200);
+    }
+  });
+});
+
+describe("route shapes that are easy to get wrong", () => {
+  it("treats /shopping/archived as the bulk delete, not as a row id", async () => {
+    // Declared before @Delete(":id") on purpose. If the order were reversed
+    // this would try to delete a row called "archived" and 422.
+    const { accessToken } = await signIn();
+    const { status } = await request("DELETE", "/api/shopping/archived", {
+      token: accessToken,
+    });
+    expect(status).toBe(200);
+  });
+
+  it("routes /settings/groups/items/:id to the remove handler", async () => {
+    const { accessToken } = await signIn();
+    const { status, body } = await request(
+      "DELETE",
+      "/api/settings/groups/items/00000000-0000-4000-8000-000000000000",
+      { token: accessToken },
+    );
+    // 422 item.notFound proves it reached the handler; a 404 would mean the
+    // path had been swallowed by @Delete("groups/:id").
     expect(status).toBe(422);
     expect(body).toMatchObject({ key: "item.notFound" });
   });
