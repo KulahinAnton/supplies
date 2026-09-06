@@ -186,15 +186,17 @@ no drift possible. That is worth a paragraph in the README on its own.
 ```
 supplies/
 ├── apps/
-│   ├── web/          Next.js 16 — today's app, moved in Phase 4
+│   ├── web/          Next.js 16 — today's app, moved 2026-09-06
 │   ├── api/          NestJS — the new backend
 │   ├── spa/          Vite + React — the new web client
 │   └── mobile/       Expo + React Native
 ├── packages/
-│   ├── core/         pure engine, messages, formatting, zod schemas + 339 tests
+│   ├── core/         pure engine, messages, formatting, zod schemas + tests
+│   ├── db/           Prisma client, queries, and every write service
+│   ├── ui/           design system — theme tokens + Base UI primitives
 │   └── api-client/   generated types + fetch client + TanStack Query hooks
-├── prisma/           one schema, 14 migrations, one seed — unchanged
-└── bot/              Telegram bot — unchanged, still on the engine directly
+├── prisma/           one schema, one seed — unchanged
+└── bot/              @supplies/bot — Telegram bot, still on the engine directly
 ```
 
 **One database.** All four clients point at the same Postgres on port 5434 with
@@ -293,6 +295,69 @@ Phone testing needs a LAN IP rather than `localhost`, which is why
 `EXPO_PUBLIC_API_URL` is separate — the same reason `TELEGRAM_WEBHOOK_URL` is
 already separate from `APP_URL` today.
 
+### 4.3 The design system is shared too — `packages/ui`
+
+**Added 2026-09-06, after the first SPA screens made the omission obvious.**
+
+The plan was careful about one kind of duplication and blind to another. It
+said, correctly and at length, that the *rules* must have one implementation.
+It said nothing about the *presentation*, and so the SPA grew its own: a single
+`components/ui.tsx` with four hand-rolled components and a hard-coded
+neutral/emerald palette, next to a Next app with twenty-two Base UI primitives,
+a themed token set in `oklch`, and a dark mode.
+
+That is the same mistake in a different layer, and it fails for the same
+reason. Two definitions of a card diverge exactly as fast as two definitions of
+a stock rule; the only difference is that nobody writes a test for the card, so
+the divergence is discovered by looking at it. Which is how it *was* discovered.
+
+**What makes this fixable is that almost none of it was ever Next-specific.**
+The primitives are Base UI plus `class-variance-authority` plus Tailwind — plain
+React with no framework dependency at all. A grep for `next` across
+`components/ui/` returns exactly one hit, `sonner.tsx`, which reads
+`next-themes` for the toaster's colour scheme. Twenty-one of twenty-two files
+move as they are.
+
+```
+packages/ui/
+├── src/
+│   ├── theme.css      the oklch tokens, .dark, and the @theme inline map
+│   ├── lib/utils.ts   cn()
+│   ├── primitives/    button, card, badge, input, select, checkbox, switch, …
+│   └── domain/        state-badges — the one place expiry/stock colours live
+└── package.json       "./*": "./src/*.tsx", same subpath pattern as core
+```
+
+Three things this buys, in the order they matter:
+
+1. **The parity work stops being cosmetic.** With one token set and one button,
+   aligning a screen is a question of structure and content — which is where
+   the real gaps are — instead of re-deriving a colour and getting it nearly
+   right.
+2. **The domain colours get one home.** `--warning` and `--success` exist
+   because an expiry chip must not hardcode a hex value. That argument does not
+   weaken when a second client renders the same chip; it gets stronger.
+3. **It is the claim the project is trying to make, in a second layer.** "One
+   engine, four clients" reads better when the design system is shared by a
+   Next.js app and a Vite SPA than when the SPA visibly is not the same product.
+
+Two costs, both known and both small:
+
+- **Tailwind v4 must be told to scan the package.** Content detection follows
+  imports from the entry CSS, and a linked workspace package under
+  `node_modules` is skipped by default. Both apps add one
+  `@source "../../packages/ui/src"` line. Without it the classes exist in the
+  source and not in the stylesheet, which looks like the components are broken.
+- **`sonner.tsx` and the theme toggle stay app-local.** They depend on how the
+  host app stores the theme — `next-themes` on a class attribute for Next, a
+  small hook for the SPA. The *tokens* are shared; the mechanism that flips
+  them is not, and pretending otherwise would drag `next-themes` into a Vite
+  bundle to serve one component.
+
+`@supplies/ui` is web-only on purpose. React Native has no DOM and no Tailwind
+class strings, so Phase 3 shares `core` and the API client and gets its own
+components — that is a real boundary, not a failure to reuse.
+
 ---
 
 ## 5. Phases
@@ -354,8 +419,55 @@ Endpoint sketch — 46 actions and 17 readers collapse to roughly 40 routes:
 | 2.6 | Port screens: login → items → item detail → add/take → shopping → dashboard → settings → groups → recipes | 6–9 d |
 | 2.7 | Barcode scanner — lift the existing DOM code verbatim | 0.5 d |
 | 2.8 | Playwright against the SPA; adapt the 4 existing specs | 1 d |
+| 2.9 | **Parity gate** — extract `packages/ui`, then align screen by screen | 4–6 d |
+
+#### Phase 2.9 — the parity gate
+
+**Added 2026-09-06.** The first pass built the SPA screens as *translations* —
+same data, same endpoints, whatever layout fell out. Put side by side with the
+Next app they are visibly a different product, and in a few places a
+functionally poorer one. Since the entire point is to demonstrate that the same
+application can be built twice on one engine, "roughly equivalent" is the one
+outcome that proves nothing.
+
+So parity is now an explicit gate with a checklist, and **Phase 3 does not
+start until it closes** (decided 2026-09-06 — see §10).
+
+Two rules for the work, because they change what "aligned" means:
+
+- **The Next app is the reference.** Where the two differ, the SPA moves. Where
+  the Next app is itself wrong, both change, and the fix lands in `web` first.
+- **A missing rule counts as a missing feature.** A screen is not aligned
+  because it looks the same. If the Next page calls `splitExpiring` from the
+  engine and the SPA re-derives the split with an inline filter, that is a
+  second implementation of a rule, and it is the exact failure this whole plan
+  exists to prevent — it just slipped in through the view layer.
+
+| # | Screen | Gap |
+|---|---|---|
+| — | *design system* | SPA has 4 hand-rolled components and a bare palette against 22 primitives + tokens + dark mode → `packages/ui` (§4.3) |
+| — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` |
+| 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows link to a page that does not exist; no minimum shown |
+| 2 | items | to audit |
+| 3 | item detail | to audit |
+| 4 | item form | to audit |
+| 5 | shopping | to audit |
+| 6 | settings | to audit |
+| 7 | recipes | to audit |
+| 8 | groups + group detail | **missing entirely** |
+| 9 | items archive | **missing entirely** |
+| 10 | register · join · forgot · reset | **missing entirely** — 4 public routes |
+
+Screens 2–7 say "to audit" rather than guessing: each is read against its Next
+counterpart when its turn comes, and the row is filled in with what was
+actually found. A checklist written from memory is a checklist that misses
+things.
 
 ### Phase 3 — React Native, Android · 3–4 weeks
+
+> **Blocked on Phase 2.9.** Not started until web and SPA are at parity. The
+> reasoning is in §10: a third client built against a second-rate second client
+> copies its gaps, and the phone is the most expensive place to discover that.
 
 | # | Task | Est. |
 |---|---|---|
@@ -541,6 +653,16 @@ the one-repo decision.
 | 5 | **iOS later** | Its own Phase 5, after Phase 4 ships; §3 stays cross-platform |
 | 6 | **No deadline** | Buys the Nest ceremony and full parity; §6 on what it costs |
 | 7 | **Domains unknown → env-driven** | §4.2; localhost defaults, no origin in source |
+
+### Amended 2026-09-06
+
+Three corrections, all from reading the first SPA screens next to the Next app.
+
+| # | Decision | Consequence in this plan |
+|---|---|---|
+| 8 | **Phase 4.1 pulled forward — `apps/web` now** | Decision 3 said Vercel stays untouched *until* 4.1; it never said 4.1 had to be last. Keeping the Next app at the repo root while `apps/api` and `apps/spa` existed made the layout say the opposite of what it means: that the Next app is the project and the rest are attachments. The move is a rename plus one Vercel setting, and doing it on an unmerged branch costs nothing — doing it after three more phases means re-touching every file those phases add. |
+| 9 | **The design system is shared: `packages/ui`** | §4.3. The original plan factored the rules and forgot the components, which is the same duplication one layer up. |
+| 10 | **Parity gates Phase 3** | Phase 2.9. A React Native app built against a second-rate SPA inherits its gaps, and a phone is the slowest place to find them. Full parity was already decision 1; this says *when* it is checked, not just that it is owed. |
 
 ### Still open, but not blocking
 
@@ -732,9 +854,38 @@ Two bugs that only running it could find:
   state — correctly, since shipping one would put a second copy of Feature 13's
   category inheritance on the wire.
 
+### Review — three gaps found, 2026-09-06
+
+Raised after the first implementation round, and all three were right.
+
+**1. `apps/web` does not exist.** §4 has drawn the target layout since day one
+and the one app that was already finished was the one still at the repo root.
+The deferral had a reason — Phase 4.1 is the only step that touches production —
+but the reason had quietly stopped applying: nothing on this branch is pushed,
+production runs from `main`, and the "risk" was one Vercel setting flipped at
+merge time rather than at commit time. Meanwhile the layout was actively
+misleading, and every phase added files to a root that was going to move
+anyway. Decision 8; done below.
+
+**2. The SPA is a different product to look at.** Not a difference of taste: 22
+themed primitives and a dark mode against four hand-rolled components and
+`@import "tailwindcss"` on its own. Worse, some of the difference is
+functional — the dashboard alone is missing the badges, the recent-activity
+card and the warn-days caption, has a link that goes nowhere for group rows,
+and re-implements Feature 30's split with an inline filter instead of calling
+`splitExpiring`. That last one is a duplicated *rule*, in the layer nobody was
+watching. Decision 9 and Phase 2.9.
+
+**3. Native before parity is the wrong order.** Agreed and adopted as decision
+10. Building a third client against a second client that is missing four routes
+and three cards just copies the gaps somewhere more expensive to fix.
+
+### Phase 4.1 — `apps/web`, moved early · done, 2026-09-06
+
 ### Phases 3–5 — not started
 
-React Native, the deploy, iOS.
+React Native, the deploy, iOS. **Phase 3 is blocked on the Phase 2.9 parity
+gate** (decision 10).
 
 ### Start here
 
