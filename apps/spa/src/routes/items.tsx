@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowDownUp, Boxes, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toDecimal } from "@supplies/core/decimal";
@@ -95,6 +95,17 @@ export function ItemsRoute() {
   const items = useQuery({
     queryKey: keys.items(Object.fromEntries(new URLSearchParams(search))),
     queryFn: () => api.get<ItemsPage>(`/api/items${search ? `?${search}` : ""}`),
+    /**
+     * Every filter, sort, page and debounced search term is a different key,
+     * and without this each one empties the list to `undefined` while the new
+     * one loads — so the rows vanish and reappear on every keystroke and every
+     * page click. Holding the previous page until the next arrives is what the
+     * server-rendered version gets for free.
+     *
+     * `isPlaceholderData` below is how the stale rows say so, rather than
+     * pretending to be current.
+     */
+    placeholderData: keepPreviousData,
   });
 
   /**
@@ -200,7 +211,6 @@ export function ItemsRoute() {
         </div>
       </div>
 
-      {items.isPending ? <Spinner /> : null}
       <ErrorNote error={items.error} />
 
       {householdIsEmpty ? (
@@ -217,7 +227,16 @@ export function ItemsRoute() {
             Додати товар
           </Button>
         </div>
-      ) : page ? (
+      ) : (
+        /*
+         * The controls are OUTSIDE any `page &&`, and that is the whole point.
+         *
+         * They used to be inside one, so every debounced keystroke — which
+         * changes the query key — unmounted the search field along with the
+         * results, and the caret went with it. Typing more than one letter
+         * meant clicking back into the box. A control that drives a query must
+         * not be conditional on that query's data.
+         */
         <div className="space-y-4">
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -281,7 +300,7 @@ export function ItemsRoute() {
             >
               Усі категорії
             </Chip>
-            {page.categories.map((name) => (
+            {(page?.categories ?? []).map((name) => (
               <Chip
                 key={name}
                 active={view.category === name}
@@ -326,12 +345,21 @@ export function ItemsRoute() {
             )
           ) : null}
 
-          {page.rows.length === 0 ? (
+          {items.isPending ? (
+            <Spinner />
+          ) : !page || page.rows.length === 0 ? (
             <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
               Нічого не знайшли.
             </p>
           ) : (
-            <ul className="divide-y rounded-lg border">
+            <ul
+              /* Dimmed while a newer page is in flight, so stale rows do not
+                 read as the answer to what was just typed. */
+              className={cn(
+                "divide-y rounded-lg border transition-opacity",
+                items.isPlaceholderData && "opacity-60",
+              )}
+            >
               {page.rows.map(reviveItemView).map((item) => {
                 // The Next page formats this server-side, where minQty is
                 // still a Decimal. Over HTTP it is a string, so the same two
@@ -390,7 +418,7 @@ export function ItemsRoute() {
             back to seeing everything, so hiding it on short lists would strand
             anyone who chose 10 and then filtered down to 8.
           */}
-          {page.total > 0 ? (
+          {page && page.total > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <p className="text-xs text-muted-foreground tabular-nums">
                 {page.from}–{page.to} з {page.total}
@@ -450,7 +478,7 @@ export function ItemsRoute() {
             </div>
           ) : null}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
