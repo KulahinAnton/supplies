@@ -29,6 +29,7 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 ## Commands
 
 - `pnpm dev:all` / `pnpm dev:stop` — **all three at once**: Next :3000, API :3200, SPA :5173, labelled and colour-coded. The port map is deliberate — 3100 is Playwright's production build, so nothing collides
+- **Moving or renaming a file while `dev:all` is running can leave Turbopack compiling the old copy.** It reports as `Module not found` quoting a line the file no longer contains, and no amount of editing fixes it because the file is not what is being compiled. `pnpm dev:stop`, `rm -rf apps/web/.next`, start again. A clean `pnpm build` passing while dev fails is the tell
 - `pnpm dev` — Next dev server (Turbopack) · `pnpm api:dev` → [apps/api](apps/api/CLAUDE.md) · `pnpm spa:dev` → [apps/spa](apps/spa/CLAUDE.md)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
 - `pnpm verify` — lint + typecheck + unit tests, the same gate the pre-commit hook runs
