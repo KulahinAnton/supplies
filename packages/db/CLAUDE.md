@@ -11,10 +11,23 @@ implementation. `bot/CLAUDE.md` has made the same promise since Feature 9.
 ## What is here
 
 - `prisma.ts` — the client singleton (driver adapter over `pg`)
+- `account-service.ts` — registration, invites, password change and both halves
+  of a password reset. Registration lives here rather than in either app
+  because it had two implementations that had already drifted: the API's
+  consumed an invite with a conditional `updateMany` inside the transaction and
+  the web app's did not, so two people opening one link at the same moment
+  could both join on it. What stays with the callers is only the session —
+  Next writes a NextAuth cookie, the API issues a token pair, both from the row
+  this returns
 - `queries.ts` — the only place the DB meets the pure engine; pages and
   endpoints never compute states themselves
 - `stock-service.ts` — the single write path, taking an `Actor` rather than
   reading a session, which is what makes "one implementation, N front ends" real
+- `email.ts` — Resend over plain fetch, plus the two templates. **Both take the
+  base URL as an argument** rather than reading `process.env.APP_URL`: the Next
+  app and the API are separate processes with separate environments, and
+  `createInvite` was once passing an `appUrl` that the template ignored — so an
+  invite could return one link to its caller and email a different one
 - `src/generated/prisma` — the client, gitignored, `pnpm prisma generate`
 
 `lib/queries.rsc.ts` stays in the Next app: it wraps these readers in

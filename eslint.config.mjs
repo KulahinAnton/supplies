@@ -37,6 +37,67 @@ const CORE_BANNED_NODE = {
     "Node builtins do not exist on a phone. node:crypto is the one exception, and only because no mobile entry point reaches telegram-link.ts.",
 };
 
+/**
+ * What no browser bundle may reach, whichever client it belongs to.
+ *
+ * Two of these are subtler than they look. `@supplies/core` exports every
+ * module under one wildcard, so `claude` (the Anthropic SDK, holding an API
+ * key) and `telegram-link` (`node:crypto`) are as importable as `stock` is —
+ * the ban on core IMPORTING Node builtins says nothing about a consumer
+ * REACHING the one module that has the exception. And `@supplies/db` opens
+ * with the generated Prisma client, which pulls `node:module` and fails the
+ * build in a way that names a file nobody wrote.
+ */
+const BROWSER_BANNED = [
+  {
+    group: ["@supplies/db", "@supplies/db/*", "@prisma/*", "prisma", "**/generated/prisma/**"],
+    message:
+      "The database layer is server-side. A browser client goes through the API — that is what apps/api is for.",
+  },
+  {
+    group: ["@supplies/core/claude", "@supplies/core/telegram-link", "@supplies/core/*.test"],
+    message:
+      "packages/core exports every module under one wildcard, and these are the server-only ones. Reaching them from a browser bundle ships an SDK, a Node builtin, or a test.",
+  },
+  {
+    group: ["node:*"],
+    message: "Node builtins do not exist in a browser.",
+  },
+  {
+    group: ["**/apps/web/**", "**/apps/api/**", "**/apps/spa/**", "**/apps/mobile/**"],
+    message:
+      "Nothing under apps/ may import from another app (CLAUDE.md). If two need it, it moves into a package.",
+  },
+];
+
+/**
+ * The contract that makes `packages/ui` shareable rather than merely shared.
+ *
+ * The owner's rule, and it is the right one: a shared component is acceptable
+ * only while it costs NEITHER host its own idioms. The moment this package
+ * imports `next/link`, the SPA gets a Next dependency it cannot use; the
+ * moment it imports `react-router`, the Next app does. Both are the kind of
+ * coupling that is invisible at the import site and obvious in the bug report.
+ *
+ * So navigation arrives through Base UI's `render` prop and refusals come back
+ * as booleans from host-supplied callbacks. That is not a style preference —
+ * it is the only shape that lets one component serve two routers and two ways
+ * of reporting an error. `SettingsListPanel` is the proof it works.
+ */
+const UI_BANNED = [
+  ...BROWSER_BANNED,
+  {
+    group: ["next", "next/*", "next-themes", "next-auth", "server-only"],
+    message:
+      "packages/ui renders in a Vite SPA too. Take what you need as a prop — a Link goes in through `render`, not through an import.",
+  },
+  {
+    group: ["react-router", "react-router/*", "@tanstack/*", "sonner"],
+    message:
+      "packages/ui renders inside a Next app too. The host owns routing, caching and toasts; this package takes callbacks and returns booleans.",
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -135,6 +196,69 @@ const eslintConfig = defineConfig([
      */
     files: ["**/*.mjs", "**/*.js"],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    /**
+     * See UI_BANNED above. Nothing in the type system enforces a package's
+     * host-neutrality, and `packages/ui` is imported by two applications that
+     * agree on almost nothing below the component layer.
+     */
+    files: ["packages/ui/**/*.ts", "packages/ui/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": ["error", { patterns: UI_BANNED }],
+    },
+  },
+  {
+    /**
+     * The SPA is a browser bundle with no server half at all — every write
+     * goes over HTTP to `apps/api`. Reaching for `@supplies/db` here would
+     * typecheck and then fail at build time inside the generated Prisma
+     * client, which is a long way from the import that caused it.
+     */
+    files: ["apps/spa/**/*.ts", "apps/spa/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            ...BROWSER_BANNED,
+            {
+              group: ["next", "next/*", "next-themes", "next-auth", "server-only"],
+              message:
+                "There is no Next here. Routing is react-router, the theme is src/components/theme.tsx, and the session is a bearer token — see apps/spa/CLAUDE.md for the mapping.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    /**
+     * The Next app has a server half, so it may hold `@supplies/db` — what it
+     * may not do is grow the SPA's client-side stack. Two routers or two
+     * caches in one app is how a codebase stops having an answer to "where
+     * does navigation happen".
+     */
+    files: ["apps/web/**/*.ts", "apps/web/**/*.tsx"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["react-router", "react-router/*", "@tanstack/*"],
+              message:
+                "The Next app routes with `next/navigation` and caches with the framework. react-router and TanStack Query belong to apps/spa.",
+            },
+            {
+              group: ["**/apps/api/**", "**/apps/spa/**", "**/apps/mobile/**"],
+              message:
+                "Nothing under apps/ may import from another app (CLAUDE.md). If two need it, it moves into a package.",
+            },
+          ],
+        },
+      ],
+    },
   },
   globalIgnores([
     "**/.next/**",

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { MESSAGES, type MessageKey } from "@supplies/core/messages";
 import { loginSchema } from "@supplies/core/validation/auth";
 import { Button } from "@supplies/ui/button";
@@ -71,6 +71,24 @@ export function LoginRoute() {
     <AuthPageShell
       title="Вхід"
       subtitle="Той самий акаунт, що й у вебзастосунку та Telegram-боті."
+      footer={
+        <>
+          Ще немає акаунта?{" "}
+          <Link
+            to="/register"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Створити
+          </Link>
+          <span className="mx-2">·</span>
+          <Link
+            to="/forgot-password"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Забули пароль?
+          </Link>
+        </>
+      }
     >
       <form onSubmit={(e) => void submit(e)} className="space-y-4" noValidate>
         <div className="space-y-2">

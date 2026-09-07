@@ -4,10 +4,16 @@ Vite + React Router + TanStack Query, against the API in
 [`apps/api`](../api/CLAUDE.md). Plan and phases:
 [SPA_API_PORT.md](../../SPA_API_PORT.md).
 
-**Phase 2.9 — the parity gate.** Nine screens exist and share the Next app's
-design system. Several are still short of their Next counterparts in content,
-and the per-screen checklist in SPA_API_PORT.md Phase 2.9 says which. Phase 3
-(React Native) does not start until that table is clear.
+**Parity is reached.** Every screen the Next app has, this one has, including
+the four public auth flows — and the Phase 2.9 checklist in SPA_API_PORT.md is
+clear. Phase 2.10's audit closed the last of it. The one route with no Next
+counterpart is `/status`, which exists to prove the engine runs in a browser
+bundle with no Prisma in it.
+
+What that buys, and what to protect: a change to one client is now a question
+about the other. If a rule moves, it moves into `packages/core` or
+`packages/db` so both get it; if a screen gains a control, the other screen is
+short of it until someone says otherwise.
 
 Nothing here is mocked. Every number is fetched from the API, because a client
 that fakes its data proves nothing about whether the three processes can
@@ -40,6 +46,46 @@ time, so it is a build-time variable, not a runtime lookup.
 §9.5). `revalidatePath` had no equivalent here; every mutation needs an explicit
 decision about what it invalidates, and making those up one screen at a time is
 how a cache starts lying.
+
+## How a screen is put together
+
+**Routes compose; they do not implement.** A file under `src/routes/` reads as
+a list of what goes where — the biggest is 311 lines and most are under 150.
+The two places the work actually lives:
+
+- `src/hooks/` — **what is true.** `useItemList` owns the URL state, the
+  350 ms debounce and the rule that a filter change resets to page 1 while a
+  pager click does not. `useShoppingList` owns the grouping and the
+  invalidation. `useItemWrite` returns a refusal instead of reporting it,
+  because only the caller knows whether it belongs in a dialog or a toast.
+- `src/components/<feature>/` — **what it looks like.** One component per
+  thing on screen, colocated by the screen that needs it.
+
+This is not a size rule. `shopping.tsx` was 1097 lines with a 444-line
+component holding nine `useState`s, and the reason to split it was that the
+rules inside were unreadable, not that the file was long.
+
+One consequence worth keeping: **`ItemSearchBar` is rendered unconditionally**
+by its parent. It used to sit inside a `page && (…)`, so every debounced
+keystroke unmounted the field along with the results and the caret went with
+it. A control that drives a query must never be conditional on that query's
+data — and having no `data` in scope in that file is what keeps it that way.
+
+## Routes are lazy, and one boundary catches what throws
+
+Fourteen of the sixteen route components are `lazy()` in `App.tsx`. `/login`
+and `/dashboard` stay eager because each is somebody's first paint — a chunk
+fetched during a tap is free, one fetched before the app opens is not.
+`@zxing/browser` is lazy behind the scan button and must stay that way: it is
+408 KB, more than the rest of the first paint put together.
+
+`ErrorBoundary` is a class — catching a render error is the one thing React
+still has no hook for. It sits **inside** the shell, so a screen that throws
+leaves the header and the nav standing.
+
+If you add a `manualChunks` entry to `vite.config.ts`, read the comment there
+first: naming a chunk overrides Rollup's automatic async splitting, and a
+blanket vendor chunk drags every lazy dependency back into the first paint.
 
 ## The design system is not local
 

@@ -6,7 +6,6 @@ import type { Env } from "../config/env";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { JwtAuthGuard } from "./jwt-auth.guard";
-import { RegistrationService } from "./registration.service";
 
 @Module({
   imports: [
@@ -21,7 +20,6 @@ import { RegistrationService } from "./registration.service";
   controllers: [AuthController],
   providers: [
     AuthService,
-    RegistrationService,
     // Global, so a new controller is protected by default and has to opt out
     // loudly with @Public(). Opt-in protection fails silently when forgotten.
     { provide: APP_GUARD, useClass: JwtAuthGuard },

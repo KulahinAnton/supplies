@@ -37,10 +37,14 @@ export class AccountController {
   @ApiOperation({ summary: "A single-use invite link, valid 7 days." })
   async invite(@CurrentUser() caller: Caller, @Body() body: { email?: string }) {
     /**
-     * The link points at `APP_URL` — the Next app — because that is where
-     * `/join/:token` is actually served. The SPA has no join page yet, and
-     * handing out a link to a route that does not exist would be worse than
-     * pointing both clients at one canonical place to accept an invitation.
+     * The link points at `APP_URL`, and now that the SPA has a `/join/:token`
+     * of its own that is a CHOICE rather than a constraint.
+     *
+     * An invitation goes to someone who has no account yet, so they have no
+     * preference between the two clients — but the person sending it does,
+     * and it is the one they are looking at. `APP_URL` is a single setting
+     * either client can be pointed at; two links for one invite would be a
+     * second token or a second answer to "which one is canonical".
      */
     return unwrap(
       await createInvite(caller, {

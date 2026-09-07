@@ -129,6 +129,21 @@ export function reviveBatch(batch: Batch): RevivedBatch {
     createdAt: new Date(batch.createdAt),
   };
 }
+/**
+ * Feature 3 — an archived item, as the archive screen needs it.
+ *
+ * Deliberately thinner than `ItemView`: an archived item has no stock state
+ * worth showing and no expiry worth warning about, because it is out of every
+ * list and every reminder. Showing badges here would imply otherwise.
+ */
+export type ArchivedItem = {
+  id: string;
+  name: string;
+  unit: Unit;
+  categoryName: string;
+  quantity: string;
+};
+
 export type AttentionCounts = { expiring: number; restock: number };
 
 export type ShoppingRow = {

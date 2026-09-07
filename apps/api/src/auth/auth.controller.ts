@@ -1,13 +1,20 @@
-import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ConfigService } from "@nestjs/config";
 import type { Env } from "../config/env";
 import { zodBody } from "../common/zod.pipe";
 import { ApiRuleError } from "../common/api-rule-error";
-import { loginSchema, registerSchema } from "../core";
+import type { ActionResult } from "../core";
+import { loginSchema } from "../core";
+import {
+  inviteHouseholdName,
+  registerUser,
+  requestPasswordReset,
+  resetPassword,
+  type RegisteredUser,
+} from "../db";
 import { AuthService, type SessionUser, type TokenPair } from "./auth.service";
-import { RegistrationService } from "./registration.service";
 import { CurrentUser, Public, type Caller } from "./jwt-auth.guard";
 
 /**
@@ -25,7 +32,6 @@ const REFRESH_COOKIE = "supplies_refresh";
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
-    private readonly registration: RegistrationService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -33,12 +39,61 @@ export class AuthController {
   @Post("register")
   @ApiOperation({ summary: "Create an account, and a household unless invited." })
   async register(
-    @Body(zodBody(registerSchema)) body: { name: string; email: string; password: string; inviteToken?: string },
+    @Body() body: unknown,
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    const user = await this.registration.register(body);
-    return this.respond(user, request, reply);
+    /**
+     * The rules — including the schema — are in
+     * `@supplies/db/account-service`, so a phone that registers and a browser
+     * that registers produce households that are indistinguishable. There
+     * used to be a `RegistrationService` here with a second copy of them, and
+     * the two had already drifted: only this one consumed the invite
+     * race-safely, which is the version that survived the merge.
+     */
+    const result = await registerUser(body);
+    return this.respond(this.orRefuse(result), request, reply);
+  }
+
+  @Public()
+  @Post("forgot-password")
+  @ApiOperation({
+    summary: "Email a reset link. Always 200, even for an unknown address.",
+  })
+  async forgotPassword(@Body() body: unknown): Promise<{ ok: true }> {
+    /**
+     * The always-ok answer is the security property, not an oversight: a
+     * caller who could tell "no such user" from "sent" would have a free
+     * membership oracle. The link points at `APP_URL`, which is where
+     * `/reset-password` is served.
+     */
+    this.orRefuse(
+      await requestPasswordReset(body, {
+        appUrl: this.config.get("APP_URL", { infer: true }),
+      }),
+    );
+    return { ok: true };
+  }
+
+  @Public()
+  @Post("reset-password")
+  @ApiOperation({ summary: "Redeem a reset token and set a new password." })
+  async resetPassword(@Body() body: unknown): Promise<{ ok: true }> {
+    this.orRefuse(await resetPassword(body));
+    return { ok: true };
+  }
+
+  @Public()
+  @Get("invite/:token")
+  @ApiOperation({
+    summary: "Whose household an invite leads to. 404 once it is spent.",
+  })
+  async invite(@Param("token") token: string): Promise<{ householdName: string }> {
+    const householdName = await inviteHouseholdName(token);
+    // A spent, expired or invented token are one answer on purpose — telling
+    // them apart would make this a lookup service for guessed tokens.
+    if (!householdName) throw new ApiRuleError(404, "auth.inviteInvalid");
+    return { householdName };
   }
 
   @Public()
@@ -94,8 +149,27 @@ export class AuthController {
     return this.auth.currentUser(caller.userId);
   }
 
+  /**
+   * Turn a service refusal into the right status.
+   *
+   * `unwrap` answers 422 for everything, which is correct for a rule the
+   * caller broke and wrong for these two: a taken email is a conflict, and a
+   * dead invite is a bad request. The mapping lives in the controller because
+   * status codes are HTTP's business, not the service's.
+   */
+  private orRefuse<T>(result: ActionResult<T>): T {
+    if (result.ok) return result.data as T;
+    const status =
+      result.error.key === "auth.emailTaken"
+        ? 409
+        : result.error.key.startsWith("auth.invite")
+          ? 400
+          : 422;
+    throw new ApiRuleError(status, result.error.key, result.error.params);
+  }
+
   private async respond(
-    user: SessionUser,
+    user: RegisteredUser,
     request: FastifyRequest,
     reply: FastifyReply,
   ): Promise<TokenPair & { user: SessionUser }> {

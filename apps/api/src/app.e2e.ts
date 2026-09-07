@@ -664,8 +664,9 @@ describe("account and telegram", () => {
     expect(status).toBe(201);
 
     const { url } = body as unknown as { url: string };
-    // APP_URL, not the API's own origin: the SPA has no join page, so both
-    // clients hand out one canonical place to accept an invitation.
+    // APP_URL, not the API's own origin. Both clients now serve
+    // `/join/:token`, so this is the setting that picks which one an
+    // invitation opens in — see the note on the controller.
     expect(url).toContain("/join/");
     expect(url.startsWith("http")).toBe(true);
   });
@@ -686,5 +687,99 @@ describe("account and telegram", () => {
         (body as unknown as { key: string }).key,
       );
     }
+  });
+
+  /**
+   * Phase 2.10.3 — the three endpoints that were missing, and the reason the
+   * SPA could not offer password reset at all.
+   *
+   * Each of these fails against the previous commit, which is what makes them
+   * worth writing: the rules existed only inside `apps/web/lib/actions/auth.ts`,
+   * talking to Prisma directly, so no HTTP client could reach them.
+   */
+  it("answers a reset request for an unknown address exactly like a known one", async () => {
+    const unknown = await request("POST", "/api/auth/forgot-password", {
+      body: { email: `nobody-${Date.now()}@example.com` },
+    });
+    const known = await request("POST", "/api/auth/forgot-password", {
+      body: { email: "anton@example.com" },
+    });
+
+    // Same status, same body. A caller who could tell these apart would have a
+    // free membership oracle for the household, which is the whole reason this
+    // endpoint refuses to be useful.
+    expect(unknown.status).toBe(known.status);
+    expect([200, 201]).toContain(known.status);
+    expect(JSON.stringify(unknown.body)).toBe(JSON.stringify(known.body));
+  });
+
+  it("refuses a reset token that was never issued", async () => {
+    const { status, body } = await request("POST", "/api/auth/reset-password", {
+      body: { token: "not-a-real-token", password: "supplies123" },
+    });
+
+    expect(status).toBe(422);
+    // The same key a spent or expired token gets: telling them apart would say
+    // which stolen tokens are worth retrying.
+    expect((body as unknown as { key: string }).key).toBe("auth.inviteInvalid");
+  });
+
+  it("refuses a malformed reset request before touching the database", async () => {
+    const { status, body } = await request("POST", "/api/auth/reset-password", {
+      body: { token: "x", password: "short" },
+    });
+
+    expect(status).toBe(422);
+    expect((body as unknown as { key: string }).key.startsWith("auth.")).toBe(true);
+  });
+
+  it("names the household behind a live invite, and 404s a spent one", async () => {
+    const { accessToken } = await signIn();
+    const created = await request("POST", "/api/account/invite", {
+      token: accessToken,
+    });
+    const { url } = created.body as unknown as { url: string };
+    const token = url.split("/join/")[1] ?? "";
+
+    const live = await request("GET", `/api/auth/invite/${token}`);
+    expect(live.status).toBe(200);
+    expect(
+      (live.body as unknown as { householdName: string }).householdName.length,
+    ).toBeGreaterThan(0);
+
+    // Public on purpose: the join screen has to say whose household it is
+    // BEFORE asking for a password, and holding the single-use token is the
+    // authorisation.
+    const invented = await request("GET", "/api/auth/invite/nope");
+    expect(invented.status).toBe(404);
+  });
+
+  it("refuses to register an email that already exists, with 409 not 422", async () => {
+    const { status, body } = await request("POST", "/api/auth/register", {
+      body: {
+        name: "Дубль",
+        email: "anton@example.com",
+        password: "supplies123",
+      },
+    });
+
+    // `unwrap` answers 422 for every refusal, which is right for a broken rule
+    // and wrong for a conflict. The controller maps this one deliberately.
+    expect(status).toBe(409);
+    expect((body as unknown as { key: string }).key).toBe("auth.emailTaken");
+  });
+
+  it("refuses to register against an invite token that does not exist", async () => {
+    const { status, body } = await request("POST", "/api/auth/register", {
+      body: {
+        name: "Гість",
+        email: `guest-${Date.now()}@example.com`,
+        password: "supplies123",
+        inviteToken: "not-a-real-invite",
+      },
+    });
+
+    expect(status).toBe(400);
+    expect((body as unknown as { key: string }).key).toBe("auth.inviteInvalid");
   });
 });

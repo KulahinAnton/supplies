@@ -449,26 +449,162 @@ Two rules for the work, because they change what "aligned" means:
 | — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` | **done** |
 | 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
 | 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
-| 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: the «Створити ‹query›» affordance (Feature 16.2), the archive link | **done** |
+| 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. The two stragglers, Feature 16.2's create affordance and the archive link, closed in Phase 2.10.4 | **done** |
 | 4 | item detail | FEFO-ordered batches with expired appended, per-batch take/correct/discard, «Поповнити» with Feature 4's multi-row form and its barcode check, «Взяли» with the shortfall refusal inline, barcode and notes, movement history, archive and restore | **done** |
 | 5 | item form | duplicate warning while typing, barcode lookup on scan or blur with the GS1 fallback and the Open Food Facts opt-in, the set picker that hides the minimum, the unit lock, notes | **done** |
 | 6 | shopping | full port: drag between groups, the move menu, group create/rename/delete, per-group add, the buy dialog with its stock-in, check/uncheck, archive and its reveal toggle, row editing, candidates with their detail lines, and who added or bought each row | **done** |
 | 7 | settings | all seven panels: household, categories with per-category warn days, locations, item groups with their thresholds, duplicates, members and invites, Telegram, password — with drag-to-reorder, star-a-default, add and delete throughout | **done** |
 | 8 | recipes | matched | **done** |
 | 9 | groups + group detail | both screens, with the membership editor and its barcode scan | **done** |
-| 10 | items archive | **missing entirely** | to do |
-| 11 | register · join · forgot · reset | **missing entirely** — 4 public routes | to do |
+| 10 | items archive | **missing entirely** | **done** — Phase 2.10.4 |
+| 11 | register · join · forgot · reset | **missing entirely** — 4 public routes, one of them blocked on the API | **done** — Phase 2.10.3–4 |
 
 Rows 3–7 were audited against their Next counterparts rather than guessed, and
 what is listed is what was actually found. They are on the shared design system
 and read as the same product; the remainder is content, and each gets its own
 pass.
 
+#### Phase 2.10 — the architecture audit
+
+**Added 2026-09-07**, after a four-part review asked of the whole workspace:
+is each client a showcase in its own right, what is left for parity, are the
+imports right where the two hosts differ, and is the SPA actually decomposed.
+
+The constraint that frames all four answers, stated by the owner and now
+binding:
+
+> The two apps share a **database, not a codebase**. Duplicated views or
+> duplicated logic between them is acceptable. A shared component is
+> acceptable **only while it costs neither host its own rules** — the moment
+> sharing forces either app into an idiom it would not otherwise choose, the
+> sharing is wrong and the duplication is right.
+
+That is a sharper test than "is this reused twice", and `packages/ui` passes
+it today (§4.3, re-verified below). It is not a licence to keep sharing: each
+new candidate gets tested against it individually.
+
+##### What the audit found
+
+**The parts that already hold up.** The engine boundary is enforced rather
+than documented — `eslint.config.mjs` bans Prisma, `next`, `react` and Node
+builtins inside `packages/core`, with `node:crypto` as a named exception.
+`lib/queries.rsc.ts` collapses the layout's and the page's duplicate scans
+through `React.cache` behind `server-only`. `lib/auth-guard.ts` re-reads the
+user row rather than trusting an eight-hour JWT. The SPA keeps its access
+token in memory with an httpOnly refresh cookie and single-flight rotation.
+None of that changes.
+
+**1 · Architecture.** Four gaps, two per client.
+
+- *Web has none of the App Router's error primitives.* No `error.tsx`, no
+  `global-error.tsx`, no `not-found.tsx`, no `loading.tsx`, and not one
+  `Suspense` boundary in the app. Every page is a blocking await and any throw
+  in a server component lands on Next's default screen. For an App Router
+  showcase this is the most conspicuous omission and the cheapest to close.
+- *Web never reaches for `useActionState` / `useFormStatus` / `useOptimistic`.*
+  Server actions everywhere, forms on react-hook-form plus a hand-written
+  runner. Coherent, but not the React 19 idiom a reviewer looks for.
+- *The SPA does not code-split.* All twelve routes are static imports in
+  `App.tsx`, so the build is one 749 KB chunk (240 KB gzip) and Vite's own
+  output names the fix. The technique is plainly understood — `@zxing/browser`
+  is already lazy behind the scan button — it just was not applied at the
+  route boundary, where it pays most.
+- *Neither client has an error boundary or a single component test.* All 357
+  tests are engine tests. Web has one Playwright spec; the SPA has none. The
+  SPA is also not installable while the Next app is, which is backwards: a
+  Vite SPA is where a manifest is nearly free.
+
+**2 · Parity.** Confirmed against the route inventory, not against this
+table's own claims. Five rows remain, and only one of them is blocked:
+
+| Missing | Blocked on |
+|---|---|
+| `/items/archive` | nothing — `GET /items/archive` already exists |
+| `/items`: the create affordance and the archive link | nothing |
+| `/register` | nothing — `POST /auth/register` already takes `inviteToken` |
+| `/join/:token` | one endpoint; `inviteHouseholdName` has no API equivalent |
+| `/forgot-password`, `/reset-password` | **two endpoints that do not exist** |
+
+The last row is the sixth instance of a pattern this plan has already fixed
+five times. `apps/web/lib/actions/auth.ts` hand-rolls token hashing, the
+one-hour expiry, single-use marking and the enumeration-safe always-ok
+response **directly against Prisma** — while `changePasswordAction` and
+`createInviteAction`, in the same file, correctly delegate to
+`@supplies/db/account-service`. The API cannot offer password reset because
+the rules are not reachable from it. Note this is *not* a code-sharing
+question: the rule belongs in the service layer both hosts already call
+through, which is the boundary the whole plan is built on.
+
+Features 7, 9 and 19 (PWA, Telegram webhook, cron digest) show up as web-only
+in a feature-marker diff and are **not** parity gaps — they are properties of
+the Next deployment.
+
+**3 · Imports.** `packages/ui` passes the constraint above: zero `next/*`,
+`react-router`, `sonner` or `@tanstack` imports, navigation injected through
+Base UI's `render` prop, refusals returned as booleans from host-supplied
+callbacks. One React copy resolves across all three packages, and the
+`"use client"` directives are inert under Vite while load-bearing under Next.
+Two real problems:
+
+- *The boundary is enforced for `core` and nowhere else.* Core's own config
+  comment reads "a convention that is not enforced is a convention that
+  breaks" — and then `packages/ui` and `apps/spa` run on convention alone.
+  Nothing stops the shared package importing `next/link` tomorrow, or the
+  browser app importing `@supplies/db`.
+- *`packages/core` exports everything with no condition split.* A browser can
+  reach `@supplies/core/claude` (the Anthropic SDK) or
+  `@supplies/core/telegram-link` (`node:crypto`); the lint rule governs what
+  core *imports*, not what a consumer *reaches*. `@supplies/core/stock.test`
+  is a public entry point too.
+
+**4 · SPA componentisation.** The clearest finding, and the sharpest contrast
+between the two clients:
+
+| SPA route | lines | largest single component |
+|---|---|---|
+| `shopping.tsx` | 1097 | `ShoppingRoute` — **444 lines, 9 `useState`** |
+| `settings.tsx` | 736 | 11 components — this one is right |
+| `item-detail.tsx` | 715 | `ItemDetailRoute` — 273 |
+| `item-form.tsx` | 544 | one component plus three helpers |
+| `items.tsx` | 509 | `ItemsRoute` — **426 lines, one component** |
+
+Web made the opposite call on the same screens: shopping is `shopping-list` +
+`shopping-group-header` + `shopping-row-edit`, settings is five panel files.
+Same product, 25 SPA files against ~60. The SPA has seven files in
+`components/` and twelve routes, so nearly everything lives in whichever route
+first needed it. `settings.tsx` — ported last, and decomposed — proves the app
+can do it; the earlier screens simply were not.
+
+In fairness to web, `shopping-list.tsx` at 803 lines is the same smell one
+size down.
+
+##### The board
+
+Ordered by value, not by file count. Each row is independently shippable.
+
+| # | Work | Closes | State |
+|---|---|---|---|
+| 2.10.1 | Decompose the SPA route monoliths into `components/` and `hooks/` | audit 4 | **done** |
+| 2.10.2 | Lazy route boundaries and an error boundary in the SPA | audit 1 | **done** |
+| 2.10.3 | Move the reset flow — and registration — into `@supplies/db/account-service`; four new endpoints | audit 2 blocker | **done** |
+| 2.10.4 | The five remaining screens: archive, register, join, forgot, reset | Phase 2.9 rows 10-11 | **done** |
+| 2.10.5 | `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx` in web | audit 1 | **done** |
+| 2.10.6 | ESLint boundaries for `packages/ui`, `apps/spa` and `apps/web` | audit 3 | **done** |
+| 2.10.7 | SPA web-app manifest | audit 1 | **done** |
+
+**Deferred, with reasons.** `useActionState` in web is a rewrite of seven
+working forms for idiom alone, and the custom runner exists partly to keep
+`SettingsListPanel` host-neutral — revisit only if the runner stops paying for
+itself. Component tests for both clients are Phase 4.5's CI work, where they
+belong with the matrix that runs them; adding a lone Vitest setup now would be
+a harness with three tests in it.
+
 ### Phase 3 — React Native, Android · 3–4 weeks
 
-> **Blocked on Phase 2.9.** Not started until web and SPA are at parity. The
-> reasoning is in §10: a third client built against a second-rate second client
-> copies its gaps, and the phone is the most expensive place to discover that.
+> **Was blocked on Phase 2.9; unblocked 2026-09-07.** The reasoning is in §10:
+> a third client built against a second-rate second client copies its gaps, and
+> the phone is the most expensive place to discover that. The gate is now
+> closed — see Phase 2.9's table and the Phase 2.10 audit that finished it.
 
 | # | Task | Est. |
 |---|---|---|
@@ -1179,10 +1315,135 @@ One test-harness note worth keeping: **React's `onBlur` is delegated from
 `focusout`**, so a synthetic `blur` event never reaches it. The first run of
 the barcode-blur check looked like a broken feature and was a broken test.
 
+### Phase 2.10 — the audit, and the board it produced · 2026-09-07
+
+Seven items, all closed. **The parity gate is closed with them**, which
+unblocks Phase 3.
+
+**Decomposition (2.10.1).** The four route monoliths became routes that
+compose. `shopping.tsx` went 1097 → 187 lines, `items.tsx` 509 → 145,
+`settings.tsx` 736 → 102, `item-detail.tsx` 715 → 311, `item-form.tsx` 544 →
+230. What came out of them is 30 files under `components/{items,shopping,item,
+item-form,settings,auth}/` and eight hooks under `hooks/`.
+
+The split is not by line count. **Hooks hold what is true; components hold
+what it looks like.** `useItemList` owns the debounce, the "which control
+resets the page" rule and the sort precedence — the three things on that
+screen that are easy to get subtly wrong — and they now read in thirty lines
+with no list row in sight. `useShoppingList` owns the grouping and the
+invalidation; `useBuyFlow` owns the one write that reports its own errors,
+because a shortfall belongs beside the field that caused it and the shared
+runner toasts.
+
+One thing the split preserved on purpose: `ItemSearchBar` is rendered
+unconditionally by its parent, and its own doc comment says why. It used to
+sit inside a `page && (…)`, so every debounced keystroke unmounted the field
+and took the caret with it. Having no `data` in scope in that file is now what
+keeps the rule true.
+
+**Code splitting and the boundary (2.10.2).** Ten of twelve routes are `lazy`.
+`/login` and `/dashboard` stay eager because each is somebody's first paint —
+a chunk fetched during a tap is free, a chunk fetched before the app opens is
+not. First paint went **749 KB → 603 KB**; `@dnd-kit` (43 KB) and the Base UI
+dialog (9 KB) left it entirely, since only lazy routes reach them.
+
+A blanket `manualChunks` vendor split was tried and reverted, and the config
+says so: naming a chunk *overrides* Rollup's automatic async splitting, so
+dnd-kit, the dialog and the 408 KB `@zxing/browser` were all dragged back into
+the first paint. It bought caching and cost 63 KB on the visit that matters
+most. What survives is a `react` chunk, which is honest about buying the
+second visit rather than the first.
+
+`ErrorBoundary` is a class, because catching a render error is still the one
+thing React has no hook for. It sits INSIDE the shell, not around it: a screen
+that throws leaves the header and the nav standing, since those are how the
+reader reaches a screen that works. `resetKey={pathname}` clears it on
+navigation.
+
+**The last shared rule (2.10.3).** The audit found password reset living only
+in `apps/web/lib/actions/auth.ts`, talking to Prisma directly — token hashing,
+the one-hour expiry, single-use marking, and the enumeration-safe always-ok
+answer. The API could not offer the feature because the rules were not
+reachable from it. All three moved to `@supplies/db/account-service`, and the
+Next actions are now four one-line delegations.
+
+Pulling that thread found something worse. **Registration had two
+implementations and they had already drifted.** `RegistrationService` in the
+API consumed an invite with a conditional `updateMany` inside the transaction;
+the web app's server action did not — so two people opening the same invite
+link at the same moment could both join on one token. The version that kept
+its guarantee is the one that survived; `registration.service.ts` is deleted
+and both callers now go through `registerUser`. What deliberately stays with
+the callers is the session: Next writes a NextAuth cookie, the API issues a
+token pair, and both build it from the same row.
+
+A latent bug fell out on the way: `createInvite` took an `appUrl` and
+`inviteEmail` ignored it in favour of `process.env.APP_URL`, so an invite
+could return one link to the caller and email a different one. Both templates
+now take the base URL as an argument, which makes that disagreement
+impossible to express.
+
+Four endpoints: `POST /auth/forgot-password`, `POST /auth/reset-password`,
+`GET /auth/invite/:token`, and a rewritten `POST /auth/register`. The status
+mapping lives in the controller rather than the service, because a taken email
+is a 409 and a dead invite is a 400 while `unwrap` answers 422 for everything
+— and status codes are HTTP's business.
+
+**Six new e2e checks**, each of which fails against the previous commit. The
+one worth naming asserts that `forgot-password` answers an unknown address
+**byte-identically** to a known one: same status, same body. That is the whole
+security property, and it is exactly the kind of thing that decays silently
+without a test.
+
+**The last five screens (2.10.4).** `/items/archive`, `/register`,
+`/join/:token`, `/forgot-password`, `/reset-password` — plus the two stragglers
+on `/items`, Feature 16.2's create affordance and the archive link. The four
+public routes share `useAuthForm`, which is `useState` where the Next versions
+use react-hook-form and the same schema from `@supplies/core/validation/auth`
+in both, so the two clients refuse the same input for the same reasons.
+
+The join screen fetches the household name before offering the form, because
+«Приєднатися до «Наша родина»» and «Приєднатися» are different questions.
+Holding the single-use token is the authorisation for that name, which is why
+the endpoint is public and why it 404s the moment the token is spent.
+
+**Web's error primitives (2.10.5).** `error.tsx`, `global-error.tsx`,
+`not-found.tsx` and `(app)/loading.tsx` — none of which existed, in an app
+that already called `notFound()` in three places and was therefore shipping
+Next's English default 404. `global-error.tsx` carries its own `<html>` and
+inline styles on purpose: the failure it exists for includes the case where
+the theme provider or the font loader is what threw.
+
+**Boundaries that bite (2.10.6).** The audit's sharpest finding was that
+`packages/core`'s contract is enforced by ESLint and nothing else was.
+`packages/ui` may no longer import `next/*` or `react-router` — both, in
+opposite directions, are the coupling the owner ruled out. `apps/spa` may not
+reach `@supplies/db`, Node builtins, another app, or the two `@supplies/core`
+modules that are server-only despite the wildcard export. `apps/web` may not
+grow a second router or a second cache.
+
+Each rule was **proved to fire** by writing a violating import and watching
+lint fail, then deleting it. A boundary rule that matches nothing is worth
+nothing.
+
+**Deferred, unchanged from the board.** `useActionState` in web is a rewrite
+of seven working forms for idiom alone. Component tests for both clients
+belong with Phase 4.5's CI matrix rather than as a harness with three tests in
+it.
+
+**Not run: the API e2e suite.** It needs the local Postgres and Docker was not
+running on this machine. Everything else passed — lint, four typechecks, 357
+unit tests, 20 API unit tests, all three builds — and the compiled API `dist`
+was checked for the specifier trap that has bitten three times before (no
+non-relative `@supplies/` survives compilation). The six new checks are
+written and unrun.
+
 ### Phases 3–5 — not started
 
-React Native, the deploy, iOS. **Phase 3 is blocked on the Phase 2.9 parity
-gate** (decision 10).
+React Native, the deploy, iOS. **The Phase 2.9 parity gate closed on
+2026-09-07**, so decision 10 no longer blocks Phase 3: every screen the Next
+app has, the SPA has, and the last business rule that lived in only one of
+them now lives in `packages/db`.
 
 ### Start here
 

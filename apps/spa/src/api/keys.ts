@@ -24,6 +24,7 @@ export const keys = {
   members: ["members"] as const,
   telegram: ["telegram"] as const,
   itemNames: ["item-names"] as const,
+  archive: ["archive"] as const,
   group: (id: string) => ["group", id] as const,
 };
 
@@ -34,3 +35,10 @@ export const stockWriteInvalidates = [
   keys.attention,
   keys.shopping,
 ];
+
+/**
+ * What archiving or restoring makes stale, which is everything a stock write
+ * touches **plus the archive itself**. Archiving removes an item from every
+ * list at once, so the narrow invalidation is the wrong instinct here.
+ */
+export const archiveWriteInvalidates = [...stockWriteInvalidates, keys.archive];
