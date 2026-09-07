@@ -17,7 +17,7 @@ export default defineConfig({
          * cache and downloads only what actually changed.
          *
          * The first visit got smaller from route-level `lazy()` in `App.tsx`
-         * — 749 KB down to 603 KB — which is a different fix for a different
+         * — 749 KB down to 605 KB — which is a different fix for a different
          * problem. Both were in the advice Vite's own chunk-size warning
          * prints, and only one of them was about first-paint bytes.
          */

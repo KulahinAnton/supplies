@@ -1344,8 +1344,13 @@ keeps the rule true.
 **Code splitting and the boundary (2.10.2).** Ten of twelve routes are `lazy`.
 `/login` and `/dashboard` stay eager because each is somebody's first paint —
 a chunk fetched during a tap is free, a chunk fetched before the app opens is
-not. First paint went **749 KB → 603 KB**; `@dnd-kit` (43 KB) and the Base UI
-dialog (9 KB) left it entirely, since only lazy routes reach them.
+not. First paint went **749 KB → 605 KB** (240 → 195 KB gzipped, and that 605 is
+after the four new auth screens); `@dnd-kit` (43 KB) and the Base UI dialog
+(9 KB) left it entirely, since only lazy routes reach them.
+
+The remainder is react-dom, react-router, TanStack Query, Base UI's core and
+the shell, which the first paint genuinely needs — so 605 KB is the honest
+floor for this stack rather than a number still worth attacking.
 
 A blanket `manualChunks` vendor split was tried and reverted, and the config
 says so: naming a chunk *overrides* Rollup's automatic async splitting, so
