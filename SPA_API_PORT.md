@@ -450,8 +450,8 @@ Two rules for the work, because they change what "aligned" means:
 | 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
 | 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
 | 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. Still missing: the «Створити ‹query›» affordance (Feature 16.2), the archive link | **done** |
-| 4 | item detail | on the design system, with per-batch dated chips and an edit link. Still missing: discard, correct, per-batch take, notes, location | partial |
-| 5 | item form | on the design system. Still missing: the `Select` primitive (deleted as unused; re-add when this screen is aligned), notes field, barcode lookup | partial |
+| 4 | item detail | FEFO-ordered batches with expired appended, per-batch take/correct/discard, «Поповнити» with Feature 4's multi-row form and its barcode check, «Взяли» with the shortfall refusal inline, barcode and notes, movement history, archive and restore | **done** |
+| 5 | item form | duplicate warning while typing, barcode lookup on scan or blur with the GS1 fallback and the Open Food Facts opt-in, the set picker that hides the minimum, the unit lock, notes | **done** |
 | 6 | shopping | full port: drag between groups, the move menu, group create/rename/delete, per-group add, the buy dialog with its stock-in, check/uncheck, archive and its reveal toggle, row editing, candidates with their detail lines, and who added or bought each row | **done** |
 | 7 | settings | all seven panels: household, categories with per-category warn days, locations, item groups with their thresholds, duplicates, members and invites, Telegram, password — with drag-to-reorder, star-a-default, add and delete throughout | **done** |
 | 8 | recipes | matched | **done** |
@@ -1135,6 +1135,49 @@ and cleared a set's threshold; created an invite link pointing at
 `APP_URL/join/…`; minted a Telegram deep link with the real bot username; and
 was refused a password change with «Поточний пароль невірний.» Everything was
 put back to the seeded values.
+
+### Phase 2.9 — the item page and its form · 2026-09-07
+
+The last two partial screens are done, and with them the parity gate is one
+row from closed.
+
+**Item detail** shows the batches in the order FEFO will actually draw them —
+by calling `fefoOrder` from `@supplies/core`, not by re-deriving "soonest
+expiry first, then undated oldest-first, expired excluded". That meant a
+`reviveBatch` alongside the existing revivers: the engine wants `Decimal` and
+`Date`, and JSON has neither. Reviving is the cheap half of the bargain; the
+expensive half would have been a second implementation of §3.3 that agreed
+with the server until it did not. Plus per-batch take, correct and discard,
+Feature 4's multi-row restock with its barcode check, the shortfall refusal
+inline, the movement history, and archive with its confirmation.
+
+**The item form** carries the whole of Feature 16.1 (a duplicate warning that
+recomputes as you type and never blocks), Feature 10 and 20 (the barcode
+lookup on scan *or* blur, with the GS1 manufacturer fallback worded as a
+separate fact rather than a name), Feature 18.2's opt-in share, Feature 26's
+set picker that replaces the minimum with a pointer to where it actually
+lives, and §3.2's unit lock.
+
+Both use `useState` where the Next versions use react-hook-form. That is a
+dependency difference, not a behavioural one: the schema is `itemSchema` from
+`@supplies/core/validation/item` in both, so the two forms refuse exactly the
+same items for exactly the same reasons, and the API refuses them again.
+
+Verified against both clients on one database. `/items/<id>` returns
+byte-identical headings, quantity, minimum, batch count and FEFO order in the
+SPA and the Next app. In the SPA: took one (150 → 149), was refused 99999 with
+«Не вистачає 99 850 штук — доступно (не прострочено) лише 149 штук» *inside
+the dialog next to the field*, restocked one (149 → 150), added and removed a
+second row in the multi-row form, corrected a batch 1 → 2 → 1 (151 → 150),
+saw «Усю партію» fill the field with the batch's own quantity, watched
+«Кава мелен» raise the duplicate warning, watched the set picker swap the
+minimum field for its pointer, and typed a barcode whose lookup answered
+«За даними GS1 Україна, виробник — ТОВ «САНДОРА»» with the share checkbox
+offered and unchecked. The item ended where it started: 150, no set, minimum 4.
+
+One test-harness note worth keeping: **React's `onBlur` is delegated from
+`focusout`**, so a synthetic `blur` event never reaches it. The first run of
+the barcode-blur check looked like a broken feature and was a broken test.
 
 ### Phases 3–5 — not started
 

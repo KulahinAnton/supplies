@@ -10,6 +10,7 @@
  * JSON has no decimal type. Never `Number()` one for arithmetic — only for
  * display, and only after `@supplies/core/format` has had it.
  */
+import { toDecimal, type Decimal } from "@supplies/core/decimal";
 import type { MovementReason, Unit } from "@supplies/core/units";
 
 export type StockState = "OUT" | "LOW" | "OK";
@@ -77,9 +78,23 @@ export type ItemDetail = {
     minQty: string;
     notes: string | null;
     barcode: string | null;
+    /** Feature 3 — archived, never deleted; movements still reference it. */
+    isArchived: boolean;
     batches: Batch[];
+    /** Feature 26 — the set this item is counted with, if any. */
+    groupId: string | null;
+    categoryId: string;
+    locationId: string | null;
     category: { id: string; name: string };
     location: { id: string; name: string } | null;
+    /** Most recent first, capped at 50 by the query. */
+    movements: {
+      id: string;
+      reason: MovementReason;
+      delta: string;
+      occurredAt: string;
+      user: { name: string };
+    }[];
   };
   household: { expiryWarnDays: number };
   warnDays: number;
@@ -87,6 +102,33 @@ export type ItemDetail = {
   stock: StockState;
   expiry: ExpiryState;
 };
+
+/**
+ * A batch as the engine wants it.
+ *
+ * `fefoOrder` takes `Decimal` and `Date`, because on the server it is handed
+ * Prisma rows. Reviving here is what lets the item page call the *same*
+ * ordering function the Next page calls, rather than re-deriving "soonest
+ * expiry first, then undated oldest-first, expired excluded" — which is
+ * §3.3 and has no business being written twice.
+ */
+export type RevivedBatch = Omit<Batch, "quantity" | "expiresAt" | "createdAt"> & {
+  quantity: Decimal;
+  expiresAt: Date | null;
+  createdAt: Date;
+  /** Kept as it arrived, for display without a second conversion. */
+  quantityRaw: string;
+};
+
+export function reviveBatch(batch: Batch): RevivedBatch {
+  return {
+    ...batch,
+    quantity: toDecimal(batch.quantity),
+    quantityRaw: batch.quantity,
+    expiresAt: batch.expiresAt ? new Date(batch.expiresAt) : null,
+    createdAt: new Date(batch.createdAt),
+  };
+}
 export type AttentionCounts = { expiring: number; restock: number };
 
 export type ShoppingRow = {
