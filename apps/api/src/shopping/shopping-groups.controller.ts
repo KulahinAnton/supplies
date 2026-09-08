@@ -9,6 +9,7 @@ import {
   renameShoppingGroup,
   reorderShoppingGroups,
 } from "../db";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * Feature 11 — the groups a shopping list is organised into: «Сільпо»,
@@ -28,6 +29,7 @@ import {
  */
 @ApiTags("shopping")
 @Controller("shopping-groups")
+@ApiRefusal(422)
 export class ShoppingGroupsController {
   @Post()
   @ApiOperation({ summary: "Create a group." })

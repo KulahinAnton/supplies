@@ -16,6 +16,14 @@ import {
 import { itemSchema, parseItemListSearch, updateItemSchema } from "../core";
 import { zodBody } from "../common/zod.pipe";
 import { unwrap } from "../common/unwrap";
+import { ApiContract, ApiRefusal } from "../common/openapi";
+import {
+  archivedItemSchema,
+  itemDetailSchema,
+  itemViewSchema,
+  itemsPageSchema,
+  namedItemSchema,
+} from "../contracts";
 
 /**
  * Feature 34 — reads, and nothing more.
@@ -33,6 +41,7 @@ import { unwrap } from "../common/unwrap";
  */
 @ApiTags("items")
 @Controller("items")
+@ApiRefusal(422)
 export class ItemsController {
   /**
    * The query string is the one `itemListSearch` writes — `q`, `filter`,
@@ -46,6 +55,7 @@ export class ItemsController {
    */
   @Get()
   @ApiOperation({ summary: "Paged, filtered, sorted items for this household." })
+  @ApiContract(itemsPageSchema)
   async list(
     @CurrentUser() caller: Caller,
     @Query() query: Record<string, string | string[] | undefined>,
@@ -57,12 +67,14 @@ export class ItemsController {
   @ApiOperation({
     summary: "Id and name only — for pickers, without loading every batch.",
   })
+  @ApiContract(namedItemSchema, { array: true })
   async names(@CurrentUser() caller: Caller) {
     return getItemNames(caller.householdId);
   }
 
   @Get("archive")
   @ApiOperation({ summary: "Archived items." })
+  @ApiContract(archivedItemSchema, { array: true })
   async archived(@CurrentUser() caller: Caller) {
     return getArchivedItems(caller.householdId);
   }
@@ -71,12 +83,15 @@ export class ItemsController {
   @ApiOperation({
     summary: "Every item with its computed state — what the dashboard reads.",
   })
+  @ApiContract(itemViewSchema, { array: true })
   async all(@CurrentUser() caller: Caller) {
     return getItemViews(caller.householdId);
   }
 
   @Get(":id")
   @ApiOperation({ summary: "One item, its batches and its recent movements." })
+  @ApiContract(itemDetailSchema)
+  @ApiRefusal(404)
   async detail(@CurrentUser() caller: Caller, @Param("id") id: string) {
     /**
      * `getItemDetail` is already scoped by `householdId`, so this returns null

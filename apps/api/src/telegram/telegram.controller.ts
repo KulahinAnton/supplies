@@ -6,6 +6,7 @@ import type { Env } from "../config/env";
 import { unwrap } from "../common/unwrap";
 import { createTelegramLink } from "../db";
 import { sendDigestNow } from "../bot";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * Feature 9 and 19.1 — the two Telegram buttons on the Settings screen.
@@ -23,6 +24,7 @@ import { sendDigestNow } from "../bot";
  */
 @ApiTags("telegram")
 @Controller("telegram")
+@ApiRefusal(422)
 export class TelegramController {
   constructor(private readonly config: ConfigService<Env, true>) {}
 

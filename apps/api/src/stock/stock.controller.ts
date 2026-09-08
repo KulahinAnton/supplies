@@ -11,6 +11,7 @@ import {
   correctionSchema,
   discardSchema,
 } from "../core";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * Feature 34 — the writes, and every one of them is three lines.
@@ -31,6 +32,7 @@ import {
  */
 @ApiTags("stock")
 @Controller("stock")
+@ApiRefusal(422)
 export class StockController {
   @Post("add")
   @ApiOperation({ summary: "Add one or more batches of an item (PURCHASE)." })

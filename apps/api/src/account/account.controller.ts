@@ -5,6 +5,7 @@ import { CurrentUser, type Caller } from "../auth/jwt-auth.guard";
 import type { Env } from "../config/env";
 import { unwrap } from "../common/unwrap";
 import { changePassword, createInvite } from "../db";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * The two things Settings lets you do to an account: change your password,
@@ -16,6 +17,7 @@ import { changePassword, createInvite } from "../db";
  */
 @ApiTags("account")
 @Controller("account")
+@ApiRefusal(422)
 export class AccountController {
   constructor(private readonly config: ConfigService<Env, true>) {}
 

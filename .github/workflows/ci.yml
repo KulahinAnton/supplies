@@ -68,6 +68,13 @@ jobs:
       - name: Integration smoke test
         run: pnpm test:db
 
+      # The API against the same seeded database — 50 checks, including the
+      # wire contracts every client's types are inferred from. Before the
+      # builds, because a broken contract should fail in seconds rather than
+      # after two production builds and two browsers.
+      - name: API end-to-end and contract tests
+        run: pnpm test:api:e2e
+
       # Before the e2e run, which serves this build rather than compiling its
       # own. `prisma generate` runs as part of the build script.
       - name: Build
@@ -79,10 +86,15 @@ jobs:
       - name: Install Chromium for Playwright
         run: pnpm exec playwright install chromium --with-deps
 
-      - name: End-to-end tests
+      - name: End-to-end tests — the Next app
         run: pnpm test:e2e
         env:
           AUTH_TRUST_HOST: "true"
+
+      # The SPA starts its own API on 3210 and serves its own build on 4173,
+      # so it shares nothing with the step above but the database.
+      - name: End-to-end tests — the SPA
+        run: pnpm test:e2e:spa
 
       # Only on failure — a green run should leave nothing to look at.
       - uses: actions/upload-artifact@v4
@@ -92,4 +104,6 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            apps/spa/playwright-report/
+            apps/spa/test-results/
           retention-days: 7

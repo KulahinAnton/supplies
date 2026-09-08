@@ -13,6 +13,8 @@ import {
   uncheckListRow,
   updateListRow,
 } from "../db";
+import { ApiContract, ApiRefusal } from "../common/openapi";
+import { shoppingViewSchema } from "../contracts";
 
 /**
  * Feature 34 — the shopping list.
@@ -28,9 +30,11 @@ import {
  */
 @ApiTags("shopping")
 @Controller("shopping")
+@ApiRefusal(422)
 export class ShoppingController {
   @Get()
   @ApiOperation({ summary: "The list, grouped, with archived rows separated." })
+  @ApiContract(shoppingViewSchema)
   async list(@CurrentUser() caller: Caller) {
     return getShoppingView(caller.householdId);
   }

@@ -4,6 +4,7 @@ import { Throttle } from "@nestjs/throttler";
 import { CurrentUser, type Caller } from "../auth/jwt-auth.guard";
 import { unwrap } from "../common/unwrap";
 import { suggestRecipe } from "../db";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * Feature 32 — «Рецепти».
@@ -19,6 +20,7 @@ import { suggestRecipe } from "../db";
  */
 @ApiTags("recipes")
 @Controller("recipes")
+@ApiRefusal(422)
 export class RecipesController {
   @Post("suggest")
   @Throttle({ default: { limit: 6, ttl: 60_000 } })

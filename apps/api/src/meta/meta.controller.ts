@@ -2,6 +2,8 @@ import { Controller, Get } from "@nestjs/common";
 import { Public } from "../auth/jwt-auth.guard";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { MOVEMENT_REASONS, UNITS } from "../core";
+import { ApiContract } from "../common/openapi";
+import { metaSchema } from "../contracts";
 
 /**
  * The enumerations a client needs before it can render a form.
@@ -24,6 +26,7 @@ export class MetaController {
   @ApiOperation({
     summary: "Enumerations the clients need — units and movement reasons.",
   })
+  @ApiContract(metaSchema)
   meta(): { units: readonly string[]; movementReasons: readonly string[] } {
     return { units: UNITS, movementReasons: MOVEMENT_REASONS };
   }

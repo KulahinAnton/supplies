@@ -412,13 +412,13 @@ Endpoint sketch — 46 actions and 17 readers collapse to roughly 40 routes:
 | # | Task | Est. |
 |---|---|---|
 | 2.1 | Vite scaffold, Tailwind v4 config, copy the 22 UI primitives | 1 d |
-| 2.2 | `packages/api-client`: generate types from OpenAPI, fetch wrapper, refresh-on-401 interceptor | 2 d |
+| 2.2 | The wire contract in `packages/core/contracts` — client types, the OpenAPI schemas and the e2e parser from one zod object each. **Done, inverted:** see the 2026-09-08 log for why generating FROM the document was the wrong direction | 2 d |
 | 2.3 | Auth context, protected routes, token storage | 1 d |
 | 2.4 | Router: 16 routes + the authed shell | 1 d |
 | 2.5 | TanStack Query hooks + invalidation map (the `revalidatePath` replacement) | 2 d |
 | 2.6 | Port screens: login → items → item detail → add/take → shopping → dashboard → settings → groups → recipes | 6–9 d |
 | 2.7 | Barcode scanner — lift the existing DOM code verbatim | 0.5 d |
-| 2.8 | Playwright against the SPA; adapt the 4 existing specs | 1 d |
+| 2.8 | Playwright against the SPA — 14 checks on the production build, two `webServer` entries, desktop and mobile | 1 d |
 | 2.9 | **Parity gate** — extract `packages/ui`, then align screen by screen | 4–6 d |
 
 #### Phase 2.9 — the parity gate
@@ -809,6 +809,20 @@ Three corrections, all from reading the first SPA screens next to the Next app.
   (simpler, one source of truth, needs `transpilePackages` + Metro config) or
   build to `dist` (works everywhere with no bundler config, adds a build step).
   Source is the default; revisit only if Metro fights back in Phase 3.1.
+- **Cross-tab refresh (found 2026-09-08, not fixed).** Refresh tokens rotate
+  and a replay revokes every session for that user, which is the correct
+  answer to theft. `refreshSession` shares one in-flight rotation per
+  document, so a double mount is harmless — but two TABS have two module
+  instances and two guards, so a pair restoring at the same instant can still
+  replay. The window is small (a probe with two simultaneous loads did not
+  reproduce it, because the first rotation lands before the second request
+  goes out) and the cost when it loses is being signed out of everything.
+  Two ways to close it: `navigator.locks` in the client, which is one browser
+  API and no server change, or a grace window on the server where a token
+  retired seconds ago is re-issued rather than treated as theft. The first is
+  smaller; the second also covers the phone. Decide when Phase 3.2 gives the
+  React Native app the same problem, since whatever is chosen should serve
+  both.
 
 ---
 
@@ -1539,6 +1553,96 @@ anyone would have to trust.
 
 **Green: lint, four typechecks, 357 unit tests, 20 API unit tests, 38 API e2e,
 every smoke check, 8 Playwright checks, three builds.**
+
+### Phase 2 — closed · 2026-09-08
+
+The last two rows, 2.2 and 2.8. **Phase 2 is done.**
+
+##### 2.2 — the contract, and why it runs the other way
+
+The task said "generate types from the OpenAPI document". Looking at what that
+would actually produce stopped it: the API had **zero** response
+documentation — no DTOs, no `@ApiResponse`, no `@ApiProperty` — so `/docs`
+listed forty URLs and described none of their answers, and a generator pointed
+at it would have emitted `unknown` for every one.
+
+The obvious repair is a DTO class per shape with `@ApiProperty` on each field.
+This API already refused that bargain once: `common/zod.pipe.ts` explains why
+request validation does not use class-validator — two definitions of a valid
+item drift, and the second one always loses. Response shapes are the same
+problem, so they get the same answer rather than the opposite one.
+
+So the direction inverted. `packages/core/src/contracts/` now holds one zod
+object per wire shape, and three things fall out of each that cannot disagree:
+
+- the TypeScript type the SPA consumes (`z.infer`)
+- the OpenAPI schema `/docs` publishes (`z.toJSONSchema`, no new dependency)
+- a parser the API's own e2e suite runs real responses through
+
+The third is what makes the first two true. `apps/spa/src/api/types.ts` was 332
+hand-written lines copied from what the endpoints were observed to send; it is
+now re-exports plus the three revivers JSON forces. **Every SPA screen
+typechecked against the generated types with no edit** — which is the evidence
+the hand-written copies were accurate, and the reason nothing else had to move.
+
+Twelve contract tests parse `/health`, `/meta`, `/auth/*`, `/dashboard`,
+`/attention`, `/movements`, `/household`, `/taxonomy`, `/items` and its paged
+form, `/items/names|archive|all`, `/items/:id` (choosing an item that HAS
+batches, so a wrong batch schema cannot pass by never being exercised),
+`/shopping`, `/groups`, `/groups/:id`, `/restock`, `/barcode/:code/item` and a
+refusal envelope. Fifty checks now, all green.
+
+Stated plainly in the suite, because the limit is easy to miss: a field that
+disappears, is renamed or changes type fails there; a field the API *adds*
+does not, since zod ignores unknown keys. That is the right default for how an
+API evolves, and the mitigation for the gap is that client types come from
+these schemas — a field nobody added here is a field no client can read.
+
+`/docs` went from describing nothing to publishing 28 success schemas and **52
+refusal envelopes**. The second number is the more useful one: the envelope is
+the unusual thing about this API — a message KEY and its params, never prose,
+so three clients render one Ukrainian catalogue. A reader who does not see
+that writes `catch (e) { show(e.message) }` and ships English.
+
+##### 2.8 — Playwright against the SPA
+
+Fourteen checks across desktop and a Pixel 7 viewport, on the **production
+build**, with two `webServer` entries: the compiled API on 3210 and `vite
+preview` on 4173. The SPA is rebuilt inside that command, because
+`VITE_API_URL` is inlined at build time and a bundle built for the default
+3200 would ignore the API the suite just started.
+
+They cover the machinery the Next app does not have: a token held in memory, a
+session restored from an httpOnly cookie, a mutation invalidating a query
+cache, a lazy route chunk arriving. The stock test asserts the number falls
+after «Взяли» — in the Next app that number changes because the server
+re-rendered; here it changes because an invalidation was written correctly,
+and nothing else proves the key map is right. A forgotten key looks exactly
+like a successful write until someone notices the screen disagreeing with the
+database.
+
+**One test says what it cannot do.** The reload test guards the property — one
+refresh, session survives — but it cannot reproduce the StrictMode replay bug
+it was written for, because a production build does not double-invoke effects.
+Verified by reverting the fix and watching it pass anyway. The comment says
+so; a test trusted to catch something it cannot is worse than no test.
+
+That check also corrected the fix's own description. `refreshSession` shares
+one rotation **per document**, so it makes a double mount harmless — and two
+TABS have two module instances and two guards, so a pair restoring at the same
+instant is still a race. A probe with two simultaneous loads did not reproduce
+it (the first rotation lands before the second request goes out), but narrow
+is not never. §10 now carries it as an open item with the two ways to close
+it, to be decided when Phase 3.2 gives the phone the same problem.
+
+##### CI
+
+Both suites are in `ci.yml`. The API's runs before the builds, so a broken
+contract fails in seconds rather than after two production builds and two
+browsers.
+
+**Green: lint, four typechecks, 357 unit, 20 API unit, 50 API e2e, every smoke
+check, 8 Playwright on web, 14 on the SPA, three builds.**
 
 ### Phases 3–5 — not started
 

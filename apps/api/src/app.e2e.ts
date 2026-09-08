@@ -10,6 +10,31 @@ import { AppModule } from "./app.module";
 import { EmptyBodyPipe } from "./common/empty-body.pipe";
 import { RuleErrorFilter } from "./common/rule-error.filter";
 import { prisma } from "./db";
+import * as z from "zod";
+import {
+  apiErrorSchema,
+  attentionCountsSchema,
+  archivedItemSchema,
+  barcodeItemSchema,
+  dashboardSchema,
+  groupDetailSchema,
+  groupViewSchema,
+  healthSchema,
+  householdSchema,
+  itemDetailSchema,
+  itemViewSchema,
+  itemsPageSchema,
+  memberSchema,
+  metaSchema,
+  movementSchema,
+  namedItemSchema,
+  readySchema,
+  restockEntrySchema,
+  sessionUserSchema,
+  shoppingViewSchema,
+  taxonomySchema,
+  tokenPairSchema,
+} from "./contracts";
 
 /**
  * Feature 34 — the API against a **live seeded database**, the same bargain
@@ -810,5 +835,155 @@ describe("account and telegram", () => {
 
     expect(status).toBe(400);
     expect((body as unknown as { key: string }).key).toBe("auth.inviteInvalid");
+  });
+});
+
+/**
+ * Phase 2.2 — the contract, checked against a real database.
+ *
+ * Every schema in `@supplies/core/contracts` claims to describe a response.
+ * These are what make the claim true: the SPA's types are inferred from those
+ * schemas, so a query that changes shape fails HERE rather than as `undefined`
+ * on someone's dashboard.
+ *
+ * What this catches and what it does not, stated plainly rather than implied:
+ * a field that disappears, is renamed, or changes type fails here, because zod
+ * requires every key the schema declares. A field the API *adds* does not,
+ * because zod ignores unknown keys — and that is the right default for the
+ * direction an API actually evolves. The cost is that a response can grow a
+ * field the contract never learns about; the mitigation is that the SPA's
+ * types come from these schemas, so a field nobody added here is a field no
+ * client can read, which is noticed the first time someone wants it.
+ */
+describe("the wire contract", () => {
+  /** Parse, and fail with the path zod objected to rather than "invalid". */
+  function conforms(schema: z.ZodType, body: unknown, label: string) {
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues
+        .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+        .join("; ");
+      throw new Error(`${label} does not match its contract — ${issues}`);
+    }
+  }
+
+  it("GET /health and /health/ready", async () => {
+    conforms(healthSchema, (await request("GET", "/health")).body, "/health");
+    conforms(readySchema, (await request("GET", "/health/ready")).body, "/health/ready");
+  });
+
+  it("GET /meta", async () => {
+    const { accessToken } = await signIn();
+    conforms(metaSchema, (await request("GET", "/api/meta", { token: accessToken })).body, "/meta");
+  });
+
+  it("POST /auth/login and GET /auth/me", async () => {
+    const login = await request("POST", "/api/auth/login", { body: LOGIN });
+    conforms(tokenPairSchema, login.body, "/auth/login");
+
+    const { accessToken } = login.body as unknown as { accessToken: string };
+    const me = await request("GET", "/api/auth/me", { token: accessToken });
+    conforms(sessionUserSchema, me.body, "/auth/me");
+  });
+
+  it("GET /dashboard, /attention, /movements", async () => {
+    const { accessToken } = await signIn();
+    const token = accessToken;
+
+    conforms(dashboardSchema, (await request("GET", "/api/dashboard", { token })).body, "/dashboard");
+    conforms(attentionCountsSchema, (await request("GET", "/api/attention", { token })).body, "/attention");
+    conforms(
+      z.array(movementSchema),
+      (await request("GET", "/api/movements", { token })).body,
+      "/movements",
+    );
+  });
+
+  it("GET /household, /household/members, /taxonomy", async () => {
+    const { accessToken: token } = await signIn();
+
+    conforms(householdSchema, (await request("GET", "/api/household", { token })).body, "/household");
+    conforms(
+      z.array(memberSchema),
+      (await request("GET", "/api/household/members", { token })).body,
+      "/household/members",
+    );
+    conforms(taxonomySchema, (await request("GET", "/api/taxonomy", { token })).body, "/taxonomy");
+  });
+
+  it("GET /items and its paging shape", async () => {
+    const { accessToken: token } = await signIn();
+
+    conforms(itemsPageSchema, (await request("GET", "/api/items", { token })).body, "/items");
+    // The paged form as well as the default: `from`/`to`/`pageCount` only
+    // become interesting once a page size is in play.
+    conforms(
+      itemsPageSchema,
+      (await request("GET", "/api/items?per=10&page=1&sort=name", { token })).body,
+      "/items?per=10",
+    );
+  });
+
+  it("GET /items/names, /items/archive, /items/all", async () => {
+    const { accessToken: token } = await signIn();
+
+    conforms(z.array(namedItemSchema), (await request("GET", "/api/items/names", { token })).body, "/items/names");
+    conforms(z.array(archivedItemSchema), (await request("GET", "/api/items/archive", { token })).body, "/items/archive");
+    conforms(z.array(itemViewSchema), (await request("GET", "/api/items/all", { token })).body, "/items/all");
+  });
+
+  it("GET /items/:id, on an item that has batches and movements", async () => {
+    const { accessToken: token } = await signIn();
+    const page = (await request("GET", "/api/items", { token })).body as unknown as {
+      rows: { id: string; batchCount: number }[];
+    };
+    // Pick one with stock: an item with no batches would let a wrong `batches`
+    // schema pass by never being exercised.
+    const withStock = page.rows.find((r) => r.batchCount > 0) ?? page.rows[0];
+    conforms(
+      itemDetailSchema,
+      (await request("GET", `/api/items/${withStock?.id ?? ""}`, { token })).body,
+      "/items/:id",
+    );
+  });
+
+  it("GET /shopping, /groups, /restock", async () => {
+    const { accessToken: token } = await signIn();
+
+    conforms(shoppingViewSchema, (await request("GET", "/api/shopping", { token })).body, "/shopping");
+    conforms(z.array(groupViewSchema), (await request("GET", "/api/groups", { token })).body, "/groups");
+    conforms(z.array(restockEntrySchema), (await request("GET", "/api/restock", { token })).body, "/restock");
+  });
+
+  it("GET /groups/:id, when the household has a set", async () => {
+    const { accessToken: token } = await signIn();
+    const groups = (await request("GET", "/api/groups", { token })).body as unknown as {
+      id: string;
+    }[];
+    if (groups.length === 0) return; // Feature 26 is optional; nothing to check.
+
+    conforms(
+      groupDetailSchema,
+      (await request("GET", `/api/groups/${groups[0]?.id ?? ""}`, { token })).body,
+      "/groups/:id",
+    );
+  });
+
+  it("GET /barcode/:code/item, for a code nothing matches", async () => {
+    const { accessToken: token } = await signIn();
+    conforms(
+      barcodeItemSchema,
+      (await request("GET", "/api/barcode/0000000000000/item", { token })).body,
+      "/barcode/:code/item",
+    );
+  });
+
+  it("a refusal carries a key, not prose", async () => {
+    const { status, body } = await request("POST", "/api/auth/login", {
+      body: { email: "anton@example.com", password: "wrong-password" },
+    });
+
+    expect(status).toBe(401);
+    conforms(apiErrorSchema, body, "a refusal");
   });
 });

@@ -25,6 +25,7 @@ import {
   itemGroupSchema,
   locationSchema,
 } from "../core";
+import { ApiRefusal } from "../common/openapi";
 
 /**
  * Feature 34 — settings.
@@ -42,6 +43,7 @@ import {
  */
 @ApiTags("settings")
 @Controller("settings")
+@ApiRefusal(422)
 export class SettingsController {
   @Patch("household")
   @ApiOperation({ summary: "Warn days, digest hour, AI switch — household data." })

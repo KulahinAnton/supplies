@@ -16,6 +16,13 @@ import {
 } from "../db";
 import { AuthService, type SessionUser, type TokenPair } from "./auth.service";
 import { CurrentUser, Public, type Caller } from "./jwt-auth.guard";
+import { ApiContract, ApiRefusal } from "../common/openapi";
+import {
+  inviteHouseholdSchema,
+  okSchema,
+  sessionUserSchema,
+  tokenPairSchema,
+} from "../contracts";
 
 /**
  * Feature 34.
@@ -46,6 +53,8 @@ export class AuthController {
   @Public()
   @Post("register")
   @ApiOperation({ summary: "Create an account, and a household unless invited." })
+  @ApiContract(tokenPairSchema, { status: 201 })
+  @ApiRefusal(400, 409, 422)
   async register(
     @Body() body: unknown,
     @Req() request: FastifyRequest,
@@ -68,6 +77,7 @@ export class AuthController {
   @ApiOperation({
     summary: "Email a reset link. Always 200, even for an unknown address.",
   })
+  @ApiContract(okSchema, { status: 201 })
   async forgotPassword(@Body() body: unknown): Promise<{ ok: true }> {
     /**
      * The always-ok answer is the security property, not an oversight: a
@@ -86,6 +96,8 @@ export class AuthController {
   @Public()
   @Post("reset-password")
   @ApiOperation({ summary: "Redeem a reset token and set a new password." })
+  @ApiContract(okSchema, { status: 201 })
+  @ApiRefusal(400, 422)
   async resetPassword(@Body() body: unknown): Promise<{ ok: true }> {
     this.orRefuse(await resetPassword(body));
     return { ok: true };
@@ -96,6 +108,8 @@ export class AuthController {
   @ApiOperation({
     summary: "Whose household an invite leads to. 404 once it is spent.",
   })
+  @ApiContract(inviteHouseholdSchema)
+  @ApiRefusal(404)
   async invite(@Param("token") token: string): Promise<{ householdName: string }> {
     const householdName = await inviteHouseholdName(token);
     // A spent, expired or invented token are one answer on purpose — telling
@@ -107,6 +121,8 @@ export class AuthController {
   @Public()
   @Post("login")
   @ApiOperation({ summary: "Exchange a password for a token pair." })
+  @ApiContract(tokenPairSchema, { status: 201 })
+  @ApiRefusal(401, 422)
   async login(
     @Body(zodBody(loginSchema)) body: { email: string; password: string },
     @Req() request: FastifyRequest,
@@ -121,6 +137,8 @@ export class AuthController {
   @ApiOperation({
     summary: "Rotate a refresh token. Replaying a used one revokes every session.",
   })
+  @ApiContract(tokenPairSchema, { status: 201 })
+  @ApiRefusal(401)
   async refresh(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -135,6 +153,7 @@ export class AuthController {
   @Public()
   @Post("logout")
   @ApiOperation({ summary: "Revoke this device's refresh token." })
+  @ApiContract(okSchema, { status: 201 })
   async logout(
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -150,6 +169,7 @@ export class AuthController {
 
   @Get("me")
   @ApiOperation({ summary: "The signed-in user, re-read from the database." })
+  @ApiContract(sessionUserSchema)
   async me(@CurrentUser() caller: Caller): Promise<SessionUser> {
     // Re-read rather than echo the token's claims: a 15-minute access token
     // can outlive a deactivated account (lib/auth-guard.ts makes the same

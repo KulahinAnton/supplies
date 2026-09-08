@@ -45,7 +45,17 @@ time, so it is a build-time variable, not a runtime lookup.
 **Write the query-key map before porting screens, not during** (SPA_API_PORT.md
 §9.5). `revalidatePath` had no equivalent here; every mutation needs an explicit
 decision about what it invalidates, and making those up one screen at a time is
-how a cache starts lying.
+how a cache starts lying. `e2e/spa.spec.ts` is what proves the map is right: a
+forgotten key looks exactly like a successful write until someone notices the
+screen disagreeing with the database.
+
+## The response types are not written here
+
+`src/api/types.ts` re-exports `@supplies/core/contracts` and adds the three
+revivers JSON forces. **Do not hand-add a field to it.** If an endpoint grows
+one, it goes in the contract, where the OpenAPI document and the API's own
+contract tests pick it up too — a field added only here is a field the server
+is not known to send.
 
 ## How a screen is put together
 
@@ -132,8 +142,10 @@ refreshes and the second carried the token the first had just retired. The
 app turned itself in; the symptom was being signed out immediately after
 registering.
 
-StrictMode makes it certain in development. Two tabs restored at once do the
-same thing in production.
+The guard is per **document**, so it fixes a double mount and not two tabs
+loading at the same instant — those have two module instances and two guards.
+That race is real and narrow, and it is an open item in SPA_API_PORT.md §10
+rather than something this fixed.
 
 Related, in `api/client.ts`: a 401 clears the access token only when the token
 still installed is the one that failing attempt carried. Otherwise a slow

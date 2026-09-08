@@ -43,15 +43,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * access token.
    *
    * It used to post directly, and that was a real bug rather than a style
-   * point. Refresh tokens ROTATE, and the API answers a replayed one by
-   * revoking every session — correctly, since a replay is what token theft
-   * looks like. React's StrictMode double-invokes this effect in development,
-   * so two refreshes went out, the second carrying the token the first had
-   * just retired. The symptom was being anonymous immediately after
-   * registering; the cause was the app reporting itself for theft.
+   * point. Refresh tokens ROTATE, and `AuthService.refresh` answers a replayed
+   * one by revoking every session for that user — correctly, since a replay is
+   * what token theft looks like. React's StrictMode double-invokes this effect,
+   * so two refreshes went out, the second carrying the token the first had just
+   * retired. The symptom was being anonymous immediately after registering; the
+   * cause was the app reporting itself for theft.
    *
-   * `refreshSession` shares one in-flight rotation between every caller, which
-   * is what makes a second mount — or a second tab — harmless.
+   * `refreshSession` shares one in-flight rotation between every caller **in
+   * this document**, which is what makes a double mount harmless.
+   *
+   * What it does NOT fix, stated because the scope is easy to overestimate:
+   * two TABS have two module instances and therefore two guards, so a pair
+   * restoring at the same instant is still a race the client cannot close from
+   * here. It is narrow — the first rotation usually lands before the second
+   * request is sent, and a probe with two simultaneous loads did not reproduce
+   * it — but narrow is not never. Closing it properly needs a cross-tab lock
+   * (`navigator.locks`) or a short grace window on the server; SPA_API_PORT.md
+   * §10 carries it as an open item rather than a fixed one.
    */
   useEffect(() => {
     let cancelled = false;
