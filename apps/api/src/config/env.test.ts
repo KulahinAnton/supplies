@@ -17,9 +17,12 @@ describe("defaults", () => {
   it("boots on localhost with nothing but a database and a secret", () => {
     const env = validateEnv(MINIMAL);
     expect(env.API_PORT).toBe(3200);
+    // The three local clients: SPA, Next app, and `expo start --web`. The
+    // phone itself needs none of them — a native fetch sends no Origin.
     expect(env.CORS_ORIGINS).toEqual([
       "http://localhost:5173",
       "http://localhost:3000",
+      "http://localhost:8081",
     ]);
     expect(env.COOKIE_SAMESITE).toBe("lax");
     expect(env.COOKIE_SECURE).toBe(false);

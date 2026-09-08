@@ -606,16 +606,16 @@ a harness with three tests in it.
 > the phone is the most expensive place to discover that. The gate is now
 > closed — see Phase 2.9's table and the Phase 2.10 audit that finished it.
 
-| # | Task | Est. |
-|---|---|---|
-| 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d |
-| 3.2 | `expo-secure-store` tokens, same `api-client`, refresh on 401 | 1 d |
-| 3.3 | **Milestone A** — login, items list, item detail with take/add, scan | 4–5 d |
-| 3.4 | `expo-camera` barcode scanning | 1 d |
-| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d |
-| 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w |
-| 3.7 | Push notifications via `expo-notifications` | 2–3 d |
-| 3.8 | Play Console listing ($25, once) | 1 d |
+| # | Task | Est. | State |
+|---|---|---|---|
+| 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d | **done** |
+| 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | |
+| 3.3 | **Milestone A** — login, items list, item detail with take/add, scan | 4–5 d | |
+| 3.4 | `expo-camera` barcode scanning | 1 d | |
+| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | ⚠ needs an Expo account |
+| 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | |
+| 3.7 | Push notifications via `expo-notifications` | 2–3 d | |
+| 3.8 | Play Console listing ($25, once) | 1 d | ⚠ needs an account |
 
 **Milestone A is a checkpoint, not a reduced scope.** Full parity is the
 destination; 3.3–3.5 just happen to be the order that proves the whole stack —
@@ -1643,6 +1643,94 @@ browsers.
 
 **Green: lint, four typechecks, 357 unit, 20 API unit, 50 API e2e, every smoke
 check, 8 Playwright on web, 14 on the SPA, three builds.**
+
+### Phase 3.1 — the scaffold, and Metro against pnpm · 2026-09-08
+
+`apps/mobile` exists: Expo SDK 57, Expo Router, NativeWind 4, TanStack Query,
+`react-native-safe-area-context` wrapping the app from the first commit.
+
+**`metro.config.js` is the whole of this task**, and §9.2 was right to budget
+half a day for it. Three settings, and the third is the one where every
+monorepo guide gives advice that is wrong here:
+
+- `watchFolders` — the workspace root, or an edit to `packages/core` never
+  rebuilds and the app serves a stale copy of a rule you just changed.
+- `nodeModulesPaths` — this app's store, then the root's.
+- **`disableHierarchicalLookup` stays `false`.** Turning it on is the standard
+  npm/yarn workspace fix, because with a hoisted `node_modules` the upward walk
+  finds packages the app never declared. pnpm does not hoist: each package gets
+  a private `node_modules` holding exactly its own dependencies, so the upward
+  walk *is* correct resolution. Turned on, the bundle died on `expo-router` →
+  `@expo/metro-runtime` → `whatwg-fetch` — none of which this app declares, nor
+  should. Adopting twenty of Expo's transitive dependencies to satisfy a
+  setting would have been the wrong repair.
+- `unstable_enablePackageExports` — `packages/core` publishes subpaths only and
+  has no barrel (deliberately: a barrel would drag `node:crypto` into every
+  screen's module graph), so Metro has to honour `exports`.
+
+One dependency is declared here and looks wrong until you know why:
+`react-native-css-interop`. NativeWind's babel preset rewrites this app's own
+JSX to import its runtime, so these files genuinely depend on it and the
+upward walk from `app/` cannot see inside `nativewind`'s private store.
+
+##### What the proof screen actually proves
+
+`app/index.tsx` is not a hello-world. It runs PROJECT_PROMPT.md §3.6 — the
+worked example `packages/core/src/stock.test.ts` reproduces verbatim — on the
+device, and prints what the engine answered:
+
+| | |
+|---|---|
+| Всього | **13 шт.** |
+| Довга форма | **13 штук** — `Intl.PluralRules`, the "many" form |
+| Запас (мінімум 4) | **OK** |
+| Придатність | **EXPIRED** — the item takes the worst state of its batches |
+| Порядок FEFO | **soonest → later → undated** — §3.3, expired excluded |
+
+Then the exported bundle was grepped, which is the part that matters:
+`штук`, `packages/core`, `fefoOrder` and `UNIT_PLURAL` are all in it;
+`@prisma/client`, `PrismaClient` and `node:crypto` are not. The single
+`node:module` hit is a comment in `format.ts` warning about it. **That is
+Phase 0's payoff, collected**: the engine was decoupled from `Prisma.Decimal`
+so a Metro bundle could take it, and now one has.
+
+The bans are enforced rather than hoped for. `eslint.config.mjs` extends the
+browser boundary to `apps/mobile` — `@supplies/db`, Prisma, `node:*`, the two
+server-only core modules, `next/*`, and sibling apps — and each was proved to
+fire by writing a violating import and watching lint fail. The Node-builtin
+ban is the load-bearing one here: a browser fails loudly, while **Metro
+resolves a builtin to nothing and the app crashes on a phone**, which is the
+most expensive place this project has to learn anything.
+
+##### Verified without a device
+
+`expo export --platform android` resolves the whole module graph and writes a
+Hermes bundle with no emulator involved, so a resolution mistake surfaces in
+seconds — `pnpm mobile:bundle`. The screen itself was rendered through
+`expo start --web`: same components, same NativeWind classes, real fetches to
+a running API. Console clean.
+
+Two small things fell out of that:
+
+- `CORS_ORIGINS` gained `http://localhost:8081`. The phone needs none of it —
+  a native fetch sends no `Origin` — but `expo start --web` is how a screen
+  gets looked at without a phone, and a preflight failure there reads as "the
+  API is down".
+- `userInterfaceStyle` is `light`, not `automatic`, and NativeWind's
+  `darkMode` is `class`. `automatic` on an app with exactly one theme is a
+  promise the manifest does not keep, and with NativeWind's default
+  media-query dark mode anything trying to SET the scheme throws. `class` is
+  where this is going anyway: both web clients offer light/dark/system as a
+  choice, and parity means the phone will too.
+
+##### The version matrix is Expo's, not the workspace's
+
+React 19.2.3 and React Native 0.86.3, because `expo install --check` says so —
+which means a second copy of React in the store. That is correct: no runtime is
+shared between a phone and a browser, and fighting an SDK's tested matrix costs
+a day later. TypeScript stays on the workspace's 5.9.3 rather than the
+suggested 6.0.3; the app typechecks, and one compiler across five packages is
+worth more than matching a recommendation.
 
 ### Phases 3–5 — not started
 

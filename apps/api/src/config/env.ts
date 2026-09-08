@@ -53,7 +53,19 @@ const schema = z
      * Who may call this API from a browser. The SPA and the Next app locally;
      * real origins once they exist.
      */
-    CORS_ORIGINS: originList("http://localhost:5173,http://localhost:3000"),
+    /**
+     * The three local clients: the SPA on 5173, the Next app on 3000, and
+     * `expo start --web` on 8081.
+     *
+     * The last one is a development surface only — the React Native app on a
+     * real device sends no `Origin` header and CORS never applies to it. It
+     * is here because `expo start --web` is how a phone screen gets looked at
+     * without a phone, and a preflight failure there reads as "the API is
+     * down" rather than "this origin is not on the list".
+     */
+    CORS_ORIGINS: originList(
+      "http://localhost:5173,http://localhost:3000,http://localhost:8081",
+    ),
 
     /**
      * Empty means a host-only cookie, which is what you want on localhost.

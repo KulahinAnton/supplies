@@ -60,3 +60,10 @@ blob-report/
 # Compiler output (apps/api). `nest build` emits the API and the core sources
 # it pulls in, which is a lot of files that are already tracked as source.
 dist/
+
+# Expo — the dev server's scratch directory and the bundle `expo export` writes.
+# `.expo-export` is only ever produced to prove Metro resolves the workspace
+# (apps/mobile/CLAUDE.md); nothing consumes it.
+apps/mobile/.expo/
+apps/mobile/.expo-export/
+apps/mobile/expo-env.d.ts

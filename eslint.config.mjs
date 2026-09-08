@@ -52,16 +52,17 @@ const BROWSER_BANNED = [
   {
     group: ["@supplies/db", "@supplies/db/*", "@prisma/*", "prisma", "**/generated/prisma/**"],
     message:
-      "The database layer is server-side. A browser client goes through the API — that is what apps/api is for.",
+      "The database layer is server-side. A client goes through the API — that is what apps/api is for.",
   },
   {
     group: ["@supplies/core/claude", "@supplies/core/telegram-link", "@supplies/core/*.test"],
     message:
-      "packages/core exports every module under one wildcard, and these are the server-only ones. Reaching them from a browser bundle ships an SDK, a Node builtin, or a test.",
+      "packages/core exports every module under one wildcard, and these are the server-only ones. Reaching them from a client bundle ships an SDK, a Node builtin, or a test.",
   },
   {
     group: ["node:*"],
-    message: "Node builtins do not exist in a browser.",
+    message:
+      "Node builtins exist in neither a browser nor a Metro bundle. Metro resolves them to nothing and the app crashes on a phone.",
   },
   {
     group: ["**/apps/web/**", "**/apps/api/**", "**/apps/spa/**", "**/apps/mobile/**"],
@@ -210,12 +211,24 @@ const eslintConfig = defineConfig([
   },
   {
     /**
-     * The SPA is a browser bundle with no server half at all — every write
-     * goes over HTTP to `apps/api`. Reaching for `@supplies/db` here would
-     * typecheck and then fail at build time inside the generated Prisma
-     * client, which is a long way from the import that caused it.
+     * The SPA and the React Native app are bundles with no server half at all
+     * — every write goes over HTTP to `apps/api`. Reaching for `@supplies/db`
+     * from either would typecheck and then fail inside the generated Prisma
+     * client, a long way from the import that caused it.
+     *
+     * For `apps/mobile` the Node-builtin ban is the load-bearing half. A
+     * browser at least fails loudly; Metro resolves `node:crypto` to nothing
+     * and the app crashes on a phone, which is the most expensive place this
+     * project has to find anything out. Phase 3.1 checked the built bundle for
+     * `@prisma/client`, `PrismaClient` and `node:crypto` and found none — this
+     * rule is what keeps that true.
      */
-    files: ["apps/spa/**/*.ts", "apps/spa/**/*.tsx"],
+    files: [
+      "apps/spa/**/*.ts",
+      "apps/spa/**/*.tsx",
+      "apps/mobile/**/*.ts",
+      "apps/mobile/**/*.tsx",
+    ],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",
@@ -225,7 +238,7 @@ const eslintConfig = defineConfig([
             {
               group: ["next", "next/*", "next-themes", "next-auth", "server-only"],
               message:
-                "There is no Next here. Routing is react-router, the theme is src/components/theme.tsx, and the session is a bearer token — see apps/spa/CLAUDE.md for the mapping.",
+                "There is no Next in apps/spa or apps/mobile. The SPA routes with react-router and the phone with expo-router; neither has a server half.",
             },
           ],
         },
@@ -260,8 +273,22 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    /**
+     * Metro and Tailwind load their config with `require`, so these two files
+     * are CommonJS by requirement rather than by preference — and
+     * `metro.config.js` cannot be ESM at all, because Metro reads it before
+     * any transform runs.
+     */
+    files: ["apps/mobile/metro.config.js", "apps/mobile/tailwind.config.js"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
   globalIgnores([
     "**/.next/**",
+    // `expo export` output — a 6 MB bundle of somebody else's JavaScript,
+    // produced to prove Metro resolves the workspace and consumed by nothing.
+    "apps/mobile/.expo-export/**",
+    "apps/mobile/.expo/**",
     "out/**",
     "build/**",
     "**/next-env.d.ts",

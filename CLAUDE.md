@@ -28,7 +28,8 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 
 ## Commands
 
-- `pnpm dev:all` / `pnpm dev:stop` — **all three at once**: Next :3000, API :3200, SPA :5173, labelled and colour-coded. The port map is deliberate — 3100 is Playwright's production build, so nothing collides
+- `pnpm mobile:dev` — Expo dev server (`expo start`); `pnpm mobile:android` for a connected device; `pnpm mobile:bundle` exports an Android bundle with no device, which is how a Metro resolution mistake surfaces in seconds → [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md)
+- `pnpm dev:all` / `pnpm dev:stop` — **all three web processes at once**: Next :3000, API :3200, SPA :5173, labelled and colour-coded. The port map is deliberate — 3100 is Playwright's production build, so nothing collides
 - **Moving or renaming a file while `dev:all` is running can leave Turbopack compiling the old copy.** It reports as `Module not found` quoting a line the file no longer contains, and no amount of editing fixes it because the file is not what is being compiled. `pnpm dev:stop`, `rm -rf apps/web/.next`, start again. A clean `pnpm build` passing while dev fails is the tell
 - `pnpm dev` — Next dev server (Turbopack) · `pnpm api:dev` → [apps/api](apps/api/CLAUDE.md) · `pnpm spa:dev` → [apps/spa](apps/spa/CLAUDE.md)
 - `pnpm build` / `pnpm lint` / `pnpm typecheck`
@@ -95,6 +96,10 @@ Four clients, one engine. **Nothing under `apps/` may import from another app** 
 - `lib/auth-guard.ts` — `requireSession()` / `validSessionOrNull()` (re-checks the user in the DB; stale JWT → `/login`)
 - `components/` → [apps/web/components/CLAUDE.md](apps/web/components/CLAUDE.md) · `e2e/` — Playwright, run from here
 - **Env comes from the repo root.** Next only reads env files in its own directory, so `next.config.ts` loads `../../.env` explicitly with `override: false` — one file for the app, the Prisma CLI, the bot and the scripts, and a real environment variable (Vercel) always wins
+
+### `apps/mobile` — the React Native app
+
+→ [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md). Expo SDK 57 + Expo Router + NativeWind 4, on `@supplies/core` and the API. **`@supplies/ui` is web-only and stays that way** — React Native has no DOM, so the primitives are rebuilt and only the colour tokens are transcribed. `metro.config.js` is the interesting file: pnpm's private `node_modules` per package means `disableHierarchicalLookup` must stay **off**, which is the opposite of the usual monorepo advice. `pnpm mobile:bundle` resolves the whole graph without a device
 
 ### `apps/api` and `apps/spa`
 
