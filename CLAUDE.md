@@ -37,7 +37,8 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 - ESLint is **type-aware** (`typescript-eslint` `recommendedTypeChecked`), which is what catches unawaited promises and unsafe `any`. That is why a lint run takes ~15s
 - `pnpm test` / `pnpm test:watch` — vitest from the root over `packages/**/*.test.ts` and `bot/**/*.test.ts`, no DB. The apps run their own suites (`pnpm test:api`), because they need different environments
 - `pnpm typecheck` covers the root — bot, scripts, packages, prisma — and `pnpm -r --filter "./apps/*" typecheck` covers each app under its own compiler settings. `pnpm verify` runs both
-- `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself; re-seed afterwards if you want pristine demo data.
+- `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself, and its checks are written as properties rather than against particular seeded rows — a check that fails because the fixture drifted, while the rule it names is intact, teaches people to ignore the output
+- `pnpm --filter @supplies/api test:e2e` — the API against the same live database (38 checks). Needs Docker and a seed; deliberately outside `pnpm test` and the commit hook, because a hook that fails when Docker is down teaches people to reach for `--no-verify`. It deletes the invites and reset tokens it creates
 - `pnpm db:up` — start Postgres (docker compose, port 5434)
 - `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:studio` → [prisma/CLAUDE.md](prisma/CLAUDE.md)
 - `pnpm bot:dev` / `pnpm bot:start` — Telegram bot (long polling) → [bot/CLAUDE.md](bot/CLAUDE.md)

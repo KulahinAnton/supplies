@@ -27,6 +27,14 @@ import { CurrentUser, Public, type Caller } from "./jwt-auth.guard";
  */
 const REFRESH_COOKIE = "supplies_refresh";
 
+/** Refusals whose HTTP status is not the default 422. */
+const REFUSAL_STATUS: Record<string, number | undefined> = {
+  "auth.emailTaken": 409,
+  "auth.inviteInvalid": 400,
+  "auth.inviteExpired": 400,
+  "auth.resetLinkInvalid": 400,
+};
+
 @ApiTags("auth")
 @Controller("auth")
 export class AuthController {
@@ -153,19 +161,22 @@ export class AuthController {
    * Turn a service refusal into the right status.
    *
    * `unwrap` answers 422 for everything, which is correct for a rule the
-   * caller broke and wrong for these two: a taken email is a conflict, and a
-   * dead invite is a bad request. The mapping lives in the controller because
-   * status codes are HTTP's business, not the service's.
+   * caller broke and wrong here: a taken email is a conflict, and a token that
+   * is spent, expired or invented is a bad request rather than a
+   * well-formed-but-wrong one. The mapping lives in the controller because
+   * status codes are HTTP's business and not the service's.
+   *
+   * Listed explicitly rather than matched by prefix. `auth.invite*` happened
+   * to mean "dead token" for both keys that existed, and a prefix would have
+   * quietly claimed the next one that did not.
    */
   private orRefuse<T>(result: ActionResult<T>): T {
     if (result.ok) return result.data as T;
-    const status =
-      result.error.key === "auth.emailTaken"
-        ? 409
-        : result.error.key.startsWith("auth.invite")
-          ? 400
-          : 422;
-    throw new ApiRuleError(status, result.error.key, result.error.params);
+    throw new ApiRuleError(
+      REFUSAL_STATUS[result.error.key] ?? 422,
+      result.error.key,
+      result.error.params,
+    );
   }
 
   private async respond(

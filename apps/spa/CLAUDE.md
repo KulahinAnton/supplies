@@ -121,6 +121,25 @@ Read its Next counterpart first, then match it. In particular:
 - **`Button render={<Link/>}` needs `nativeButton={false}`.** Base UI warns
   otherwise, and the semantics really are wrong — it is an `<a>`.
 
+## Refreshing is single-flight, and that is not a nicety
+
+**Never post to `/auth/refresh` yourself. Call `refreshSession()`.**
+
+Refresh tokens rotate, and the API answers a replayed one by revoking every
+session — correctly, since a replay is what theft looks like. `AuthProvider`
+used to post directly, so React's StrictMode double-invoked effect sent two
+refreshes and the second carried the token the first had just retired. The
+app turned itself in; the symptom was being signed out immediately after
+registering.
+
+StrictMode makes it certain in development. Two tabs restored at once do the
+same thing in production.
+
+Related, in `api/client.ts`: a 401 clears the access token only when the token
+still installed is the one that failing attempt carried. Otherwise a slow
+request that 401s after a concurrent refresh already installed a new token
+would sign someone out mid-session.
+
 ## `credentials: "include"` from day one
 
 Set before there is a cookie to send. The refresh token is an httpOnly cookie,

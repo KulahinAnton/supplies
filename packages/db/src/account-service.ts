@@ -165,7 +165,9 @@ export async function requestPasswordReset(
  * Finish a password reset.
  *
  * Three ways the token can be no good — never issued, already used, expired —
- * and all three answer with the same message on purpose. Distinguishing them
+ * and all three answer with the same message on purpose. (Its own message: this
+ * used to borrow `auth.inviteInvalid` and tell people resetting a password
+ * that their invitation was invalid.) Distinguishing them
  * would tell someone holding a stolen token which ones are worth trying
  * again, and none of the three is actionable by the person who owns the
  * account anyway: the answer is always "ask for a new link".
@@ -181,7 +183,7 @@ export async function resetPassword(input: unknown): Promise<ActionResult> {
     where: { tokenHash: hashToken(parsed.data.token) },
   });
   if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
-    return actionError(ruleMessage("auth.inviteInvalid"));
+    return actionError(ruleMessage("auth.resetLinkInvalid"));
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);

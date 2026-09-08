@@ -72,6 +72,16 @@ export const MESSAGES = {
   "auth.currentPasswordWrong": "Поточний пароль невірний.",
   "auth.inviteInvalid": "Запрошення недійсне або вже використане.",
   "auth.inviteExpired": "Термін дії запрошення минув.",
+  /**
+   * Separate from `auth.inviteInvalid`, which the reset flow used to borrow.
+   * The two are the same shape — a single-use token that is spent, expired or
+   * invented — but not the same sentence: someone resetting a password was
+   * being told their INVITATION was invalid, on a screen that had never
+   * mentioned one. Reusing a key because the logic matches is how copy ends up
+   * describing the wrong feature.
+   */
+  "auth.resetLinkInvalid":
+    "Посилання для відновлення недійсне або вже використане. Запросіть нове.",
   "auth.sessionRequired": "Потрібно увійти.",
   "auth.forbidden": "Немає доступу до цих даних.",
 

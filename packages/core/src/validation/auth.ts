@@ -32,7 +32,10 @@ export const changePasswordSchema = z.object({
 export const forgotPasswordSchema = z.object({ email: emailField });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, key("auth.inviteInvalid")),
+  // An empty token means the link was opened without its query string, which
+  // is the reset flow's own failure and not an invitation's — see
+  // `auth.resetLinkInvalid` in messages.ts.
+  token: z.string().min(1, key("auth.resetLinkInvalid")),
   password: passwordField,
 });
 

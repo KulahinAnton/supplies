@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
 import { EmptyBodyPipe } from "./common/empty-body.pipe";
 import { RuleErrorFilter } from "./common/rule-error.filter";
+import { prisma } from "./db";
 
 /**
  * Feature 34 — the API against a **live seeded database**, the same bargain
@@ -51,6 +52,7 @@ async function signIn(): Promise<{ accessToken: string; refreshToken: string }> 
 }
 
 beforeAll(async () => {
+  startedAt = new Date();
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
   await app.register(cookie, { secret: process.env.API_JWT_SECRET ?? "test-secret" });
@@ -61,8 +63,30 @@ beforeAll(async () => {
   await app.getHttpAdapter().getInstance().ready();
 }, 30_000);
 
+/**
+ * When the suite started, so the teardown can tell its own rows from the
+ * ones that were already there.
+ */
+let startedAt: Date;
+
 afterAll(async () => {
+  /**
+   * Put the demo household back.
+   *
+   * These tests hand out invites and ask for password resets, and both leave
+   * a row behind. Ten runs left ten unused invites in the seeded household —
+   * harmless individually, and collectively the reason nobody can look at
+   * that table and tell a real invitation from test residue. `scripts/smoke.ts`
+   * has cleaned up after itself since it was written; this now does too.
+   *
+   * Scoped by time rather than by household: a run that fails half way should
+   * still not take out a row it did not create.
+   */
+  await prisma.householdInvite.deleteMany({ where: { createdAt: { gte: startedAt } } });
+  await prisma.passwordResetToken.deleteMany({ where: { createdAt: { gte: startedAt } } });
+
   await app?.close();
+  await prisma.$disconnect();
 });
 
 describe("health", () => {
@@ -718,10 +742,15 @@ describe("account and telegram", () => {
       body: { token: "not-a-real-token", password: "supplies123" },
     });
 
-    expect(status).toBe(422);
+    // 400, not 422: a token that was never issued is a bad request, not a
+    // well-formed one that broke a rule. The status set in the controller is
+    // explicit about which refusals get which code.
+    expect(status).toBe(400);
     // The same key a spent or expired token gets: telling them apart would say
-    // which stolen tokens are worth retrying.
-    expect((body as unknown as { key: string }).key).toBe("auth.inviteInvalid");
+    // which stolen tokens are worth retrying. And its OWN key rather than
+    // `auth.inviteInvalid`, which used to tell people resetting a password
+    // that their invitation was invalid.
+    expect((body as unknown as { key: string }).key).toBe("auth.resetLinkInvalid");
   });
 
   it("refuses a malformed reset request before touching the database", async () => {

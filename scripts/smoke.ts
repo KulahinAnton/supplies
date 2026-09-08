@@ -15,6 +15,7 @@ import {
   getItemViews,
   getShoppingView,
 } from "@supplies/db/queries";
+import { addListRow, deleteListRow } from "@supplies/db/shopping-service";
 import { itemQuantity } from "@supplies/core/stock";
 import { renderMessage } from "@supplies/core/messages";
 import { digestText } from "@supplies/bot/digest";
@@ -218,16 +219,65 @@ async function main() {
     dashboard.expiring[0].name,
   );
 
+  /**
+   * Feature 6 — the rule is that a candidate stops being one once it is on
+   * the list. Tested as a PROPERTY of any starting state rather than against
+   * two seeded product names.
+   *
+   * The previous version asserted that «Хліб житній» was on the list and
+   * «Кава мелена» was not, and it broke — not because the rule broke, but
+   * because this script mutates the demo household by design and the browser
+   * testing that follows it mutates it further. A check that fails when the
+   * fixture drifts, while the behaviour it names is intact, teaches whoever
+   * reads the output to ignore it. That is worse than no check.
+   *
+   * This one moves a row itself and puts it back, so it holds on a freshly
+   * seeded database and on one that has been used for a week.
+   */
   console.log("\n7. Shopping candidates exclude what is already on the list");
-  const { rows, candidates } = await getShoppingView(household.id);
-  const onListIds = rows.filter((r) => !r.isChecked && r.itemId).map((r) => r.itemId);
-  check("bread is on the list", onListIds.includes(bread.id));
-  check(
-    "bread is NOT also a candidate",
-    !candidates.some((c) => c.itemId === bread.id),
+  const listBefore = await getShoppingView(household.id);
+  const onList = new Set(
+    listBefore.rows.filter((r) => !r.isChecked && r.itemId).map((r) => r.itemId),
   );
-  check("coffee IS a candidate", candidates.some((c) => c.name === "Кава мелена"));
-  console.log(`      candidates: ${candidates.map((c) => c.name).join(", ")}`);
+  check(
+    "no candidate is already on the list",
+    listBefore.candidates.every((c) => !c.itemId || !onList.has(c.itemId)),
+    `${listBefore.candidates.length} candidate(s), ${onList.size} on list`,
+  );
+
+  // A set is offered as free text and has no itemId, so it cannot be moved on
+  // and off the list by id — pick a real item.
+  const movable = listBefore.candidates.find((c) => c.itemId);
+  if (!movable?.itemId) {
+    check("a candidate exists to move onto the list", false, "none offered");
+  } else {
+    const added = await addListRow(actor, { itemId: movable.itemId });
+    check(`«${movable.name}» added to the list`, added.ok);
+
+    const listDuring = await getShoppingView(household.id);
+    check(
+      "it is on the list now",
+      listDuring.rows.some((r) => r.itemId === movable.itemId && !r.isChecked),
+    );
+    check(
+      "and it is no longer offered as a candidate",
+      !listDuring.candidates.some((c) => c.itemId === movable.itemId),
+    );
+
+    const addedRow = listDuring.rows.find((r) => r.itemId === movable.itemId);
+    if (addedRow) await deleteListRow(actor, addedRow.id);
+
+    const listAfter = await getShoppingView(household.id);
+    check(
+      "removing it offers it again",
+      listAfter.candidates.some((c) => c.itemId === movable.itemId),
+    );
+    check(
+      "and the list is back where it started",
+      listAfter.rows.length === listBefore.rows.length,
+      `${listAfter.rows.length} row(s)`,
+    );
+  }
 
   // Feature 20 — the GEPIR cache. No network here: this pins the storage
   // contract the lookup depends on, above all that a MISS is cachable and

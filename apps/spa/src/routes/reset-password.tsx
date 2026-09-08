@@ -42,7 +42,7 @@ export function ResetPasswordRoute() {
     return (
       <AuthPageShell
         title="Посилання неповне"
-        subtitle={MESSAGES["auth.inviteInvalid"]}
+        subtitle={MESSAGES["auth.resetLinkInvalid"]}
         footer={
           <Link
             to="/forgot-password"

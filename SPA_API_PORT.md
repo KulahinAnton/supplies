@@ -1436,12 +1436,109 @@ of seven working forms for idiom alone. Component tests for both clients
 belong with Phase 4.5's CI matrix rather than as a harness with three tests in
 it.
 
-**Not run: the API e2e suite.** It needs the local Postgres and Docker was not
-running on this machine. Everything else passed — lint, four typechecks, 357
-unit tests, 20 API unit tests, all three builds — and the compiled API `dist`
+**Not run at the time: the API e2e suite.** It needs the local Postgres and
+Docker was not running. Everything else passed, and the compiled API `dist`
 was checked for the specifier trap that has bitten three times before (no
-non-relative `@supplies/` survives compilation). The six new checks are
-written and unrun.
+non-relative `@supplies/` survives compilation). The suite ran the next day —
+see the entry below, which is where the interesting part of this work turned
+out to be.
+
+### Phase 2.10 — what running it against a real database found · 2026-09-08
+
+The previous entry ended with the API e2e suite unrun, because Docker was
+down. With Postgres up, 37 of the 38 checks passed on the first try and the
+rest of the session was spent on what the failure and the browser walkthrough
+turned up. Three real defects, none of which any amount of typechecking would
+have shown.
+
+**1 · A password reset was telling people their invitation was invalid.**
+
+The failing check expected 422 and got 400 — my assertion was wrong, and
+chasing why led somewhere better. `resetPassword` was returning
+`auth.inviteInvalid`, which renders «Запрошення недійсне або вже
+використане.» The logic matched — a single-use token that is spent, expired or
+invented — so the key had been borrowed, and the copy went along with it. Both
+clients showed it, because the Next app had the same line before the rules
+moved.
+
+`auth.resetLinkInvalid` now exists and says «Посилання для відновлення
+недійсне або вже використане. Запросіть нове.» Reusing a message key because
+the *logic* matches is how copy ends up describing the wrong feature.
+
+The status mapping in `AuthController` became an explicit table at the same
+time. It matched `auth.invite*` by prefix, which happened to be right for both
+keys that existed and would have quietly claimed the next one that was not.
+
+**2 · The SPA reported itself for token theft on every mount.**
+
+Visible as: register through the SPA, land on the dashboard, reload, and find
+yourself signed out. The network log had the answer — **two** `POST
+/auth/refresh` on one load, the first `201`, the second `401`.
+
+`AuthProvider` posted to `/auth/refresh` directly instead of going through
+`refreshOnce`, the single-flight guard in `api/client.ts`. Refresh tokens
+rotate, and the API answers a replayed one by revoking every session —
+correctly, because a replay is what theft looks like. React's StrictMode
+double-invokes effects in development, so the second effect presented the
+token the first had just retired, and the app turned itself in.
+
+StrictMode is what made it certain; nothing about the fault is
+development-only. Two tabs restored at once do the same thing.
+
+The fix is that the bootstrap now calls an exported `refreshSession`, so every
+caller shares one rotation. A second bug fell out while reading that code:
+`apiFetch` cleared the access token on any 401, including one belonging to a
+request that had been in flight *before* a concurrent refresh installed a new
+token — signing someone out on the strength of an answer to a question asked
+before the token existed. It now clears only when the token still installed is
+the one the failing attempt carried.
+
+Verified in the browser: one refresh per load, `201`, and the dashboard
+survives a reload.
+
+**3 · A smoke check that failed while the rule it named was intact.**
+
+`pnpm test:db` §7 asserted that «Хліб житній» was on the shopping list and
+«Кава мелена» was not. It had been failing for days — not because candidate
+exclusion broke, but because this script mutates the demo household by design
+and the browser testing that follows mutates it further. A check that fails
+while its subject is healthy teaches whoever reads the output to ignore it,
+which is worse than no check.
+
+It is now a property test: no candidate may already be on the list, then it
+moves a candidate onto the list itself, watches it leave the candidate set,
+removes it, and watches it come back — asserting the list ends where it
+started. It holds on a freshly seeded database and on one that has been used
+for a week. **All smoke checks pass.**
+
+The same instinct fixed the e2e suite's litter. It hands out an invite and
+asks for a password reset on every run and left both rows behind; ten runs had
+left ten unused invitations in the seeded household, which is the reason
+nobody could look at that table and tell a real invitation from residue. It
+now deletes what it created, scoped by timestamp so a half-failed run cannot
+take out a row it did not make. Confirmed: 38 tests, counts unchanged.
+
+##### Walked through in a browser, against Postgres
+
+Registration through the SPA created «Родина Проба» with all 7 categories and
+5 locations from `@supplies/core/household-defaults` — the shared seeding path
+that used to exist twice — and signed straight in. An invite created through
+`POST /account/invite` was named correctly by `GET /auth/invite/:token`
+(«Наша родина»), accepted through the SPA's join screen, and the new member
+immediately saw the household's real stock and «Останні дії». The token was
+then refused twice over: 404 on lookup, 400 on a second registration.
+
+The reset round trip ran end to end with a planted token, since no mail is
+configured locally: the new password signed in, the old one was refused with
+`auth.invalidCredentials`, and the token was refused with the new
+`auth.resetLinkInvalid`.
+
+All of it cleaned up afterwards — the probe household, the joined user and the
+one invite this run created, each named exactly rather than by a `deleteMany`
+anyone would have to trust.
+
+**Green: lint, four typechecks, 357 unit tests, 20 API unit tests, 38 API e2e,
+every smoke check, 8 Playwright checks, three builds.**
 
 ### Phases 3–5 — not started
 

@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   api,
+  refreshSession,
   setAccessToken,
   type SessionUser,
   type TokenPair,
@@ -33,23 +34,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   /**
-   * On load, try the refresh cookie once.
+   * On load, try the refresh cookie once — **through `refreshSession`, never
+   * by posting to `/auth/refresh` here**.
    *
    * The access token lives in memory, so a reload always starts signed out as
-   * far as this process knows. The httpOnly cookie is what actually carries
-   * the session across a reload, and this is the one request that turns it
-   * back into an access token.
+   * far as this process knows. The httpOnly cookie is what carries the session
+   * across that reload, and this is the one request that turns it back into an
+   * access token.
+   *
+   * It used to post directly, and that was a real bug rather than a style
+   * point. Refresh tokens ROTATE, and the API answers a replayed one by
+   * revoking every session — correctly, since a replay is what token theft
+   * looks like. React's StrictMode double-invokes this effect in development,
+   * so two refreshes went out, the second carrying the token the first had
+   * just retired. The symptom was being anonymous immediately after
+   * registering; the cause was the app reporting itself for theft.
+   *
+   * `refreshSession` shares one in-flight rotation between every caller, which
+   * is what makes a second mount — or a second tab — harmless.
    */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      if (!(await refreshSession())) {
+        // No cookie, or an expired one. Ordinary, not an error worth showing.
+        if (!cancelled) setState({ status: "anonymous" });
+        return;
+      }
       try {
-        const pair = await api.post<TokenPair>("/api/auth/refresh");
-        setAccessToken(pair.accessToken);
         const user = await api.get<SessionUser>("/api/auth/me");
         if (!cancelled) setState({ status: "signed-in", user });
       } catch {
-        // No cookie, or an expired one. Ordinary, not an error worth showing.
         if (!cancelled) setState({ status: "anonymous" });
       }
     })();

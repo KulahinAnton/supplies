@@ -85,6 +85,26 @@ async function send(path: string, init: RequestInit): Promise<Response> {
  */
 let refreshing: Promise<boolean> | null = null;
 
+/**
+ * Ask the refresh cookie for a session. Exported so the auth bootstrap uses
+ * THIS path rather than posting to `/auth/refresh` itself.
+ *
+ * It did post directly, and the consequence was ugly: React's StrictMode
+ * double-invokes effects in development, so `AuthProvider` fired two
+ * refreshes. The first rotated the token; the second presented the one that
+ * had just been retired, which the API correctly treats as a replay — and its
+ * answer to a replay is to revoke every session. The visible symptom was
+ * being anonymous immediately after registering.
+ *
+ * Development is where StrictMode makes it certain, but nothing about the
+ * fault is development-only: two tabs restored at once do the same thing.
+ * Going through the single-flight guard means concurrent callers share one
+ * rotation and one answer.
+ */
+export async function refreshSession(): Promise<boolean> {
+  return refreshOnce();
+}
+
 async function refreshOnce(): Promise<boolean> {
   refreshing ??= (async () => {
     try {
@@ -107,15 +127,29 @@ async function refreshOnce(): Promise<boolean> {
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // Which token each attempt actually carried, so the check below judges the
+  // attempt whose answer it is holding — not the one before the retry.
+  let sentWith = accessToken;
   let response = await send(path, init);
 
   if (response.status === 401 && !path.startsWith("/api/auth/")) {
-    if (await refreshOnce()) response = await send(path, init);
+    if (await refreshOnce()) {
+      sentWith = accessToken;
+      response = await send(path, init);
+    }
   }
 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ErrorBody;
-    if (response.status === 401) setAccessToken(null);
+    /**
+     * Only when the token we sent is the one still installed.
+     *
+     * Otherwise a slow request that 401s after a concurrent refresh has
+     * already installed a NEW token would clear that fresh token and sign the
+     * person out mid-session, on the strength of an answer to a question asked
+     * before it existed.
+     */
+    if (response.status === 401 && accessToken === sentWith) setAccessToken(null);
     throw new ApiError(
       response.status,
       body.message ?? `${response.status} ${response.statusText}`,
