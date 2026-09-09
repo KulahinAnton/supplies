@@ -140,6 +140,40 @@ NativeWind's babel preset rewrites this app's own JSX to import its runtime, so
 these source files genuinely depend on it, and the upward walk from `app/`
 cannot see inside `nativewind`'s private store.
 
+## Builds: `eas.json`, and the config that cannot be JSON
+
+Three profiles. `development` is a dev client, `preview` is a release APK for
+internal distribution — the one to sideload and carry around — and
+`production` is an `app-bundle`, because Play will not take an APK.
+`appVersionSource: "remote"` puts the version code on EAS's side so that
+shipping a build does not produce a commit whose only content is a number.
+
+**`app.config.ts` exists for one reason: cleartext HTTP.** Android 9 blocks
+`http://` from a standalone build, and Expo Go hides this — Expo Go's own
+manifest permits it — so the failure appears the first time the app is a real
+APK, as every request failing in a way indistinguishable from a dead API. The
+`expo-build-properties` plugin can allow it, but app-wide rather than per host,
+so it is switched on `EAS_BUILD_PROFILE`: allowed everywhere except
+`production`, which gets none and therefore cannot talk to a dev machine at
+all. That is the right failure; production points at the deployed HTTPS API.
+
+**The API address is not in this repo, deliberately** (SPA_API_PORT.md §4.2).
+`EXPO_PUBLIC_API_URL` is read by `lib/api/url.ts` and inlined at build time,
+and for a cloud build it comes from an EAS environment variable rather than
+from `eas.json`, because the value is the LAN address of whoever is building:
+
+```bash
+npx eas-cli env:create --environment preview \
+  --name EXPO_PUBLIC_API_URL --value "http://<your-lan-ip>:3200" --type string --visibility plaintext
+npx eas-cli build --platform android --profile preview
+```
+
+Without it the APK falls back to `10.0.2.2`, which is the emulator's name for
+its host and means nothing on a phone.
+
+`npx eas-cli`, not `eas` — the CLI is not installed globally here, and
+`pnpm dlx eas-cli` resolves the package but not its bin on Windows.
+
 ## Typed routes, and a watcher quirk worth recognising
 
 `experiments.typedRoutes` generates `.expo/types/router.d.ts`, and it does
