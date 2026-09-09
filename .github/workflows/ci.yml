@@ -62,6 +62,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The root tsconfig does not cover the apps — each has its own compiler
+      # settings, and `pnpm verify` runs both. CI ran only the first, so an
+      # error in apps/mobile or apps/spa reached a reviewer as a green tick.
+      - name: Typecheck each app
+        run: pnpm -r --filter "./apps/*" typecheck
+
       - name: Unit tests
         run: pnpm test
 
@@ -107,3 +113,34 @@ jobs:
             apps/spa/playwright-report/
             apps/spa/test-results/
           retention-days: 7
+
+  # apps/mobile, which needs no database and shares nothing with the job above.
+  # Separate so its failure says "the phone app" rather than being the
+  # fourteenth step of something else.
+  mobile:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # This is the check that would have caught an EAS build failing on a
+      # missing peer dependency, two hours before the build did. It also names
+      # config keys the SDK has dropped and packages that have drifted from the
+      # versions it expects.
+      - name: Expo doctor
+        working-directory: apps/mobile
+        run: npx --yes expo-doctor
+
+      # Resolves the entire module graph and writes a Hermes bundle with no
+      # device attached, which is how a Metro resolution mistake surfaces in
+      # seconds rather than on a phone. pnpm does not hoist, so an undeclared
+      # dependency that happens to resolve on one machine fails here.
+      - name: Android bundle
+        run: pnpm mobile:bundle
