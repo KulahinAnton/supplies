@@ -20,6 +20,7 @@ export const keys = {
   groups: ["groups"] as const,
   members: ["members"] as const,
   itemNames: ["item-names"] as const,
+  telegram: ["telegram"] as const,
   archive: ["archive"] as const,
   group: (id: string) => ["group", id] as const,
 };

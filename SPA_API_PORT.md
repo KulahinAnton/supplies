@@ -612,8 +612,8 @@ a harness with three tests in it.
 | 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
 | 3.3 | **Milestone A** — login, items list, item detail with take/add | 4–5 d | **done** — the scan moved to 3.4, where it belongs |
 | 3.4 | `expo-camera` barcode scanning | 1 d | **done** — and driven end to end on the emulator, which was not expected to be possible |
-| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | ⚠ needs an Expo account |
-| 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | |
+| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **config done** — profiles, cleartext, the EAS project; the build itself is queued |
+| 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | **done** — full parity with the SPA |
 | 3.7 | Push notifications via `expo-notifications` | 2–3 d | |
 | 3.8 | Play Console listing ($25, once) | 1 d | ⚠ needs an account |
 
@@ -2043,13 +2043,117 @@ can be made once.
 
 Green: lint, five typechecks, 361 unit, 28 API unit, the Android bundle.
 
-### Phases 3.5–5 — not started
+### Phase 3.5 — the build config, and a failure with no logs · 2026-09-09
 
-The APK, the remaining twelve screens, push, the store listing, the deploy,
-iOS. Phase 3 itself is no longer blocked and no longer unstarted — **the Phase
-2.9 parity gate closed on 2026-09-07**, so decision 10 stopped applying, and
-3.1–3.4 have landed since: every screen the Next app has, the SPA has, and the
-last business rule that lived in only one of them now lives in `packages/db`.
+Three EAS profiles and `app.config.ts`, which exists for exactly one thing a
+JSON file cannot express: **cleartext HTTP, and only outside production.**
+
+Android 9 blocks `http://` from a standalone build. Expo Go hides that, because
+its own manifest permits cleartext, so the failure appears the first time the
+app is a real APK — as every request failing in a way indistinguishable from a
+dead API. `expo-build-properties` can allow it, but app-wide rather than per
+host, so it switches on `EAS_BUILD_PROFILE`: on outside production, off in it.
+A production build therefore cannot talk to a dev machine at all, which is the
+correct failure — production points at the deployed HTTPS API from 4.3.
+
+The API address stays out of the tree (§4.2). `EXPO_PUBLIC_API_URL` is an EAS
+environment variable rather than an `env` block in `eas.json`, because the
+value is the LAN address of whoever is building.
+
+##### Two hours of not seeing an error
+
+The first build errored with `EAS_BUILD_UNKNOWN_GRADLE_ERROR`, and **the CLI
+has no way to show the logs of a finished build.** `eas build:view` prints the
+status; the logs are on a page that needs a signed-in browser. `eas build:list
+--json` at least carries `error.errorCode`, which was how the Gradle failure
+was identified at all.
+
+Reproducing it locally was a partial success. `expo prebuild` succeeded, which
+ruled out the config plugins and — more usefully — proved pnpm's isolated
+`node_modules` does not break Expo's Gradle autolinking, the thing most likely
+to be blamed. Gradle then failed twice for reasons that were **both local**: a
+`local.properties` written with Windows backslashes (`sdk.dir=C\:\Users\…`,
+where `\U` is an invalid unicode escape — the literal message is "Malformed
+\uxxxx encoding"), and then the NDK's CMake step refusing under Android
+Studio's bundled JDK 25. Neither is what an EAS builder on JDK 17 hits.
+
+The answer was to stop guessing and resubmit **without `--no-wait`**: the CLI
+streams the builder's log while it runs, which is the only way to read a Gradle
+failure without a browser session. Worth knowing before the next one.
+
+`expo prebuild` also has a side effect worth naming: it writes `android/`
+inside the workspace root that Metro watches, and Metro stops bundling. The
+directory is gitignored now, and the fix is to delete it and restart the dev
+server.
+
+### Phase 3.6 — parity, and four places the phone is not the browser · 2026-09-09
+
+Every screen the SPA has. Four native tabs with the attention counts as badges,
+«Огляд», «Покупки» with the Feature 6 candidates and Feature 11 grouping, the
+item form and the archive, seven settings screens, Feature 26 sets and their
+membership, «Рецепти», and the four public auth routes.
+
+##### The differences are all one difference
+
+A phone is not a small browser, and copying an interaction that depends on a
+mouse or an address bar produces something that works and feels borrowed.
+
+**Drag becomes a long press.** Shopping rows and taxonomy order are
+drag-and-drop on the web; here a row opens a sheet and a taxonomy row has two
+arrows. A drag competing with the vertical scroll of the screen it lives on is
+a gesture people fire by accident — and Feature 11's own note already says the
+collision strategy is the hard part.
+
+**Selects become chips.** Category, location, unit and set are horizontal chip
+rows rather than `@expo/ui`'s `Picker`. Under ten options a chip row is one tap
+where a picker is two, and every option is readable without opening anything.
+
+**Settings becomes an index.** The web renders eight panels on one page, which
+is fine with a wheel. On a phone the bottom panel is eight swipes away every
+time, so the tab is a list of rows and each panel is its own screen.
+
+**The list's view state is local.** Features 27 and 28 put it in the query
+string on the web so a filtered list is a shareable link. There is no address
+bar here and no link to share; `itemListSearch` still builds the request, which
+is the part that matters.
+
+##### The bug the screenshots found
+
+`formatQuantity` had been printing «0.8 кг» — a decimal POINT — on every phone
+screen since Milestone A. `Intl.NumberFormat` exists on Hermes but
+`format(BigInt(n))` throws `TypeError: Cannot convert BigInt to number`, so the
+function fell through to its raw-string fallback: no grouping, and the wire
+format's dot instead of the Ukrainian comma. Nothing crashed and nothing
+logged. It was found by reading a screenshot.
+
+That is the second `Intl` surface to differ on the phone after `PluralRules`,
+so the grouping is now written out and pinned against Node's real
+`Intl.NumberFormat`, and `packages/core/CLAUDE.md` says to check the
+**arguments** and not just the constructor. `formatUsd`'s `style: "currency"`
+was the last unproven one and has now been probed: «0,0123 USD», the same on
+Hermes and in a browser.
+
+Two more found by looking at the emulator rather than by reasoning: the items
+tab lost its top inset when it moved under a headerless tab navigator, and
+adding a fourth tab silently unlabelled the other three — Material's `auto`
+label mode drops every label but the selected one at four items.
+
+##### What pnpm made explicit
+
+`zod` is now a declared dependency of the app. It always was one, travelling
+inside `@supplies/core`, but pnpm does not hoist so the type import did not
+resolve until it was written down. Second time this layout has demanded that,
+after `react-native-css-interop`.
+
+Green throughout: lint, five typechecks, 365 unit, 28 API unit, and an Android
+bundle that still contains no Prisma, no node builtins and no `server-only`.
+
+### Phases 3.7–5 — not started
+
+Push notifications, the Play listing, the deploy, iOS. Phase 3 is otherwise
+done: **the Phase 2.9 parity gate closed on 2026-09-07**, decision 10 stopped
+applying, and 3.1–3.6 landed on 2026-09-08 and 09. All four clients now render
+the same household from the same engine.
 
 ### Start here
 

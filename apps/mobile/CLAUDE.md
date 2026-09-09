@@ -4,9 +4,35 @@ Expo SDK 57 + Expo Router + NativeWind 4, against the API in
 [`apps/api`](../api/CLAUDE.md). Plan and phases:
 [SPA_API_PORT.md](../../SPA_API_PORT.md) Phase 3.
 
-**Status: Phase 3.4.** Login, the item list with search and filters, the item
-detail with batches, take-and-add, and the barcode scanner. The remaining
-twelve screens are 3.6.
+**Status: Phase 3.6 — parity.** Every screen the SPA has, this has: four
+native tabs (Огляд · Запаси · Покупки · Ще), the item list and detail, the
+item form, the archive, the shared shopping list, Feature 26 sets, seven
+settings screens, «Рецепти», the scanner, and the four public auth routes.
+3.7 is push; 3.5's APK is built on EAS.
+
+## Four decisions where this app is not the SPA
+
+They are all the same decision in different clothes: a phone is not a small
+browser, and copying an interaction that depends on a mouse or an address bar
+produces something that works and feels borrowed.
+
+- **Drag becomes a long press.** Feature 11's shopping rows and Feature 15's
+  taxonomy order are drag-and-drop on the web. Here a row opens a sheet and a
+  taxonomy row has two arrows. A drag competing with the vertical scroll of
+  the screen it lives on is a gesture people fire by accident.
+- **Selects become chips.** The item form's category, location, unit and set
+  are horizontal chip rows, not `@expo/ui`'s `Picker`. Under ten options, a
+  chip row is one tap where a picker is two and shows every option without
+  opening anything. A picker earns itself when hiding the list costs less than
+  showing it.
+- **Settings becomes an index.** The web renders eight panels on one page.
+  Here the tab is a list of rows and each panel is a screen — otherwise every
+  visit to the bottom panel is eight swipes.
+- **The list's view state is local, not in the URL.** There is no address bar
+  to put it in and no link to share, so `useItemList` keeps it in `useState`
+  and only turns the search STRING into a request. `itemListSearch` still
+  builds that request, which is what keeps four clients asking the same
+  questions.
 
 ## Running it
 

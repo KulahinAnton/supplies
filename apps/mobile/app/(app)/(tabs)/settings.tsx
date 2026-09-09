@@ -139,6 +139,10 @@ export default function SettingsScreen() {
           label="Пароль"
           onPress={() => router.push("/settings/password")}
         />
+        <SettingsRow
+          label="Telegram"
+          onPress={() => router.push("/settings/telegram")}
+        />
         <SettingsRow label="Стан збірки" onPress={() => router.push("/status")} />
       </SettingsGroup>
 

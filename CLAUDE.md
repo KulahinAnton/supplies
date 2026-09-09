@@ -100,7 +100,7 @@ Four clients, one engine. **Nothing under `apps/` may import from another app** 
 
 ### `apps/mobile` — the React Native app
 
-→ [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md). Expo SDK 57 + Expo Router + NativeWind 4, on `@supplies/core` and the API. **`@supplies/ui` is web-only and stays that way** — React Native has no DOM, so the primitives are rebuilt and only the colour tokens are transcribed. `metro.config.js` is the interesting file: pnpm's private `node_modules` per package means `disableHierarchicalLookup` must stay **off**, which is the opposite of the usual monorepo advice. `pnpm mobile:bundle` resolves the whole graph without a device
+→ [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md). Expo SDK 57 + Expo Router + NativeWind 4, on `@supplies/core` and the API. At parity with the SPA since Phase 3.6: four native tabs, every screen, the scanner, the public auth routes. **`@supplies/ui` is web-only and stays that way** — React Native has no DOM, so the primitives are rebuilt and only the colour tokens are transcribed. `metro.config.js` is the interesting file: pnpm's private `node_modules` per package means `disableHierarchicalLookup` must stay **off**, which is the opposite of the usual monorepo advice. `pnpm mobile:bundle` resolves the whole graph without a device. Where the phone deliberately differs from the web — drag becomes a long press, selects become chips, settings becomes an index — the reasoning is in its CLAUDE.md
 
 ### `apps/api` and `apps/spa`
 

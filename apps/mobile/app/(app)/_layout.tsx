@@ -56,6 +56,7 @@ export default function AppLayout() {
       <Stack.Screen name="settings/groups" options={{ title: "Набори товарів" }} />
       <Stack.Screen name="settings/members" options={{ title: "Учасники" }} />
       <Stack.Screen name="settings/password" options={{ title: "Пароль" }} />
+      <Stack.Screen name="settings/telegram" options={{ title: "Telegram" }} />
       <Stack.Screen name="recipes" options={{ title: "Рецепти" }} />
       <Stack.Screen name="status" options={{ title: "Стан" }} />
       {/*
