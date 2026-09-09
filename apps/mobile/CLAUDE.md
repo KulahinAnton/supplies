@@ -205,6 +205,54 @@ every run, and it is being ignored on purpose: 9 MB buys a version pinned in
 the lockfile and a command that works without a network fetch, on a machine
 where "eas is not recognised" has already cost an afternoon once.
 
+## Reading a failed EAS build without a browser
+
+`eas build:view` prints a status and `EAS_BUILD_UNKNOWN_GRADLE_ERROR`, which
+says nothing. `--no-wait` and streaming both end at the same sentence. Two
+hours went into guessing before finding that the build record **carries a
+signed URL to the full log**:
+
+```bash
+pnpm exec eas build:view <id> --json > build.json   # .logFiles[0] is a signed URL
+curl -sL --raw "<that url>" -o log.br               # served Content-Encoding: br
+node -e 'require("fs").writeFileSync("log.txt", require("zlib").brotliDecompressSync(require("fs").readFileSync("log.br")))'
+```
+
+`--raw` matters: without it curl decodes the transfer and hands back something
+neither gzip nor text. The result is newline-delimited JSON, one object per log
+line, with a `phase` field — `RUN_EXPO_DOCTOR`, `RUN_GRADLEW` and the rest.
+
+**`expo doctor` runs on the builder**, and its output is in there. It is the
+most useful thing in the file: on the first two builds it named a missing peer,
+an invalid app config key and three out-of-date packages, none of which the
+error message mentioned. Run `npx expo-doctor` locally before spending a build.
+
+## pnpm will not resolve what you did not declare — three times now
+
+The Metro bundle step failed on the builder with `Cannot find module
+'babel-preset-expo'`. `babel.config.js` names it directly, so it was always a
+direct dependency; it happened to resolve locally and did not on a release
+bundle. The same shape had already appeared twice, and doctor found two more:
+
+| Package | Named by | Found by |
+|---|---|---|
+| `react-native-css-interop` | NativeWind's babel output | Phase 3.1, Metro |
+| `zod` | `useAuthForm`'s type import | Phase 3.6, tsc |
+| `babel-preset-expo` | `babel.config.js` | an EAS build failing |
+| `react-native-reanimated` | peer of `react-native-css-interop` | `expo doctor` |
+| `react-native-worklets` | peer of `react-native-reanimated` | `expo doctor` |
+
+The last two carry doctor's own warning, which is the point: *"Your app may
+crash outside of Expo Go without this dependency. Native module peer
+dependencies must be installed directly."* Expo Go bundles them, so the
+emulator never complained.
+
+`expo.install.exclude` holds `typescript`: the SDK wants 6.0 and this
+workspace is on 5.9.3 across five projects, which is its own change rather
+than something to slip into a build fix. Excluding it keeps doctor's output at
+21/21, so the next failure is visible instead of being the sixth line of a
+standing complaint.
+
 ## Typed routes, and a watcher quirk worth recognising
 
 `experiments.typedRoutes` generates `.expo/types/router.d.ts`, and it does
