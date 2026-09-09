@@ -633,13 +633,13 @@ are free now and expensive to retrofit.
 
 ### Phase 4 — finish and present · 3–5 days
 
-| # | Task | Est. |
-|---|---|---|
-| 4.1 | **⚠ prod** Move the Next app to `apps/web`; set Vercel Root Directory | 0.5 d |
-| 4.2 | **⚠ prod** Verify the deploy: build, migrations, bot webhook, cron | 0.5 d |
-| 4.3 | Deploy the API (Railway / Fly / Render) and the SPA (Vercel / Netlify) | 1 d |
-| 4.4 | README rewrite: diagram, stack table, screenshots, "where to look" | 1 d |
-| 4.5 | CI matrix — core, api, web, spa; Playwright on both web clients | 1 d |
+| # | Task | Est. | State |
+|---|---|---|---|
+| 4.1 | **⚠ prod** Move the Next app to `apps/web`; set Vercel Root Directory | 0.5 d | **done, 2026-09-06** |
+| 4.2 | **⚠ prod** Verify the deploy: build, migrations, bot webhook, cron | 0.5 d | needs your say-so — it touches what the household is using |
+| 4.3 | Deploy the API (Railway / Fly / Render) and the SPA (Vercel / Netlify) | 1 d | needs an account and a hosting choice |
+| 4.4 | README rewrite: diagram, stack table, screenshots, "where to look" | 1 d | **done** |
+| 4.5 | CI matrix — core, api, web, spa; Playwright on both web clients | 1 d | **done** — plus a mobile job, which is what the EAS failure argued for |
 
 Phase 4.1 is deliberately **the last thing that touches production**. Until
 then the Next app stays at the repo root and Vercel's configuration never
