@@ -614,7 +614,7 @@ a harness with three tests in it.
 | 3.4 | `expo-camera` barcode scanning | 1 d | **done** — and driven end to end on the emulator, which was not expected to be possible |
 | 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **config done** — profiles, cleartext, the EAS project; the build itself is queued |
 | 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | **done** — full parity with the SPA |
-| 3.7 | Push notifications via `expo-notifications` | 2–3 d | |
+| 3.7 | Push notifications via `expo-notifications` | 2–3 d | **done** — everything but delivery, which needs the APK and FCM credentials |
 | 3.8 | Play Console listing ($25, once) | 1 d | ⚠ needs an account |
 
 **Milestone A is a checkpoint, not a reduced scope.** Full parity is the
@@ -2148,12 +2148,59 @@ after `react-native-css-interop`.
 Green throughout: lint, five typechecks, 365 unit, 28 API unit, and an Android
 bundle that still contains no Prisma, no node builtins and no `server-only`.
 
-### Phases 3.7–5 — not started
+### Phase 3.7 — push, and a module that must not be imported · 2026-09-09
 
-Push notifications, the Play listing, the deploy, iOS. Phase 3 is otherwise
-done: **the Phase 2.9 parity gate closed on 2026-09-07**, decision 10 stopped
-applying, and 3.1–3.6 landed on 2026-09-08 and 09. All four clients now render
-the same household from the same engine.
+Feature 35: a `PushDevice` table, two endpoints, registration from the phone,
+and the daily digest going to phones after it goes to chats.
+
+##### Three decisions
+
+**Keyed by token, not by user.** One person may carry two phones and a tablet
+and each of them agrees separately. The token is also reassignable, because two
+people signing into the same phone get the same address from the OS — an
+upsert that only ever inserted would leave the first user receiving the second
+one's reminders.
+
+**Only `DeviceNotRegistered` deletes a row.** It means the app is gone from
+that device and the row can never do anything but slow future sends down. A
+rate limit looks similar and is transient; deleting on that would lose a live
+device over a busy minute.
+
+**Nothing throws.** By the time push runs, the digest has already reached
+Telegram. A push service that is down must not take the run down with it, and
+the caller already has a `failures` counter.
+
+##### Adding `expo-notifications` broke the entire app in Expo Go
+
+Not push — everything. The module throws while it is being evaluated on
+Android in Expo Go, and Expo Router imports every route file to build its
+route table, so one throw turned all twenty-odd screens into «Route
+"./login.tsx" is missing the required default export».
+
+`apps/mobile/lib/push/module.ts` is the answer: nothing imports the package
+directly, and that wrapper loads it with a dynamic `import()` in a try/catch.
+Catching the rejection was not enough — **a resolved import is not a working
+module.** It settles and hands back a half-built namespace whose functions are
+`undefined`, so the first call died inside an unwatched promise and the
+settings screen span forever. The guard checks for the API, not for a
+rejection.
+
+The behaviour is right in production too: a device whose notification module
+will not initialise should lose its reminders, not its inventory.
+
+##### What is left, and who has to do it
+
+Delivery. Remote push needs the APK or a development build — Expo Go on
+Android has not carried it since SDK 53 — and Android needs FCM credentials
+uploaded to the EAS project, which is the household owner's Firebase account
+and not something this repo can hold.
+
+### Phases 3.8–5 — not started
+
+The Play listing, the deploy, iOS. Phase 3 is otherwise done: **the Phase 2.9
+parity gate closed on 2026-09-07**, decision 10 stopped applying, and 3.1–3.7
+landed on 2026-09-08 and 09. All four clients now render the same household
+from the same engine, and the daily reminder reaches all of them.
 
 ### Start here
 

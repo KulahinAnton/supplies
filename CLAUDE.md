@@ -2,7 +2,7 @@
 
 Family web app (mobile-first, PWA) + Telegram bot for tracking what the household has in stock, what is running low, and what is about to expire. One household, many equal members, one shared inventory. Full spec: [PROJECT_PROMPT.md](PROJECT_PROMPT.md).
 
-> **Status.** Features 0–33 implemented and running in production on Vercel + Neon. 14 migrations, seed idempotent, `pnpm test` (339 across 22 files), `pnpm test:db` (52 integration checks against a live database, re-runnable), `pnpm test:e2e` (Playwright, 4 specs across desktop and mobile), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
+> **Status.** Features 0–35 implemented; 0–33 are running in production on Vercel + Neon, and the workspace on this branch is well ahead of it. 16 migrations, seed idempotent, `pnpm test` (378 across 25 files), `pnpm test:db` (52 integration checks against a live database, re-runnable), `pnpm test:api:e2e` (56 checks against the same), `pnpm test:e2e` (Playwright, 4 specs across desktop and mobile) and `pnpm test:e2e:spa` (14), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
 > Not exercised by any automated check: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them. The scan is no longer entirely unproven: on the phone it has been driven end to end against a barcode hung on the Android emulator's virtual-scene wall (`pnpm barcode` → [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md)). The web clients' `BarcodeDetector` path, and focus and glare everywhere, still need hardware.
 
@@ -40,7 +40,7 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 - `pnpm test` / `pnpm test:watch` — vitest from the root over `packages/**/*.test.ts` and `bot/**/*.test.ts`, no DB. The apps run their own suites (`pnpm test:api`), because they need different environments
 - `pnpm typecheck` covers the root — bot, scripts, packages, prisma — and `pnpm -r --filter "./apps/*" typecheck` covers each app under its own compiler settings. `pnpm verify` runs both
 - `pnpm test:db` — integration smoke test against a **live** seeded database (`scripts/smoke.ts`): transactions, FEFO through Prisma, household scoping. It mutates the demo household and cleans up after itself, and its checks are written as properties rather than against particular seeded rows — a check that fails because the fixture drifted, while the rule it names is intact, teaches people to ignore the output
-- `pnpm --filter @supplies/api test:e2e` — the API against the same live database (38 checks). Needs Docker and a seed; deliberately outside `pnpm test` and the commit hook, because a hook that fails when Docker is down teaches people to reach for `--no-verify`. It deletes the invites and reset tokens it creates
+- `pnpm --filter @supplies/api test:e2e` — the API against the same live database (56 checks). Needs Docker and a seed; deliberately outside `pnpm test` and the commit hook, because a hook that fails when Docker is down teaches people to reach for `--no-verify`. It deletes the invites and reset tokens it creates
 - `pnpm db:up` — start Postgres (docker compose, port 5434)
 - `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:studio` → [prisma/CLAUDE.md](prisma/CLAUDE.md)
 - `pnpm bot:dev` / `pnpm bot:start` — Telegram bot (long polling) → [bot/CLAUDE.md](bot/CLAUDE.md)

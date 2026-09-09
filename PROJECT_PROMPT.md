@@ -1308,3 +1308,50 @@ code.
 carries `householdId` from the verified token, and handlers receive it rather
 than reading it themselves — a handler that forgets to scope a query cannot
 compile.
+
+---
+
+### Feature 35 — the daily reminder as a phone notification
+
+The digest already reaches the household two ways: a Telegram message, and the
+dashboard whenever somebody opens the app. Feature 35 adds a third for the one
+case neither covers — a phone in a pocket, with the app closed and Telegram
+muted.
+
+**One message a day, and it is the same message.** Not a new channel with its
+own content: `digestText` is the single source, flattened for a notification
+because a push shows two or three lines in a system font and cannot render the
+bot's markdown. A household that gets a notification and then opens Telegram
+must not read two different accounts of the same cupboard.
+
+**A device agrees, not a person.** `PushDevice` is keyed by the Expo push
+token, because one person may carry two phones and a tablet and each of them is
+allowed separately. The token can also move between users: two people signing
+into the same phone receive the same address from the OS, so registration
+reassigns it — otherwise the first would keep receiving the second one's
+reminders.
+
+**Permission is asked once, from a screen somebody chose to open.** iOS and
+Android both grant an app one prompt per install; spending it on a cold launch,
+before anyone knows what the app is for, is how an app ends up permanently
+denied with no way back except the system settings. «Налаштування → Сповіщення»
+is the only place that asks.
+
+**There is no in-app switch to turn reminders off**, only the operating
+system's. A second toggle creates the state where the app believes it may
+notify and the system disagrees, and the honest answer to "stop these" is the
+one the platform already provides.
+
+**A dead address is deleted; a busy one is not.** Expo answers per message, and
+only `DeviceNotRegistered` — the app is gone from that device — removes the
+row. A rate limit or a transport error looks similar and is temporary; deleting
+on those would lose a live device over a busy minute.
+
+**Push never fails the digest.** By the time notifications are sent the
+Telegram half has already gone out. A push service that is down is a worse day,
+not a failed run.
+
+Expo's push service carries the message rather than FCM and APNs directly: one
+address format, one endpoint, and the credentials sit on EAS instead of in this
+repository. The cost is a dependency on a service Expo runs, which for one
+message a day to one household is the right side of the trade.
