@@ -43,6 +43,7 @@
     "mobile:dev": "pnpm --filter @supplies/mobile start",
     "mobile:android": "pnpm --filter @supplies/mobile android",
     "mobile:bundle": "pnpm --filter @supplies/mobile bundle:android",
+    "eas": "eas",
     "dev:all": "node scripts/check-dev-ports.mjs && concurrently -n web,api,spa -c cyan,magenta,green -k \"pnpm dev\" \"pnpm api:dev\" \"pnpm spa:dev\"",
     "dev:stop": "node scripts/check-dev-ports.mjs --kill"
   },
