@@ -1,51 +1,65 @@
+import Constants, { ExecutionEnvironment } from "expo-constants";
+import { Platform } from "react-native";
+
 /**
  * Feature 35 — `expo-notifications`, loaded so that it cannot take the app
  * down with it.
  *
  * **This wrapper is not defensive programming for its own sake.** Adding
  * `expo-notifications` to an SDK 57 app and importing it normally breaks the
- * entire application in Expo Go on Android: the module throws while it is
- * being evaluated —
+ * entire application in Expo Go on Android:
  *
  *     expo-notifications: Android Push notifications (remote notifications)
  *     functionality provided by expo-notifications was removed from Expo Go
  *     with the release of SDK 53. Use a development build instead.
  *
- * — and Expo Router imports every route file to build its route table, so a
- * single throw turned all twenty-odd screens into «Route "./login.tsx" is
- * missing the required default export». The app did not lose push; it lost
- * everything.
+ * Expo Router imports every route file to build its route table, so a single
+ * throw turned all twenty-odd screens into «Route "./login.tsx" is missing the
+ * required default export». The app did not lose push; it lost everything.
  *
- * A dynamic import inside a try/catch is what makes that survivable, because
- * the failure happens during evaluation and there is nowhere else to catch it.
- * The result is also the right behaviour in production: a device whose
- * notification module will not initialise should lose its reminders, not its
- * inventory.
+ * **And it cannot be caught.** The throw is not in the entry module: importing
+ * anything from the package pulls in `DevicePushTokenAutoRegistration.fx.js`,
+ * whose *module scope* registers a push-token listener, which throws. That
+ * happens inside Metro's `loadModuleImplementation`, several frames below the
+ * `import()`, and neither `.catch()` on the promise nor a `try` around the
+ * call site sees it — both were tried, and both still put a red box on screen
+ * the moment somebody signed in.
+ *
+ * So the environment is checked BEFORE the import rather than after it. The
+ * package tells you itself that it does not work there; asking first is the
+ * only thing that actually avoids the failure.
  *
  * The type-only import is free — TypeScript erases it, so nothing is required
  * at load time.
  */
 type NotificationsModule = typeof import("expo-notifications");
 
+/**
+ * Expo Go on Android, where remote push has not existed since SDK 53. A
+ * development build or the APK reports a different execution environment and
+ * takes the ordinary path.
+ */
+function knownUnsupported(): boolean {
+  return (
+    Platform.OS === "android" &&
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient
+  );
+}
+
 /** Cached, including the failure: retrying a module that threw throws again. */
 let pending: Promise<NotificationsModule | null> | null = null;
 
-/**
- * **A resolved import is not a working module.** In Expo Go the `import()`
- * settles fine and hands back a half-built namespace whose functions are
- * `undefined` — the throw happened partway through evaluating it. Catching the
- * rejection was not enough; the first call then died with «undefined is not a
- * function» inside a promise nobody was watching, and the settings screen sat
- * on its spinner forever.
- *
- * So "loaded" means "has the API", not "did not reject".
- */
 export function loadNotifications(): Promise<NotificationsModule | null> {
+  if (knownUnsupported()) return Promise.resolve(null);
+
   pending ??= import("expo-notifications")
+    // A resolved import is still not proof of a working module — belt as well
+    // as braces, for the next runtime that half-initialises it.
     .then((module) =>
       typeof module?.getPermissionsAsync === "function" ? module : null,
     )
     .catch(() => null);
+
   return pending;
 }
 

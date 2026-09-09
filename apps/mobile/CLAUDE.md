@@ -219,13 +219,28 @@ throw turned all twenty-odd screens into «Route "./login.tsx" is missing the
 required default export». Twenty minutes of reading that message before the
 cause was obvious.
 
-`lib/push/module.ts` is the answer: nothing imports `expo-notifications`
-directly, and that wrapper loads it with a dynamic `import()` inside a
-try/catch. **A resolved import is not a working module** — the import settles
-and hands back a half-built namespace whose functions are `undefined`, so the
-guard checks for the API rather than for a rejection. Getting that wrong the
-first time left the settings screen spinning forever on an unhandled
-«undefined is not a function».
+`lib/push/module.ts` is the answer, and **the thing that works is checking the
+environment before importing, not catching the import.** Two attempts failed
+first, and both are worth knowing:
+
+- `.catch()` on the promise. The throw is not in the entry module —
+  importing anything from the package pulls in
+  `DevicePushTokenAutoRegistration.fx.js`, whose *module scope* registers a
+  push-token listener, which throws. That happens inside Metro's
+  `loadModuleImplementation`, several frames below the `import()`.
+- a `try` around the `import()` call itself. Same reason.
+
+Both still put a red box on screen the moment somebody signed in, because
+`useNotificationRouting` is mounted on the authed layout. The read-the-stack
+step is what settled it: the red box names the file, and it was not the one
+being imported.
+
+So the wrapper asks `Constants.executionEnvironment` first and never reaches
+the import in Expo Go on Android. It also keeps a "did this resolve to
+something usable" check, because **a resolved import is not a working
+module** — an earlier version settled with a half-built namespace whose
+functions were `undefined`, which left the settings screen spinning on an
+unhandled «undefined is not a function».
 
 The behaviour is right in production too: a device whose notification module
 will not initialise should lose its reminders, not its inventory. What it does
