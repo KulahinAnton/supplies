@@ -13,15 +13,24 @@ import { useAttention } from "@/hooks/use-attention";
  * accessory, and the platform's own press and haptics. The churn that "unstable"
  * warns about is confined to this file.
  *
- * **Three tabs, matching `AppNav` minus what a phone does differently.**
- * «Налаштування» and «Рецепти» arrive with their screens; a tab that leads
- * somewhere unbuilt is worse than a tab that does not exist yet.
+ * **Four tabs, matching `AppNav` with one rename.** The fourth is labelled
+ * «Ще» rather than «Налаштування»: it is the index for settings, sets and the
+ * build status, and a tab label has room for one short word. «Рецепти» is not
+ * a tab — it is Feature 32.1, off unless the household turned it on, and a
+ * fifth tab that is usually absent is worse than a row inside this one.
  */
 export default function TabsLayout() {
   const { expiring, restock } = useAttention();
 
   return (
-    <NativeTabs>
+    /**
+     * `labelVisibilityMode="labeled"` is not decoration. Material's default is
+     * `auto`, which drops every label but the selected one once a bar has four
+     * items — so adding «Ще» silently unlabelled the other three, and a bar of
+     * three anonymous glyphs is a worse tab bar than one with a word under
+     * each. Android-only, and ignored elsewhere.
+     */
+    <NativeTabs labelVisibilityMode="labeled">
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon sf="square.grid.2x2" md="dashboard" />
         <NativeTabs.Trigger.Label>Огляд</NativeTabs.Trigger.Label>
@@ -47,6 +56,11 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Badge hidden={restock === 0}>
           {String(restock)}
         </NativeTabs.Trigger.Badge>
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon sf="gearshape" md="settings" />
+        <NativeTabs.Trigger.Label>Ще</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

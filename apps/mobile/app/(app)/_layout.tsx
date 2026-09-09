@@ -49,6 +49,13 @@ export default function AppLayout() {
       <Stack.Screen name="items/[id]/edit" options={{ title: "Редагувати" }} />
       <Stack.Screen name="items/new" options={{ title: "Новий товар" }} />
       <Stack.Screen name="items/archive" options={{ title: "Архів" }} />
+      <Stack.Screen name="groups/[id]" options={{ title: "" }} />
+      <Stack.Screen name="settings/household" options={{ title: "Родина" }} />
+      <Stack.Screen name="settings/categories" options={{ title: "Категорії" }} />
+      <Stack.Screen name="settings/locations" options={{ title: "Місця зберігання" }} />
+      <Stack.Screen name="settings/groups" options={{ title: "Набори товарів" }} />
+      <Stack.Screen name="settings/members" options={{ title: "Учасники" }} />
+      <Stack.Screen name="settings/password" options={{ title: "Пароль" }} />
       <Stack.Screen name="status" options={{ title: "Стан" }} />
       {/*
         Full screen, not a sheet: a viewfinder wants the whole display, and a
