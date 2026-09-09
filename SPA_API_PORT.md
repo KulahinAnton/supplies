@@ -612,7 +612,7 @@ a harness with three tests in it.
 | 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
 | 3.3 | **Milestone A** — login, items list, item detail with take/add | 4–5 d | **done** — the scan moved to 3.4, where it belongs |
 | 3.4 | `expo-camera` barcode scanning | 1 d | **done** — and driven end to end on the emulator, which was not expected to be possible |
-| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **config done** — profiles, cleartext, the EAS project; the build itself is queued |
+| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **done** — APK built, installed and signed in as a standalone app |
 | 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | **done** — full parity with the SPA |
 | 3.7 | Push notifications via `expo-notifications` | 2–3 d | **done** — everything but delivery, which needs the APK and FCM credentials |
 | 3.8 | Play Console listing ($25, once) | 1 d | ⚠ needs an account |
@@ -2077,9 +2077,39 @@ where `\U` is an invalid unicode escape — the literal message is "Malformed
 \uxxxx encoding"), and then the NDK's CMake step refusing under Android
 Studio's bundled JDK 25. Neither is what an EAS builder on JDK 17 hits.
 
-The answer was to stop guessing and resubmit **without `--no-wait`**: the CLI
-streams the builder's log while it runs, which is the only way to read a Gradle
-failure without a browser session. Worth knowing before the next one.
+Streaming without `--no-wait` did not help either — the CLI ends at the same
+sentence. What worked is that **the build record carries a signed URL to the
+whole log**: `eas build:view <id> --json` has a `logFiles` array, the file is
+brotli-encoded, and `curl --raw` is the part that is easy to get wrong. Inside
+is newline-delimited JSON with a `phase` on every line, and the answer:
+
+    Failed to construct transformer: Error: Cannot find module 'babel-preset-expo'
+    Execution failed for task ':app:createBundleReleaseJsAndAssets'
+
+Not Gradle at all — Metro, during the bundle step. `babel.config.js` names
+`babel-preset-expo` directly, so it was always a direct dependency of this app;
+it resolved locally and did not on a release bundle. **Third time pnpm's
+isolation has demanded that a dependency be written down** rather than found by
+accident, after `react-native-css-interop` and `zod`.
+
+`expo doctor` also runs on the builder, and its output was in the same file
+naming three more problems the error message never mentioned:
+`react-native-reanimated` is a required peer of `react-native-css-interop` and
+`react-native-worklets` of reanimated — both carrying doctor's own warning that
+an app *may crash outside Expo Go* without them, which is exactly why the
+emulator never complained — and `newArchEnabled` is not a valid SDK 57 config
+key. Run `npx expo-doctor` before spending a build; it is 21/21 now, with
+`typescript` excluded because the SDK wants 6.0 and this workspace is on 5.9.3
+across five projects.
+
+##### What the APK proved
+
+Installed on the emulator and signed in: `ua.supplies.app/MainActivity` in
+focus, no Expo Go, the release bundle, reaching `http://192.168.53.34:3200`
+over the LAN. That single sign-in is the proof for four separate things at
+once — the release bundle runs, `usesCleartextTraffic` is actually applied (the
+request would fail without it), `EXPO_PUBLIC_API_URL` came through from the EAS
+environment variable, and every native module compiled and linked.
 
 `expo prebuild` also has a side effect worth naming: it writes `android/`
 inside the workspace root that Metro watches, and Metro stops bundling. The
