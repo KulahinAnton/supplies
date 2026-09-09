@@ -92,18 +92,55 @@ export function formatQuantity(value: Numeric): string {
 }
 
 /**
- * Ukrainian plural selection. Ukrainian has three forms and picking them with
- * `n === 1 ? a : b` is wrong the moment a count reaches 2 or 5:
- * 1 пляшка / 2 пляшки / 5 пляшок.
+ * Ukrainian plural selection — CLDR's `uk` rule, written out rather than asked
+ * for.
+ *
+ * This used to be `new Intl.PluralRules(LOCALE)`, and it crashed the React
+ * Native app on load: **Hermes ships `Intl.DateTimeFormat`, `Intl.NumberFormat`
+ * and `Intl.Collator`, but not `Intl.PluralRules`.** The other three
+ * constructors in this file are fine on the same engine, which is why the
+ * failure was one line rather than the whole module.
+ *
+ * The alternative was `@formatjs/intl-pluralrules` in the phone's entry file.
+ * Rejected: `packages/core` is portable by contract, and a polyfill in one
+ * client papers over a runtime assumption the *package* got wrong — the next
+ * consumer with a partial ICU hits it again. This app is Ukrainian-only by
+ * design (§8), so it needs one language's rule, not CLDR's machinery.
+ *
+ * The rule is fixed and short. `format.test.ts` compares it against Node's own
+ * `Intl.PluralRules` across every integer 0–1000 plus decimals, so "written
+ * out" does not mean "guessed at".
+ *
+ *   one   v = 0 and i % 10 = 1      and i % 100 ≠ 11
+ *   few   v = 0 and i % 10 = 2..4   and i % 100 ≠ 12..14
+ *   many  v = 0 and (i % 10 = 0 or i % 10 = 5..9 or i % 100 = 11..14)
+ *   other everything else — i.e. anything with a fractional part
  */
-const pluralRules = new Intl.PluralRules(LOCALE);
+export type UkPluralCategory = "one" | "few" | "many" | "other";
+
+export function selectUkPlural(count: number): UkPluralCategory {
+  // `v` in CLDR terms: a number with visible fraction digits is always "other"
+  // in Ukrainian — «1,5 літра» takes no plural form of its own.
+  if (!Number.isInteger(count)) return "other";
+
+  const i = Math.abs(count);
+  const mod10 = i % 10;
+  const mod100 = i % 100;
+
+  if (mod10 === 1 && mod100 !== 11) return "one";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "few";
+  return "many";
+}
 
 export type UkPlural = { one: string; few: string; many: string };
 
 export function pluralUk(count: number, forms: UkPlural): string {
-  const rule = pluralRules.select(count);
+  const rule = selectUkPlural(count);
   if (rule === "one") return forms.one;
   if (rule === "few") return forms.few;
+  // "many" and "other" share a form: «5 штук», «1,5 штук». Ukrainian has no
+  // separate word for the fractional case and this is what the previous
+  // `Intl`-backed version did too.
   return forms.many;
 }
 

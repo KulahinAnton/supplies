@@ -1732,6 +1732,69 @@ a day later. TypeScript stays on the workspace's 5.9.3 rather than the
 suggested 6.0.3; the app typechecks, and one compiler across five packages is
 worth more than matching a recommendation.
 
+### Phase 3.1 — the emulator, and what it found in ten minutes · 2026-09-09
+
+Android Studio arrived, so the scaffold got tested on a real Android runtime
+for the first time. **The app crashed on load**, and the cause is worth the
+whole entry.
+
+`packages/core/src/format.ts` built `new Intl.PluralRules("uk-UA")` at module
+scope. **Hermes does not have `Intl.PluralRules`** — while the same file's
+`Intl.DateTimeFormat` and `Intl.NumberFormat`, three lines away, worked
+perfectly. A partial `Intl` looks present right up until the one missing
+constructor runs, and every mobile screen importing the shared formatter died
+with `undefined cannot be used as a constructor`.
+
+**Nothing before this could have caught it.** Node has the full ICU, so 357
+tests passed. Browsers have it, so both web clients were fine. `expo start
+--web` runs under react-native-web *in a browser*, so even the mobile preview
+was green — the same screen, the same components, the same bundle logic,
+rendering correctly while the emulator showed a red box. That is the argument
+for booting a device early rather than after twelve screens are written on top.
+
+##### The fix, and why it is in the package rather than the phone
+
+The reflex is `@formatjs/intl-pluralrules` in the app's entry file. Rejected:
+`packages/core` is portable **by contract**, and a polyfill in one client
+papers over an assumption the *package* got wrong — the next consumer with a
+partial ICU (an older Android, a different engine, an edge runtime) hits it
+again. And the app is Ukrainian-only by design (§8), so what it needs is one
+language's rule, not CLDR's machinery.
+
+`selectUkPlural` writes that rule out — four lines of arithmetic over `i % 10`
+and `i % 100`. Hand-written plural rules are exactly how «5 пляшки» ships, so
+the rule is only acceptable with proof: `format.test.ts` now compares it
+against **Node's real `Intl.PluralRules` for every integer 0–1000** plus a
+spread of decimals, and asserts the boundary cases 11–14 that make
+`n === 1 ? a : b` wrong. 361 unit tests, up from 357.
+
+The rule now runs identically on four runtimes instead of three, and one fewer
+runtime assumption travels with the engine.
+
+##### The emulator, and running it
+
+`cmdline-tools` → `system-images/android-36/google_apis/x86_64` → an AVD named
+`supplies_pixel_7`, all from the CLI. `expo start --android` installed Expo Go
+and opened the app without `ANDROID_HOME` ever being set.
+
+Two Git Bash traps are documented in `apps/mobile/CLAUDE.md` because both cost
+real time: device paths in `adb shell` get rewritten into Windows paths
+(`MSYS_NO_PATHCONV=1`, or use `exec-out`), and `adb logcat -c` between runs —
+without it the previous crash sits in the buffer and reads as the current one,
+which nearly had a fixed bug chased twice.
+
+##### On the device, after the fix
+
+Zero JS errors in a cleared logcat, and every value right: API reachable at
+`10.0.2.2:3200` with the database connected, «13 шт.», **«13 штук»** from the
+rewritten plural rule, stock `OK` against a minimum of 4, expiry `EXPIRED` from
+the worst batch, and FEFO ordering `soonest → later → undated` with the expired
+batch excluded. NativeWind styling rendered natively.
+
+Gate re-run after the core change, since `format.ts` is shared by everything:
+lint, five typechecks, 361 unit tests, 20 API unit, 50 API e2e, every smoke
+check.
+
 ### Phases 3–5 — not started
 
 React Native, the deploy, iOS. **The Phase 2.9 parity gate closed on

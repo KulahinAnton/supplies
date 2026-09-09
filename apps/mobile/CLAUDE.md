@@ -21,6 +21,35 @@ pnpm mobile:bundle     # expo export --platform android, no device needed
 It resolves the entire module graph and writes a Hermes bundle without any
 device, so a resolution mistake surfaces in seconds rather than on a phone.
 
+## Running it on the emulator
+
+Android Studio's SDK lives under `$LOCALAPPDATA/Android/Sdk` and neither `adb`
+nor `emulator` is on `PATH`, so call them by full path. The AVD is
+`supplies_pixel_7` — Pixel 7, API 36, `google_apis`, x86_64.
+
+```bash
+SDK="$LOCALAPPDATA/Android/Sdk"; ADB="$SDK/platform-tools/adb.exe"
+"$SDK/emulator/emulator.exe" -avd supplies_pixel_7 -no-snapshot-save -no-boot-anim &
+until [ "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 5; done
+```
+
+Then `expo start --android` installs Expo Go and opens the app; a later reopen
+is a deep link:
+
+```bash
+"$ADB" shell am start -a android.intent.action.VIEW -d "exp://10.0.2.2:8081"
+```
+
+Two Git Bash traps, both of which cost time once:
+
+- **Device paths get rewritten.** `adb shell screencap -p /sdcard/x.png` becomes
+  a Windows path and `screencap` prints its usage instead. Prefix with
+  `MSYS_NO_PATHCONV=1`, or skip device paths entirely — `"$ADB" exec-out
+  screencap -p > shot.png` is binary-safe and needs no `pull`.
+- **`adb logcat -c` before each run.** Otherwise the previous crash is still in
+  the buffer and reads as the current one. That nearly had me chasing a fixed
+  bug twice.
+
 ## `metro.config.js` is the whole of Phase 3.1
 
 Metro was written for a single application directory. pnpm gives every package
@@ -46,6 +75,20 @@ One dependency **is** declared here and looks odd: `react-native-css-interop`.
 NativeWind's babel preset rewrites this app's own JSX to import its runtime, so
 these source files genuinely depend on it, and the upward walk from `app/`
 cannot see inside `nativewind`'s private store.
+
+## Hermes has a partial `Intl`
+
+The first thing this app did on a real device was crash: `format.ts`
+constructed `Intl.PluralRules` at module scope and **Hermes does not have it**,
+though it does have `DateTimeFormat`, `NumberFormat` and `Collator`. The rule
+was written out in `packages/core` instead of polyfilled here — see
+[packages/core/CLAUDE.md](../../packages/core/CLAUDE.md) for why the fix
+belongs to the package rather than to this client.
+
+The lesson for anything added later: **the web preview cannot find this class
+of bug.** `expo start --web` runs under react-native-web in a browser with the
+full ICU, so it was perfectly green while the emulator was red. Check anything
+platform-sensitive on the device.
 
 ## What is shared and what is not
 

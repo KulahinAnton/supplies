@@ -21,6 +21,33 @@ seam belongs to whoever owns the database, not to the rules.
 build must not import. That is safe because of how the package is exported,
 below — not because anyone remembered.
 
+## The runtimes disagree about `Intl`, and Hermes is the strict one
+
+**`Intl.PluralRules` does not exist on Hermes.** `format.ts` constructed one at
+module scope and every React Native screen that imported the module crashed on
+load with `undefined cannot be used as a constructor` — while the same file's
+`Intl.DateTimeFormat` and `Intl.NumberFormat`, three lines away, worked fine.
+That asymmetry is the whole trap: a partial `Intl` looks present until the one
+missing constructor runs.
+
+Nothing caught it before a device did. Node has the full ICU, so the tests
+passed; browsers have it, so both web clients were fine; `expo start --web`
+runs under react-native-web in a browser, so even the mobile preview was fine.
+**Only Hermes on the emulator failed**, which is the argument for booting one
+before building screens rather than after.
+
+The fix was to write CLDR's `uk` rule out in `selectUkPlural` rather than
+polyfill it in the phone. A polyfill in one client papers over an assumption
+the PACKAGE got wrong, and the next consumer with a partial ICU — an older
+Android, a different JS engine, an edge runtime — hits it again. This app is
+Ukrainian-only by design (§8), so it needs one language's rule, not CLDR's
+machinery. `format.test.ts` compares the hand-written rule against Node's real
+`Intl.PluralRules` over every integer 0–1000 and a spread of decimals, so
+"written out" is checked rather than trusted.
+
+**Before adding any `Intl` API here, check it against Hermes.** The three still
+in use are the ones that work; a fourth may not.
+
 ## No barrel
 
 There is no `index.ts`, and there must not be one. The `exports` map is

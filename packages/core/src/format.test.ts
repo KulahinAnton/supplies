@@ -8,6 +8,7 @@ import {
   formatQuantityWithUnit,
   formatQuantityWithUnitLong,
   pluralUk,
+  selectUkPlural,
   UNIT_PLURAL,
 } from "./format";
 import { dateOnlyUTC } from "./period";
@@ -165,5 +166,59 @@ describe("formatDate", () => {
     // land on the same day, but the pin is what guarantees that rather than
     // the offset happening to be positive.
     expect(formatDate(new Date("2026-09-05T00:00:00Z"))).toBe("05.09.2026");
+  });
+});
+
+/**
+ * The check that lets `selectUkPlural` be hand-written.
+ *
+ * It replaced `new Intl.PluralRules("uk-UA")`, which Hermes does not have —
+ * the React Native app crashed on load at that line while the same file's
+ * `DateTimeFormat` and `NumberFormat` were fine. A rule written out by hand is
+ * only safe if something proves it agrees with the one it replaced, so this
+ * runs both over every integer to 1000 and a spread of decimals.
+ *
+ * Node has the real implementation, so this test is meaningful precisely where
+ * the app is not: on the machine that runs CI.
+ */
+describe("selectUkPlural against Intl.PluralRules", () => {
+  const reference = new Intl.PluralRules("uk-UA");
+
+  it("agrees on every integer from 0 to 1000", () => {
+    const disagreements: string[] = [];
+    for (let n = 0; n <= 1000; n++) {
+      const ours = selectUkPlural(n);
+      const theirs = reference.select(n);
+      if (ours !== theirs) disagreements.push(`${n}: ours=${ours} intl=${theirs}`);
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it("agrees on the decimals, which are all `other`", () => {
+    for (const n of [0.5, 1.5, 2.5, 4.5, 5.5, 11.5, 21.5, 100.25]) {
+      expect(selectUkPlural(n)).toBe(reference.select(n));
+    }
+  });
+
+  it("covers the three categories at the boundaries the rule turns on", () => {
+    // 11–14 are the trap: they end in 1–4 but take `many`, which is why
+    // `n === 1 ? a : b` is wrong and why this rule has the mod-100 clauses.
+    expect(selectUkPlural(1)).toBe("one");
+    expect(selectUkPlural(21)).toBe("one");
+    expect(selectUkPlural(11)).toBe("many");
+    expect(selectUkPlural(2)).toBe("few");
+    expect(selectUkPlural(22)).toBe("few");
+    expect(selectUkPlural(12)).toBe("many");
+    expect(selectUkPlural(5)).toBe("many");
+    expect(selectUkPlural(0)).toBe("many");
+  });
+
+  it("treats a negative count like its magnitude", () => {
+    // Nothing in the app shows a negative quantity, but a movement delta is
+    // negative and `formatQuantityWithUnitLong` is one refactor away from
+    // being handed one. Falling into `many` for -1 would read as «-1 штук».
+    expect(selectUkPlural(-1)).toBe("one");
+    expect(selectUkPlural(-2)).toBe("few");
+    expect(selectUkPlural(-11)).toBe("many");
   });
 });
