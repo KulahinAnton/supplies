@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { classifyRefresh, hashToken, newRefreshToken, refreshExpiry } from "./tokens";
+import {
+  REFRESH_GRACE_MS,
+  classifyRefresh,
+  hashToken,
+  newRefreshToken,
+  refreshExpiry,
+} from "./tokens";
 
 describe("newRefreshToken", () => {
   it("is 256 bits, url-safe, and never repeats", () => {
@@ -67,5 +73,83 @@ describe("classifyRefresh", () => {
     expect(classifyRefresh({ expiresAt: now, revokedAt: null }, now)).toEqual({
       status: "expired",
     });
+  });
+});
+
+describe("classifyRefresh — the grace window", () => {
+  const future = new Date("2026-12-31T00:00:00Z");
+  const now = new Date("2026-06-01T00:00:00Z");
+  const ago = (ms: number) => new Date(now.getTime() - ms);
+
+  const rotated = (at: Date) => ({
+    expiresAt: future,
+    revokedAt: at,
+    revokedReason: "rotated" as const,
+  });
+
+  it("calls a token rotated one second ago a race, not reuse", () => {
+    // Two browser tabs restoring together send the same cookie. Reading the
+    // loser as theft signs the person out of everything for opening a tab.
+    expect(classifyRefresh(rotated(ago(1_000)), now)).toEqual({ status: "raced" });
+  });
+
+  it("still calls a token rotated long ago reuse", () => {
+    expect(classifyRefresh(rotated(ago(60_000)), now)).toEqual({ status: "reused" });
+  });
+
+  it("puts the boundary exactly at REFRESH_GRACE_MS", () => {
+    expect(classifyRefresh(rotated(ago(REFRESH_GRACE_MS)), now)).toEqual({
+      status: "raced",
+    });
+    expect(classifyRefresh(rotated(ago(REFRESH_GRACE_MS + 1)), now)).toEqual({
+      status: "reused",
+    });
+  });
+
+  it("does not let a future revocation buy a grace period", () => {
+    // A clock that went backwards, or a row written by a machine ahead of this
+    // one. Either way it is not evidence of a race, and treating it as one
+    // would let a skewed clock disable theft detection entirely.
+    expect(classifyRefresh(rotated(new Date(now.getTime() + 5_000)), now)).toEqual({
+      status: "reused",
+    });
+  });
+
+  /**
+   * The clause the API's e2e suite forced, and the one most worth keeping.
+   *
+   * `revokeAllFor` stamps `revokedAt = now()` on the whole family, so without
+   * the reason check every token it killed would be inside the grace window —
+   * and the attacker who triggered the theft response could refresh again with
+   * any of them. The window would have neutered the thing it was bolted onto.
+   */
+  it("gives no grace to a token killed by the theft response", () => {
+    expect(
+      classifyRefresh(
+        { expiresAt: future, revokedAt: ago(1_000), revokedReason: "reuse" },
+        now,
+      ),
+    ).toEqual({ status: "reused" });
+  });
+
+  it("gives no grace to a token killed by signing out", () => {
+    expect(
+      classifyRefresh(
+        { expiresAt: future, revokedAt: ago(1_000), revokedReason: "logout" },
+        now,
+      ),
+    ).toEqual({ status: "reused" });
+  });
+
+  it("gives no grace to a row written before the column existed", () => {
+    // NULL is the pre-migration state, and the safe reading of it is "not a
+    // rotation" rather than "probably fine".
+    expect(
+      classifyRefresh({ expiresAt: future, revokedAt: ago(1_000) }, now),
+    ).toEqual({ status: "reused" });
+  });
+
+  it("takes the window as an argument, so the rule is testable without waiting", () => {
+    expect(classifyRefresh(rotated(ago(50)), now, 10)).toEqual({ status: "reused" });
   });
 });

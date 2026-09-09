@@ -76,6 +76,33 @@ NativeWind's babel preset rewrites this app's own JSX to import its runtime, so
 these source files genuinely depend on it, and the upward walk from `app/`
 cannot see inside `nativewind`'s private store.
 
+## Tokens: SecureStore, and why the client is not the SPA's
+
+The refresh token lives in `expo-secure-store` — the Keychain on iOS, an
+EncryptedSharedPrefs blob behind the Keystore on Android — and the access token
+lives in memory, because it expires in fifteen minutes and a value on disk is a
+value something else can read.
+
+`lib/api/client.ts` is a **sibling** of `apps/spa/src/api/client.ts`, not a
+copy, and the difference is the whole reason it is not shared: the SPA's
+refresh token is an httpOnly cookie the browser attaches by itself, so it sends
+`credentials: "include"` and never sees the value. There are no cookies here,
+so the token comes out of SecureStore and goes back in the request body — which
+is why `POST /auth/login` answers with it *both* ways. What IS shared is
+everything above: `@supplies/core/contracts`, the message catalogue, the rules.
+
+**Never post to `/auth/refresh` yourself — call `refreshSession()`.** Refresh
+tokens rotate and a replay is treated as theft; the SPA shipped a bug where the
+auth bootstrap posted directly and a double-invoked effect replayed what it had
+just rotated. The server now also allows a ten-second grace window, but that is
+for clients that cannot coordinate at all, like two browser tabs. Inside one
+process, coordinating is free.
+
+And **logout has to send the token.** `/auth/logout` finds it in a cookie or in
+the body; posting nothing returns `{ ok: true }` — it is idempotent by design —
+while leaving the row live on the server, so signing out would be a local
+illusion.
+
 ## Hermes has a partial `Intl`
 
 The first thing this app did on a real device was crash: `format.ts`

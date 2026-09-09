@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AuthProvider } from "../lib/auth/auth-context";
 import "../global.css";
 
 /**
@@ -27,8 +28,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <ExpoStatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }} />
+        <AuthProvider>
+          <ExpoStatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false }} />
+        </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );

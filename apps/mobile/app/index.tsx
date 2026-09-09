@@ -1,12 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
-import { ScrollView, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { toDecimal } from "@supplies/core/decimal";
 import { formatQuantityWithUnit, formatQuantityWithUnitLong } from "@supplies/core/format";
 import { itemExpiryState } from "@supplies/core/expiry";
 import { todayUTC } from "@supplies/core/period";
 import { fefoOrder, itemQuantity, stockState, type StockBatchInput } from "@supplies/core/stock";
-import { apiUrl, health, ready } from "../lib/api";
+import type { Health, Ready } from "@supplies/core/contracts/auth";
+import { api } from "../lib/api/client";
+import { apiUrl } from "../lib/api/url";
+import { useAuth } from "../lib/auth/auth-context";
 
 /**
  * Phase 3.1 — the scaffold's proof of life, and deliberately not a
@@ -64,8 +68,20 @@ const BATCHES: StockBatchInput[] = [
 ];
 
 export default function StatusScreen() {
-  const api = useQuery({ queryKey: ["health"], queryFn: health, retry: false });
-  const db = useQuery({ queryKey: ["ready"], queryFn: ready, retry: false });
+  const auth = useAuth();
+  const health = useQuery({
+    queryKey: ["health"],
+    // Both health endpoints sit OUTSIDE the `/api` prefix and are `@Public()`
+    // — see the API's `main.ts`. They are the two calls this screen can make
+    // before anyone has signed in.
+    queryFn: () => api.get<Health>("/health"),
+    retry: false,
+  });
+  const db = useQuery({
+    queryKey: ["ready"],
+    queryFn: () => api.get<Ready>("/health/ready"),
+    retry: false,
+  });
 
   const total = itemQuantity(BATCHES);
   const state = stockState({ minQty: toDecimal("4"), unit: "PIECE" }, BATCHES);
@@ -88,9 +104,13 @@ export default function StatusScreen() {
           <Row
             label="Процес"
             value={
-              api.isPending ? "…" : api.isError ? "недоступний" : `працює (${api.data?.uptime} с)`
+              health.isPending
+                ? "…"
+                : health.isError
+                  ? "недоступний"
+                  : `працює (${health.data?.uptime} с)`
             }
-            ok={api.isSuccess}
+            ok={health.isSuccess}
           />
           <Row
             label="База даних"
@@ -99,8 +119,23 @@ export default function StatusScreen() {
           />
         </View>
 
-        <View className="h-px bg-border" />
-
+          {/*
+            Phase 3.2 — what SecureStore had to say on launch. `loading` means
+            the stored refresh token is being exchanged; `anonymous` means
+            there was none, or it was dead. Neither is an error.
+          */}
+          <Row
+            label="Сесія"
+            value={
+              auth.status === "loading"
+                ? "перевіряємо…"
+                : auth.status === "signed-in"
+                  ? auth.user.email
+                  : "немає"
+            }
+            ok={auth.status !== "loading"}
+          />
+          <SessionButton />
         <View className="gap-2">
           <Text className="text-base font-semibold text-foreground">
             Рушій у Metro-бандлі
@@ -123,6 +158,51 @@ export default function StatusScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * Phase 3.2's proof, and **temporary** — Phase 3.3 replaces it with the real
+ * login screen.
+ *
+ * It exists because the token round trip cannot be verified without a way to
+ * start one: sign in, kill the app, relaunch, and see whether SecureStore
+ * handed the session back. The demo credentials are the seed's, and this
+ * screen is already a development surface.
+ */
+function SessionButton() {
+  const auth = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (auth.status === "loading") return null;
+
+  const signedIn = auth.status === "signed-in";
+
+  return (
+    <View className="gap-2">
+      <Pressable
+        disabled={busy}
+        onPress={() => {
+          setBusy(true);
+          setError(null);
+          const work = signedIn
+            ? auth.signOut()
+            : auth.signIn("anton@example.com", "supplies123");
+          void work
+            .catch((cause: unknown) =>
+              setError(cause instanceof Error ? cause.message : "Не вдалося"),
+            )
+            .finally(() => setBusy(false));
+        }}
+        className="items-center rounded-lg bg-primary px-3 py-2.5 active:opacity-80"
+      >
+        <Text className="text-sm font-medium text-primary-foreground">
+          {busy ? "…" : signedIn ? "Вийти" : "Увійти як anton@example.com"}
+        </Text>
+      </Pressable>
+      {error ? <Text className="text-xs text-destructive">{error}</Text> : null}
+    </View>
   );
 }
 

@@ -9,7 +9,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "./app.module";
 import { EmptyBodyPipe } from "./common/empty-body.pipe";
 import { RuleErrorFilter } from "./common/rule-error.filter";
+import { createHash } from "node:crypto";
 import { prisma } from "./db";
+
+/** Same hashing the API stores tokens with — see `auth/tokens.ts`. */
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex");
 import * as z from "zod";
 import {
   apiErrorSchema,
@@ -178,24 +182,67 @@ describe("refresh rotation", () => {
     expect(rotated.status).toBe(201);
     const second = rotated.body as unknown as { refreshToken: string };
     expect(second.refreshToken).not.toBe(first.refreshToken);
-
-    const replay = await request("POST", "/api/auth/refresh", {
-      body: { refreshToken: first.refreshToken },
-    });
-    expect(replay.status).toBe(401);
   });
 
-  it("revokes every session when a used token is replayed", async () => {
-    // The theft response. Presenting a revoked token means either a bug or a
-    // replay and the API cannot tell which, so the whole family goes — see
-    // PROJECT_PROMPT.md Feature 34.
+  /**
+   * The race, which used to sign people out for opening a second tab.
+   *
+   * Two clients holding one token — two browser tabs sharing an httpOnly
+   * cookie — send it at almost the same moment, and the loser presents what
+   * the winner just rotated. Before `REFRESH_GRACE_MS` that was
+   * indistinguishable from theft, so the correct theft response fired and
+   * every session went.
+   */
+  it("treats an immediate replay as a race, and leaves the family alone", async () => {
+    const first = await signIn();
+    const rotated = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: first.refreshToken },
+    });
+    const winner = (rotated.body as unknown as { refreshToken: string }).refreshToken;
+
+    const loser = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: first.refreshToken },
+    });
+    expect(loser.status).toBe(201);
+
+    // Its own token, not the winner's: per-device revocation still has to mean
+    // something, and two clients sharing one row would break it.
+    const losersToken = (loser.body as unknown as { refreshToken: string }).refreshToken;
+    expect(losersToken).not.toBe(winner);
+
+    // And the winner is untouched — nothing was revoked.
+    const stillGood = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: winner },
+    });
+    expect(stillGood.status).toBe(201);
+  });
+
+  /**
+   * Outside the window it is still theft, and the answer is still to burn the
+   * family (PROJECT_PROMPT.md Feature 34).
+   *
+   * The revocation timestamp is pushed back in the database rather than the
+   * test sleeping through the grace period: ten idle seconds in a suite is how
+   * people learn to skip it, and `tokens.test.ts` already pins the boundary
+   * arithmetic to the millisecond. What this covers is that the wiring reaches
+   * `revokeAllFor` at all.
+   */
+  it("revokes every session when a used token is replayed after the window", async () => {
     const first = await signIn();
     const rotated = await request("POST", "/api/auth/refresh", {
       body: { refreshToken: first.refreshToken },
     });
     const second = (rotated.body as unknown as { refreshToken: string }).refreshToken;
 
-    await request("POST", "/api/auth/refresh", { body: { refreshToken: first.refreshToken } });
+    await prisma.apiRefreshToken.update({
+      where: { tokenHash: sha256(first.refreshToken) },
+      data: { revokedAt: new Date(Date.now() - 60_000) },
+    });
+
+    const replay = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: first.refreshToken },
+    });
+    expect(replay.status).toBe(401);
 
     const survivor = await request("POST", "/api/auth/refresh", {
       body: { refreshToken: second },

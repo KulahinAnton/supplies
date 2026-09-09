@@ -116,13 +116,37 @@ export class AuthService {
       );
       throw new ApiRuleError(401, "auth.sessionRequired");
     }
+    if (verdict.status === "raced") {
+      /**
+       * Two callers holding the same token, started within `REFRESH_GRACE_MS`
+       * of each other — the loser is presenting what the winner already
+       * rotated. Issue it a pair of its own and leave the family alone.
+       *
+       * Not the winner's token: each caller ends up with its own row, so
+       * per-device revocation still means what it says. The cost is that a
+       * family briefly has two live tokens, which rotation on the next use
+       * settles.
+       *
+       * Logged at `debug` rather than `warn`. This is expected traffic — two
+       * browser tabs restoring together — and a warning per tab pair would
+       * train whoever reads the logs to skip the real reuse warning above.
+       */
+      this.logger.debug(
+        `Refresh race for user ${stored.userId}; issuing a pair inside the grace window`,
+      );
+    }
     if (verdict.status === "expired") throw new ApiRuleError(401, "auth.sessionRequired");
     if (!stored.user.isActive) throw new ApiRuleError(401, "auth.sessionRequired");
 
-    await this.prisma.client.apiRefreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
+    // Only the winner's row needs retiring. A raced token is already revoked,
+    // and re-stamping `revokedAt` would slide the grace window forward on
+    // every replay — turning a ten-second allowance into an open one.
+    if (verdict.status === "ok") {
+      await this.prisma.client.apiRefreshToken.update({
+        where: { id: stored.id },
+        data: { revokedAt: new Date(), revokedReason: "rotated" },
+      });
+    }
 
     return this.issue(
       {
@@ -139,14 +163,18 @@ export class AuthService {
   async revoke(presented: string): Promise<void> {
     await this.prisma.client.apiRefreshToken.updateMany({
       where: { tokenHash: hashToken(presented), revokedAt: null },
-      data: { revokedAt: new Date() },
+      // `logout`, not `rotated`: signing out and then refreshing must fail,
+      // grace window or not.
+      data: { revokedAt: new Date(), revokedReason: "logout" },
     });
   }
 
   async revokeAllFor(userId: string): Promise<void> {
     await this.prisma.client.apiRefreshToken.updateMany({
       where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
+      // `reuse`, so none of these gets the rotation grace window. Stamping them
+      // as rotations would hand the attacker who triggered this a fresh pair.
+      data: { revokedAt: new Date(), revokedReason: "reuse" },
     });
   }
 

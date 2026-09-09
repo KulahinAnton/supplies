@@ -609,7 +609,7 @@ a harness with three tests in it.
 | # | Task | Est. | State |
 |---|---|---|---|
 | 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d | **done** |
-| 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | |
+| 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
 | 3.3 | **Milestone A** — login, items list, item detail with take/add, scan | 4–5 d | |
 | 3.4 | `expo-camera` barcode scanning | 1 d | |
 | 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | ⚠ needs an Expo account |
@@ -809,20 +809,20 @@ Three corrections, all from reading the first SPA screens next to the Next app.
   (simpler, one source of truth, needs `transpilePackages` + Metro config) or
   build to `dist` (works everywhere with no bundler config, adds a build step).
   Source is the default; revisit only if Metro fights back in Phase 3.1.
-- **Cross-tab refresh (found 2026-09-08, not fixed).** Refresh tokens rotate
-  and a replay revokes every session for that user, which is the correct
-  answer to theft. `refreshSession` shares one in-flight rotation per
-  document, so a double mount is harmless — but two TABS have two module
-  instances and two guards, so a pair restoring at the same instant can still
-  replay. The window is small (a probe with two simultaneous loads did not
-  reproduce it, because the first rotation lands before the second request
-  goes out) and the cost when it loses is being signed out of everything.
-  Two ways to close it: `navigator.locks` in the client, which is one browser
-  API and no server change, or a grace window on the server where a token
-  retired seconds ago is re-issued rather than treated as theft. The first is
-  smaller; the second also covers the phone. Decide when Phase 3.2 gives the
-  React Native app the same problem, since whatever is chosen should serve
-  both.
+- **Cross-tab refresh — closed 2026-09-09.** `REFRESH_GRACE_MS` in
+  `apps/api/src/auth/tokens.ts` lets a just-rotated token answer once more, so
+  two tabs restoring together stop looking like theft. A `revokedReason`
+  column is what keeps it honest: only a rotation earns the grace, because
+  `revokeAllFor` stamps `revokedAt = now()` and would otherwise put a whole
+  revoked family inside the window — the API's own e2e suite caught that.
+
+  **Two things in the original note were wrong, and are worth keeping visible.**
+  It said the React Native app would have the same problem: it does not. Each
+  device holds its own token, and concurrent refreshes inside one JS context
+  are handled by the single-flight guard. The window exists for the cookie
+  clients, and the phone simply costs nothing by it. It also framed
+  `navigator.locks` as the smaller fix; it is smaller in lines and worse in
+  scope, since it puts a cross-client invariant in one of three clients.
 
 ---
 
@@ -1793,6 +1793,85 @@ batch excluded. NativeWind styling rendered natively.
 
 Gate re-run after the core change, since `format.ts` is shared by everything:
 lint, five typechecks, 361 unit tests, 20 API unit, 50 API e2e, every smoke
+check.
+
+### Phase 3.2 — tokens on a phone, and a grace window that had to be earned · 2026-09-09
+
+`expo-secure-store` for the refresh token, an API client with single-flight
+refresh, an auth context that restores a session at launch — and, on the
+server, the fix for the race §10 has been carrying as an open item.
+
+##### The grace window, and the flaw the e2e suite found in it
+
+The race, from Phase 2.8: two browser tabs share one httpOnly cookie, restore
+together, and the loser presents what the winner just rotated. That is
+indistinguishable from a replayed stolen token, so the correct theft response
+fires and the person is signed out of everything for opening a second tab.
+
+`REFRESH_GRACE_MS` (ten seconds) makes a just-rotated token answer once more
+with a pair of its own. Not the winner's pair — each caller keeps its own row,
+so per-device revocation still means what it says.
+
+**The first version of it was wrong, and the e2e suite is what said so.**
+`revokeAllFor` stamps `revokedAt = now()` on every token it kills, so a theft
+response put the whole family inside the grace window — and the attacker who
+triggered it could refresh again with any of them. The window neutered the
+thing it was bolted onto. The test that caught it was the existing
+"revokes every session when a used token is replayed", which started passing
+its first assertion and failing its second.
+
+The repair is a `revokedReason` column (`rotated` / `reuse` / `logout`) and one
+clause: **only a rotation earns grace.** NULL — a row from before the migration
+— gets none, which is the safe reading. Eight unit tests pin it, including the
+theft and logout cases and the pre-migration NULL.
+
+**A correction to what was written before.** SPA_API_PORT.md §10 said the phone
+needed this too. It does not: each device has its own token, and concurrent
+refreshes inside one JS context are handled by the single-flight guard. The
+window is for the cookie clients. The phone costs nothing by it, and the
+open item is now closed for the reason it was actually opened.
+
+##### The phone's half
+
+`token-store.ts` — SecureStore, `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`, refresh
+token only. The access token stays in memory for the same reason as in the
+SPA: it expires in fifteen minutes and a value on disk is a value something
+else can read.
+
+`api/client.ts` is a **sibling of the SPA's, not a copy of it**, and the
+difference is the point. The SPA sends `credentials: "include"` and never sees
+its refresh token, because a browser attaches the cookie. A phone has no
+cookies, so the token comes out of SecureStore and goes back in the request
+body — which is exactly why `POST /auth/login` answers with it *both* ways.
+Sharing the module would mean one client pretending to be the other. What is
+shared is everything above it: the contracts, the catalogue, the rules.
+
+The auth context carries the SPA's lesson forward without repeating its
+mistake: it calls `refreshSession()` rather than posting to `/auth/refresh`
+itself, so a double-invoked effect cannot replay a rotated token.
+
+One thing the round trip forced: **logout has to SEND the token.** `/auth/logout`
+finds it in a cookie or in the body, and posting nothing returns `{ ok: true }`
+— logout is idempotent by design — while leaving the row live. Signing out
+would have been a local illusion.
+
+##### Proved on the emulator, not asserted
+
+Sign in → a row appears with `userAgent: okhttp/4.12.0`, which is the phone.
+**Force-stop the app, relaunch** → «Сесія: anton@example.com» comes back, and
+the database shows the sign-in token marked `rotated` beside a new one issued
+seconds later. Sign out → that row becomes `logout`. All three reasons
+exercised by real traffic, with `reuse` covered by the e2e theft test.
+
+The API happened to restart during that run, which made the check stronger than
+intended: the session survived because the token is in SecureStore and Postgres,
+not in anybody's process memory.
+
+The sign-in control on the status screen is **temporary** and says so — Phase
+3.3 replaces it with the real login screen. It exists because a token round
+trip cannot be verified without a way to start one.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, every smoke
 check.
 
 ### Phases 3–5 — not started
