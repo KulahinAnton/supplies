@@ -60,10 +60,41 @@ export function formatDateTime(value: Date): string {
   return dateTimeFormatter.format(value);
 }
 
-const groupFormatter = new Intl.NumberFormat(LOCALE, {
-  useGrouping: true,
-  maximumFractionDigits: 0,
-});
+/**
+ * uk-UA groups thousands with U+00A0, a NO-BREAK space — so a quantity never
+ * wraps across a line between its thousands. The decimal separator is a comma.
+ */
+const GROUP_SEPARATOR = "\u00A0";
+const DECIMAL_SEPARATOR = ",";
+
+/**
+ * Thousands separators, on the digit STRING rather than through
+ * `Intl.NumberFormat`.
+ *
+ * This used to be `groupFormatter.format(BigInt(whole))`, and **it silently
+ * did nothing on a phone.** Hermes's `Intl.NumberFormat.prototype.format`
+ * refuses a BigInt — `TypeError: Cannot convert BigInt to number` — so every
+ * quantity hit the "not a number, show it raw" fallback and came back as the
+ * wire string: «0.8 кг» with a decimal POINT where the web showed «0,8 кг»,
+ * and no grouping at all. Nobody noticed because the seed has no four-digit
+ * quantities and an ungrouped integer looks exactly like a grouped one.
+ *
+ * A `Number` argument does work on Hermes, and the values here are
+ * `Decimal(12,3)` so nine integer digits never leave the safe range. It is
+ * still not used: this is the second time an `Intl` constructor has behaved
+ * differently on the phone (see `selectUkPlural`), and a package that is
+ * portable by contract should not keep discovering that one screen at a time.
+ * Grouping digits is four lines and `format.test.ts` pins it against Node's
+ * real `Intl.NumberFormat` across four orders of magnitude.
+ */
+function groupDigits(digits: string): string {
+  let grouped = "";
+  for (let end = digits.length; end > 0; end -= 3) {
+    const chunk = digits.slice(Math.max(0, end - 3), end);
+    grouped = grouped ? `${chunk}${GROUP_SEPARATOR}${grouped}` : chunk;
+  }
+  return grouped;
+}
 
 /**
  * Quantity with the Ukrainian decimal comma and no trailing zeros:
@@ -74,21 +105,20 @@ export function formatQuantity(value: Numeric): string {
   const negative = raw.startsWith("-");
   const unsigned = negative ? raw.slice(1) : raw;
 
-  const [wholeRaw, fractionRaw = ""] = unsigned.split(".");
+  const [wholeRaw = "", fractionRaw = ""] = unsigned.split(".");
   // Postgres hands back Decimal(12,3) with its zeros intact; drop them.
   const fraction = fractionRaw.replace(/0+$/, "");
-  const whole = wholeRaw === "" ? "0" : wholeRaw;
+  // `.5` is a quantity; `007` is not written that way but formats as 7.
+  const whole = (wholeRaw === "" ? "0" : wholeRaw).replace(/^0+(?=\d)/, "");
 
-  let grouped: string;
-  try {
-    grouped = groupFormatter.format(BigInt(whole));
-  } catch {
-    // Not an integer string (NaN, Infinity…) — show it rather than crash.
-    return raw;
-  }
+  // NaN, Infinity, "1e5" — show it rather than invent a number from it.
+  if (!/^\d+$/.test(whole) || !/^\d*$/.test(fractionRaw)) return raw;
 
   const sign = negative ? "-" : "";
-  return fraction ? `${sign}${grouped},${fraction}` : `${sign}${grouped}`;
+  const grouped = groupDigits(whole);
+  return fraction
+    ? `${sign}${grouped}${DECIMAL_SEPARATOR}${fraction}`
+    : `${sign}${grouped}`;
 }
 
 /**

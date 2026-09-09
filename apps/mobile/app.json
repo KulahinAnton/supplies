@@ -11,8 +11,7 @@
       "package": "ua.supplies.app",
       "adaptiveIcon": {
         "backgroundColor": "#297f48"
-      },
-      "edgeToEdgeEnabled": true
+      }
     },
     "ios": {
       "supportsTablet": true,

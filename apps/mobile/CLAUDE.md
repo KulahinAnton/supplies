@@ -240,10 +240,23 @@ was written out in `packages/core` instead of polyfilled here — see
 [packages/core/CLAUDE.md](../../packages/core/CLAUDE.md) for why the fix
 belongs to the package rather than to this client.
 
+It happened a second time, quieter. `Intl.NumberFormat` *is* on Hermes, but
+`format(BigInt(n))` throws, so `formatQuantity` returned the raw wire string
+and every quantity on every screen had a decimal POINT — «0.8 кг» — where the
+web showed «0,8 кг». Nothing crashed and nothing logged; it was found by
+reading a screenshot. Both fixes live in `packages/core`, for the reason in
+[packages/core/CLAUDE.md](../../packages/core/CLAUDE.md).
+
 The lesson for anything added later: **the web preview cannot find this class
 of bug.** `expo start --web` runs under react-native-web in a browser with the
-full ICU, so it was perfectly green while the emulator was red. Check anything
-platform-sensitive on the device.
+full ICU, so it was perfectly green while the emulator was red — the same probe
+printed `1 234,5` on web and `1234.5` on Android in the same second. Check
+anything platform-sensitive on the device.
+
+**Console output does not reach `adb logcat`.** Under the new architecture it
+goes to the Metro terminal, which is where a `console.log` probe has to be read
+from — `preview_logs`, or the `expo start` window. Half an hour went into
+grepping logcat for a line that was never going to be there.
 
 ## What is shared and what is not
 

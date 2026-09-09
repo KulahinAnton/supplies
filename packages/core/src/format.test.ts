@@ -34,6 +34,52 @@ describe("formatQuantity", () => {
   it("handles a negative delta", () => {
     expect(formatQuantity("-2.5")).toBe("-2,5");
   });
+
+  it("groups thousands with a no-break space", () => {
+    // Spelled as an escape: a literal U+00A0 is indistinguishable from a plain
+    // space in a diff, and only one of them passes.
+    const nbsp = "\u00A0";
+    expect(formatQuantity("1234")).toBe(`1${nbsp}234`);
+    expect(formatQuantity("1234.5")).toBe(`1${nbsp}234,5`);
+    expect(formatQuantity("1234567")).toBe(`1${nbsp}234${nbsp}567`);
+  });
+
+  it("shows a value it cannot read rather than inventing one", () => {
+    expect(formatQuantity("NaN")).toBe("NaN");
+    expect(formatQuantity("1e5")).toBe("1e5");
+  });
+});
+
+/**
+ * The grouping is written out rather than asked of `Intl.NumberFormat`,
+ * because Hermes rejects the BigInt this used to pass it and silently returned
+ * the raw wire string — a decimal POINT on every quantity in the phone app.
+ * Same bargain as `selectUkPlural`: hand-written, then checked against the
+ * implementation it replaces.
+ */
+describe("formatQuantity grouping against Intl.NumberFormat", () => {
+  const reference = new Intl.NumberFormat("uk-UA", {
+    useGrouping: true,
+    maximumFractionDigits: 0,
+  });
+
+  it("agrees on every integer from 0 to 2000", () => {
+    const disagreements: string[] = [];
+    for (let n = 0; n <= 2000; n++) {
+      const ours = formatQuantity(String(n));
+      const theirs = reference.format(n);
+      if (ours !== theirs) disagreements.push(`${n}: ours=${ours} intl=${theirs}`);
+    }
+    expect(disagreements).toEqual([]);
+  });
+
+  it("agrees across four orders of magnitude", () => {
+    // `Decimal(12,3)` tops out at nine integer digits, so this covers the
+    // column's whole range and then some.
+    for (const n of [999, 1000, 9999, 10_000, 123_456, 999_999_999]) {
+      expect(formatQuantity(String(n))).toBe(reference.format(n));
+    }
+  });
 });
 
 describe("formatDate", () => {

@@ -45,8 +45,25 @@ machinery. `format.test.ts` compares the hand-written rule against Node's real
 `Intl.PluralRules` over every integer 0–1000 and a spread of decimals, so
 "written out" is checked rather than trusted.
 
-**Before adding any `Intl` API here, check it against Hermes.** The three still
-in use are the ones that work; a fourth may not.
+**And a present constructor is not a working one.** `Intl.NumberFormat` exists
+on Hermes and formats `1234` as «1 234» — but `format(BigInt(1234))` throws
+`TypeError: Cannot convert BigInt to number`. `formatQuantity` passed a BigInt
+so that a quantity longer than a safe integer would still group, and on the
+phone every quantity therefore fell through to the raw-string fallback: «0.8
+кг» with a decimal POINT where both web clients showed «0,8 кг», and no
+thousands separator anywhere. It shipped unnoticed because the seed has no
+four-digit quantities, so the only visible difference was a dot instead of a
+comma on a single item.
+
+The grouping is now four lines of string work, checked against Node's real
+`Intl.NumberFormat` over 0–2000 and up to nine digits. Two failures of the same
+shape were enough: this package is portable by contract, so it does not get to
+find out one screen at a time which parts of `Intl` a runtime implements.
+
+**Before adding any `Intl` API here, check it against Hermes — and check the
+arguments, not just the constructor.** `DateTimeFormat` and `NumberFormat` with
+a `number` are the ones actually proven; `formatUsd` still calls
+`style: "currency"`, which no phone screen has rendered yet.
 
 ## No barrel
 
