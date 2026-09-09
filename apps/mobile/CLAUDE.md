@@ -412,6 +412,20 @@ does — it needs the machine's LAN address. `lib/api.ts` resolves this and
 `app/index.tsx` prints the answer on screen, because getting it wrong is
 indistinguishable from a dead API.
 
+## Icons come from the web app's SVG, not from a second drawing
+
+`assets/icon.png`, `adaptive-icon.png` and `splash-icon.png` are rendered from
+the same `<svg>` that draws the web app's favicon —
+`apps/web/app/icon.svg` — by a throwaway Playwright script rather than a design
+tool. Playwright is already a dependency, so the mark has one definition and
+cannot drift between the four clients.
+
+The adaptive foreground is the glyph at two thirds scale and centred, because
+Android masks it to the launcher's shape and crops about a quarter off each
+side; an icon drawn edge to edge there loses its corners. Regenerate by
+re-running the script from `apps/web`, which is where `@playwright/test`
+resolves — pnpm does not hoist it to the root.
+
 ## Not painting into Android
 
 Phase 5 is iOS, and SPA_API_PORT.md names four things that are free now and

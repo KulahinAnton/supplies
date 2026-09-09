@@ -9,6 +9,7 @@
     "android": {
       "package": "ua.supplies.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#297f48"
       }
     },
@@ -32,6 +33,14 @@
           "color": "#297f48",
           "defaultChannel": "digest"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#fbfbf9"
+        }
       ]
     ],
     "experiments": {
@@ -44,6 +53,7 @@
         "projectId": "4eaddeb5-ce6d-44e0-b22f-9fc3fc4eec28"
       }
     },
-    "owner": "kulahin"
+    "owner": "kulahin",
+    "icon": "./assets/icon.png"
   }
 }

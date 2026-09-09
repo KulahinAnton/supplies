@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { UNIT_SHORT, formatQuantityWithUnit } from "@supplies/core/format";
 import { Button } from "@/components/ui/button";
 import { Screen } from "@/components/ui/screen";
@@ -76,10 +76,7 @@ export default function StockWriteScreen() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="gap-5"
-      >
+      <View className="gap-5">
         <View className="gap-1">
           <Text className="text-xl font-semibold text-foreground">
             {taking ? "Взяли" : "Поповнити"}
@@ -123,7 +120,7 @@ export default function StockWriteScreen() {
           />
           <Button label="Скасувати" variant="ghost" onPress={() => router.back()} />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

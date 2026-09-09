@@ -654,14 +654,14 @@ app, Next.js app, Telegram bot, one engine. Phase 5 extends it.
 Sequenced after Phase 4 on purpose, so nothing you show people is ever blocked
 on Apple's review queue.
 
-| # | Task | Est. |
-|---|---|---|
-| 5.1 | Apple Developer account ($99/yr), EAS credentials, bundle id | 0.5 d |
-| 5.2 | Platform pass: safe areas, keyboard, scroll behaviour, haptics | 2–3 d |
-| 5.3 | `Info.plist` usage strings (camera), icons, splash | 0.5 d |
-| 5.4 | APNs push, if 3.7 shipped | 1 d |
-| 5.5 | TestFlight build, install, fix what only shows on a real device | 1–2 d |
-| 5.6 | App Store submission: demo account, privacy policy, App Privacy answers | 1–2 d + review latency |
+| # | Task | Est. | State |
+|---|---|---|---|
+| 5.1 | Apple Developer account ($99/yr), EAS credentials, bundle id | 0.5 d | needs an Apple account |
+| 5.2 | Platform pass: safe areas, keyboard, scroll behaviour, haptics | 2–3 d | **keyboard and safe areas done** — both live in `Screen`, so no screen can forget; haptics remain |
+| 5.3 | `Info.plist` usage strings (camera), icons, splash | 0.5 d | **done** — the camera string is on the plugin, the icons render from the web app's SVG |
+| 5.4 | APNs push, if 3.7 shipped | 1 d | 3.7 shipped; the client half is platform-neutral |
+| 5.5 | TestFlight build, install, fix what only shows on a real device | 1–2 d | needs 5.1 |
+| 5.6 | App Store submission: demo account, privacy policy, App Privacy answers | 1–2 d + review latency | needs 5.1 |
 
 **You need a Mac or EAS cloud builds.** EAS removes the hardware requirement,
 not the $99. Review latency is usually a day or two and is entirely outside your

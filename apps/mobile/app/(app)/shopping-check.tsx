@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { UNIT_SHORT } from "@supplies/core/format";
 import { api, ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
@@ -81,10 +81,7 @@ export default function ShoppingCheckScreen() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="gap-5"
-      >
+      <View className="gap-5">
         <View className="gap-1">
           <Text className="text-xl font-semibold text-foreground">Купили</Text>
           <Text className="text-sm text-muted-foreground">{row.label}</Text>
@@ -134,7 +131,7 @@ export default function ShoppingCheckScreen() {
             onPress={() => router.back()}
           />
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }
