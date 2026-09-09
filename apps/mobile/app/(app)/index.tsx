@@ -45,6 +45,7 @@ export default function ItemsScreen() {
               onQuery={setQuery}
               filter={filter}
               onFilter={setFilter}
+              onScan={() => router.push("/scan")}
             />
             <ErrorNote error={items.error} />
           </View>

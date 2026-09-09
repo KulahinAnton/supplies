@@ -25,6 +25,14 @@ export default function AppLayout() {
         advice and the platform's, and a hand-rolled `<Modal>` would imitate
         all three badly.
       */}
+      {/*
+        Full screen, not a sheet: a viewfinder wants the whole display, and a
+        camera peeking out from behind a dimmed backdrop is a worse aim.
+      */}
+      <Stack.Screen
+        name="scan"
+        options={{ presentation: "fullScreenModal", headerShown: false }}
+      />
       <Stack.Screen
         name="stock-write"
         options={{

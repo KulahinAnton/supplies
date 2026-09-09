@@ -611,7 +611,7 @@ a harness with three tests in it.
 | 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d | **done** |
 | 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
 | 3.3 | **Milestone A** — login, items list, item detail with take/add | 4–5 d | **done** — the scan moved to 3.4, where it belongs |
-| 3.4 | `expo-camera` barcode scanning | 1 d | |
+| 3.4 | `expo-camera` barcode scanning | 1 d | **done** — and driven end to end on the emulator, which was not expected to be possible |
 | 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | ⚠ needs an Expo account |
 | 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | |
 | 3.7 | Push notifications via `expo-notifications` | 2–3 d | |
@@ -1971,12 +1971,85 @@ it. Documented so nobody loses an afternoon.
 Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, the Android
 bundle.
 
-### Phases 3–5 — not started
+### Phase 3.4 — the scan, and a claim withdrawn · 2026-09-09
 
-React Native, the deploy, iOS. **The Phase 2.9 parity gate closed on
-2026-09-07**, so decision 10 no longer blocks Phase 3: every screen the Next
-app has, the SPA has, and the last business rule that lived in only one of
-them now lives in `packages/db`.
+`expo-camera` behind a `fullScreenModal` route, reached from a button sitting
+next to the search box rather than from a menu. Standing in a kitchen holding a
+packet, the barcode **is** the query; a tap deeper and the camera becomes the
+slower way to find something than typing.
+
+##### Three decisions in the screen
+
+Grocery symbologies only — `ean13`, `ean8`, `upc_a`, `upc_e`, `code128`, and
+deliberately not `qr`. Leaving QR on lets a poster, a payment code or a wifi
+sticker fire a lookup, and every one of those is a miss that reads as the app
+being wrong.
+
+A `useRef` latch, not state. The camera fires `onBarcodeScanned` for **every
+frame** it can read a code in, so one packet becomes a dozen lookups and a
+dozen navigations; the latch has to be true before the next frame arrives and a
+state update is not. Belt and braces, `onBarcodeScanned` is handed `undefined`
+once busy, which stops the native side delivering frames at all rather than
+delivering them to a guard.
+
+A hit `replace`s rather than pushes. Coming Back from the item should return to
+the list, not to a camera that would immediately scan the same packet again.
+
+##### The failure that added a state
+
+The first run on the emulator produced a black screen politely captioned
+«Наведіть камеру на штрихкод» — the app confidently instructing someone to use
+hardware it had just failed to open. CameraX had refused with *"No available
+camera can be found. Cams:1 Id:1 Lens:1"*: the AVD had no rear lens. That is
+real on a tablet, or on a phone whose camera another app is holding, so
+`onMountError` now drives an `unavailable` outcome that says so and offers the
+name search instead.
+
+##### "Only provable on a real device" was wrong
+
+That sentence had been in the root CLAUDE.md for a year, about Features 10, 21
+and 26.2. The Android emulator renders a 3D room whose wall poster can be
+replaced with any PNG — at launch with `-virtualscene-poster`, and, once it is
+on `wall` or `table`, at runtime with `adb emu virtualscene-image`. So the
+scanner can be pointed at a barcode unattended.
+
+`pnpm barcode` (`scripts/make-barcode-png.mjs`) draws the EAN-13. It computes
+the check digit from twelve digits and rejects a wrong one from thirteen,
+because a code a scanner would refuse is a confusing thing to spend an hour
+failing to read. Its quiet zone is the symbology's minimum rather than a
+generous margin: the poster is a fixed size in the scene, so every module of
+margin is taken out of the width of the bars. Bench-decoding its output through
+ZXing at descending resolutions held to ~1.9 px per module and failed below —
+which is what said a 1.6 m poster at two metres would work before the emulator
+was restarted to find out.
+
+**The miss is the evidence, not the hit.** A hit navigates to the item, and a
+mis-tap on the list would look identical. So the wall was hung with a valid
+EAN-13 that is *not* in the household, and the screen answered «Штрихкоду
+4820000431132 ще немає серед ваших запасів» — naming digits that could only
+have come off the wall. Swapping the image back without restarting then gave
+the hit, and Back from the item returned to the list rather than the camera.
+
+Still hardware-only, and now stated narrowly instead of broadly: autofocus, a
+curved or crumpled label, glare, and the web clients' `BarcodeDetector` path.
+The emulator's poster is a flat, evenly lit, perfect render.
+
+##### One thing left ugly on purpose
+
+The scan control is the glyph `▣`. The app has no icon system yet, and adding
+`@expo/vector-icons` for a single button would make it the only icon on any
+screen. It belongs to 3.6, where twelve more screens want icons and the choice
+can be made once.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, the Android bundle.
+
+### Phases 3.5–5 — not started
+
+The APK, the remaining twelve screens, push, the store listing, the deploy,
+iOS. Phase 3 itself is no longer blocked and no longer unstarted — **the Phase
+2.9 parity gate closed on 2026-09-07**, so decision 10 stopped applying, and
+3.1–3.4 have landed since: every screen the Next app has, the SPA has, and the
+last business rule that lived in only one of them now lives in `packages/db`.
 
 ### Start here
 

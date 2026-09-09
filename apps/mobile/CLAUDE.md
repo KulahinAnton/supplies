@@ -4,10 +4,9 @@ Expo SDK 57 + Expo Router + NativeWind 4, against the API in
 [`apps/api`](../api/CLAUDE.md). Plan and phases:
 [SPA_API_PORT.md](../../SPA_API_PORT.md) Phase 3.
 
-**Status: Phase 3.1.** The scaffold exists and `app/index.tsx` proves the two
-things that had to be true before any screen was worth building — the engine
-runs in a Metro bundle, and the phone can reach the API. Screens land in 3.3
-onward.
+**Status: Phase 3.4.** Login, the item list with search and filters, the item
+detail with batches, take-and-add, and the barcode scanner. The remaining
+twelve screens are 3.6.
 
 ## Running it
 
@@ -49,6 +48,71 @@ Two Git Bash traps, both of which cost time once:
 - **`adb logcat -c` before each run.** Otherwise the previous crash is still in
   the buffer and reads as the current one. That nearly had me chasing a fixed
   bug twice.
+
+## Scanning a barcode on the emulator
+
+Feature 21 was written down for a year as "only provable on a real device".
+It is not: the emulator can hold a barcode up to its own camera, and the whole
+path — mount, decode, lookup, navigate — runs unattended. Four things have to
+be true, and the first two are where the time goes.
+
+**1. The AVD needs a rear camera that renders the 3D scene.** `hw.camera.back`
+defaults to `emulated`, which is a moving green test pattern that no decoder
+will ever read, and on this AVD there was no rear lens at all — CameraX failed
+with *"No available camera can be found. Cams:1 Id:1 Lens:1"* and the app
+showed a black screen politely captioned «Наведіть камеру на штрихкод». That
+failure is why `scan.tsx` has an `unavailable` outcome at all. In
+`~/.android/avd/<name>.avd/config.ini`:
+
+    hw.camera.back=virtualscene
+
+**2. The scene's poster is behind you.** `Toren1BD` has exactly two poster
+surfaces, `wall` and `table`, and their poses live in
+`$LOCALAPPDATA/Android/Sdk/emulator/resources/Toren1BD.posters`. The stock
+`wall` sits at `z 5.316` rotated `-150°` — out of frame when the camera opens,
+so nothing you hang on it is ever seen. Moved it in front of the opening view
+(the original is beside it as `Toren1BD.posters.bak`):
+
+    poster wall
+    size 1.6 1.6
+    position 0 0.2 -2.0
+    rotation 0 0 0
+    default poster.png
+
+This edits the Android SDK, not the repo, so it does not travel with a
+checkout and an SDK update will revert it. Restoring is `cp
+Toren1BD.posters.bak Toren1BD.posters`.
+
+**3. Hang the barcode and swap it at will.**
+
+```bash
+pnpm barcode 4820000431125 barcode.png     # the seeded «Вода негазована 1,5 л»
+"$SDK/emulator/emulator.exe" -avd supplies_pixel_7 \
+  -virtualscene-poster "wall=$(cygpath -w barcode.png)"
+"$ADB" emu virtualscene-image wall "$(cygpath -w other.png)"   # no restart
+```
+
+`cygpath -w` is not optional — `emulator.exe` is not an MSYS binary and reads
+`/c/...` as a relative path. And `virtualscene-image` accepts **only** `wall`
+and `table`; custom names added to the `.posters` file work at launch and are
+rejected at runtime, which is the reason the image has to live on `wall`.
+
+**4. The bars have to survive the camera.** An EAN-13 is 95 modules wide plus
+22 of quiet zone, so a 1.6 m poster two metres away is about 2 cm per module —
+and a decoder wants two or three pixels of each. `pnpm barcode` trims the quiet
+zone to the symbology's minimum for exactly this reason; bench-decoding its
+output through ZXing at descending resolutions held to ~1.9 px per module and
+failed below, and the emulator's frame gave several times that.
+
+What this proved, rather than argued: the camera mounts and streams, a scan
+decodes, `GET /api/barcode/:code/item` runs, a hit `replace`s to the item (so
+Back returns to the list rather than to a camera that would scan it again) and
+a miss renders the code it read. The miss is the load-bearing half of the
+evidence — «Штрихкоду 4820000431132 ще немає серед ваших запасів» names the
+digits that came off the wall, which a mis-tap could not have produced.
+
+Still only provable on hardware: autofocus, a curved or crumpled label, and
+glare. The emulator's poster is a flat, evenly lit, perfect render.
 
 ## `metro.config.js` is the whole of Phase 3.1
 

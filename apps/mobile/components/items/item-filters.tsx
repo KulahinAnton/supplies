@@ -22,27 +22,45 @@ export function ItemFilters({
   onQuery,
   filter,
   onFilter,
+  onScan,
 }: {
   query: string;
   onQuery: (value: string) => void;
   filter: ItemFilter;
   onFilter: (value: ItemFilter) => void;
+  onScan: () => void;
 }) {
   return (
     <View className="gap-3 px-5 pb-3 pt-1">
-      <TextInput
-        value={query}
-        onChangeText={onQuery}
-        placeholder="Пошук за назвою…"
-        placeholderTextColor="#6b7069"
-        autoCapitalize="none"
-        autoCorrect={false}
-        // `search` gives Android the magnifier key and iOS "Search"; `clearButtonMode`
-        // is iOS-only and harmless elsewhere.
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-        className="rounded-lg border border-border bg-card px-3 py-2.5 text-base text-foreground"
-      />
+      <View className="flex-row items-center gap-2">
+        <TextInput
+          value={query}
+          onChangeText={onQuery}
+          placeholder="Пошук за назвою…"
+          placeholderTextColor="#6b7069"
+          autoCapitalize="none"
+          autoCorrect={false}
+          // `search` gives Android the magnifier key and iOS "Search";
+          // `clearButtonMode` is iOS-only and harmless elsewhere.
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          className="flex-1 rounded-lg border border-border bg-card px-3 py-2.5 text-base text-foreground"
+        />
+        {/*
+          Feature 21 — the scan is a peer of the search box, not a menu item.
+          Standing in a kitchen holding a packet, the barcode IS the query, and
+          burying it a tap deeper makes the camera the slower way to find
+          something than typing.
+        */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Сканувати штрихкод"
+          onPress={onScan}
+          className="rounded-lg border border-border bg-card px-3 py-2.5 active:opacity-70"
+        >
+          <Text className="text-base">▣</Text>
+        </Pressable>
+      </View>
 
       <ScrollView
         horizontal

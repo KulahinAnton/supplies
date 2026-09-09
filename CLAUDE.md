@@ -4,7 +4,7 @@ Family web app (mobile-first, PWA) + Telegram bot for tracking what the househol
 
 > **Status.** Features 0–33 implemented and running in production on Vercel + Neon. 14 migrations, seed idempotent, `pnpm test` (339 across 22 files), `pnpm test:db` (52 integration checks against a live database, re-runnable), `pnpm test:e2e` (Playwright, 4 specs across desktop and mobile), `pnpm lint`, `pnpm typecheck` and `pnpm build` all pass.
 >
-> Not exercised by any automated check, and only provable on a real device: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them.
+> Not exercised by any automated check: the **camera barcode scan** (Features 10, 21, 26.2) and the **drag gesture** of Features 11 and 15.1 — the wiring, collision strategy and server actions behind both are verified, but no finger has driven them. The scan is no longer entirely unproven: on the phone it has been driven end to end against a barcode hung on the Android emulator's virtual-scene wall (`pnpm barcode` → [apps/mobile/CLAUDE.md](apps/mobile/CLAUDE.md)). The web clients' `BarcodeDetector` path, and focus and glare everywhere, still need hardware.
 
 ## Stack
 
@@ -46,6 +46,7 @@ Branch → PR → CI → squash into `main`; `main` is what production runs. A p
 - `pnpm bot:dev` / `pnpm bot:start` — Telegram bot (long polling) → [bot/CLAUDE.md](bot/CLAUDE.md)
 - `pnpm bot:webhook:set` / `pnpm bot:webhook:delete` — register/remove the production webhook (needs public HTTPS `APP_URL` + `TELEGRAM_WEBHOOK_SECRET`)
 - `pnpm digest:run [--force]` — daily expiry + out-of-stock digest
+- `pnpm barcode <code> <out.png>` — draw an EAN-13 as a PNG (12 digits and the check digit is computed for you). It exists so the scanner can be tested without hardware: hung on the Android emulator's virtual-scene wall it is the only way `expo-camera` decodes anything in an unattended run
 - `pnpm migrate:deploy` — migrations against the DIRECT Neon endpoint. **This is the deploy's build command**, not `prisma migrate deploy`: Prisma takes a session-level advisory lock, and the pooled endpoint cannot hold one (Feature 19.2)
 - `pnpm backup:prod` / `pnpm backup:verify [file]` — dump production to `backups/`, and prove a dump restores by loading it into a throwaway Postgres
 - `pnpm db:prod-copy [file]` — load a dump into a local Postgres 18 on port 5435 and point the app at it via `.env.local`. The Prisma CLI keeps reading `.env`, so `db:seed` and `migrate dev` cannot reach production data by accident
@@ -111,6 +112,7 @@ Four clients, one engine. **Nothing under `apps/` may import from another app** 
 - `scripts/smoke.ts` — `pnpm test:db`, the live-database integration test
 - `scripts/run-daily-digest.ts` — hourly cron entry; picks households whose `digestHour` has arrived, skips any already sent today (`lastDigestOn`)
 - `scripts/check-dev-ports.mjs` — the `dev:all` preflight; names the process holding 3000/3200/5173 instead of failing with `EADDRINUSE`
+- `scripts/make-barcode-png.mjs` — `pnpm barcode`; an EAN-13 as a PNG, no dependency. Hung on the Android emulator's virtual-scene wall it is what makes Feature 21 testable without a phone
 
 ## Auth model
 
