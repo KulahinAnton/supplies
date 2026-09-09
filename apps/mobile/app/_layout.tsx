@@ -69,8 +69,18 @@ function Gate() {
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
+      {/*
+        The four public routes. `join/[token]` and `reset-password` are reached
+        from links — an invite or an email — which arrive here as deep links
+        into the `supplies://` scheme, so they have to exist outside the
+        authed tree rather than behind it.
+      */}
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+        <Stack.Screen name="forgot-password" />
+        <Stack.Screen name="reset-password" />
+        <Stack.Screen name="join/[token]" />
       </Stack.Protected>
     </Stack>
   );

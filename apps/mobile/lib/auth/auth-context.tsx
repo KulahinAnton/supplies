@@ -18,8 +18,16 @@ type AuthState =
   | { status: "anonymous" }
   | { status: "signed-in"; user: SessionUser };
 
+type RegisterInput = {
+  name: string;
+  email: string;
+  password: string;
+  inviteToken?: string;
+};
+
 type AuthValue = AuthState & {
   signIn: (email: string, password: string) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -72,6 +80,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "signed-in", user });
   }, []);
 
+  /**
+   * Registration signs you in, because it always has: the API answers with the
+   * same token pair `/auth/login` does. Without an invite token it creates a
+   * NEW household; with one it joins an existing one, and the API consumes the
+   * invite in the same transaction so two people racing the same link cannot
+   * both use it.
+   */
+  const register = useCallback(async (input: RegisterInput) => {
+    const pair = await api.post<TokenPair & { user?: SessionUser }>(
+      "/api/auth/register",
+      input,
+    );
+    await acceptTokens(pair);
+    const user = pair.user ?? (await api.get<SessionUser>("/api/auth/me"));
+    setState({ status: "signed-in", user });
+  }, []);
+
   const signOut = useCallback(async () => {
     /**
      * The token has to be SENT, not assumed. `/auth/logout` finds it in a
@@ -93,8 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const value = useMemo<AuthValue>(
-    () => ({ ...state, signIn, signOut }),
-    [state, signIn, signOut],
+    () => ({ ...state, signIn, register, signOut }),
+    [state, signIn, register, signOut],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;
