@@ -8,9 +8,9 @@ import { itemExpiryState } from "@supplies/core/expiry";
 import { todayUTC } from "@supplies/core/period";
 import { fefoOrder, itemQuantity, stockState, type StockBatchInput } from "@supplies/core/stock";
 import type { Health, Ready } from "@supplies/core/contracts/auth";
-import { api } from "../lib/api/client";
-import { apiUrl } from "../lib/api/url";
-import { useAuth } from "../lib/auth/auth-context";
+import { api } from "@/lib/api/client";
+import { apiUrl } from "@/lib/api/url";
+import { useAuth } from "@/lib/auth/auth-context";
 
 /**
  * Phase 3.1 — the scaffold's proof of life, and deliberately not a

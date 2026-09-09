@@ -76,6 +76,31 @@ NativeWind's babel preset rewrites this app's own JSX to import its runtime, so
 these source files genuinely depend on it, and the upward walk from `app/`
 cannot see inside `nativewind`'s private store.
 
+## Typed routes, and a watcher quirk worth recognising
+
+`experiments.typedRoutes` generates `.expo/types/router.d.ts`, and it does
+enforce — `router.push("/nope")` is a type error. Two things about it:
+
+- **The types only exist while `expo start` has run.** `expo export` does not
+  write them, so a clean checkout typechecks with a looser `Href` and a bad
+  route slips through. `pnpm mobile:bundle` in CI proves the graph resolves; it
+  does not prove the links are real.
+- **A file created while Metro is running is added to the route union**, even
+  outside `app/` — `components/ui/button.tsx` turning up as
+  `/../components/ui/button`. It is a dev-server watcher artifact, not a
+  configuration error: nothing appears in the runtime route table and no
+  warning is logged, and a Metro restart clears it. Worth knowing before
+  anyone spends an afternoon on it.
+
+Dynamic routes take the **object form**, not a template string:
+
+```tsx
+<Link href={{ pathname: "/items/[id]", params: { id: item.id } }} />
+```
+
+`/items/${id}` does not typecheck, and that is the point — the id travels as a
+param rather than being pasted into a path.
+
 ## Tokens: SecureStore, and why the client is not the SPA's
 
 The refresh token lives in `expo-secure-store` — the Keychain on iOS, an

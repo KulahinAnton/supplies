@@ -610,7 +610,7 @@ a harness with three tests in it.
 |---|---|---|---|
 | 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d | **done** |
 | 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
-| 3.3 | **Milestone A** — login, items list, item detail with take/add, scan | 4–5 d | |
+| 3.3 | **Milestone A** — login, items list, item detail with take/add | 4–5 d | **done** — the scan moved to 3.4, where it belongs |
 | 3.4 | `expo-camera` barcode scanning | 1 d | |
 | 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | ⚠ needs an Expo account |
 | 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | |
@@ -1873,6 +1873,103 @@ trip cannot be verified without a way to start one.
 
 Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, every smoke
 check.
+
+### Phase 3.3 — Milestone A on a real device · 2026-09-09
+
+Login, the items list, item detail, and take/add. Six routes, driven on the
+emulator against the seeded household.
+
+##### The gate is declarative
+
+`app/_layout.tsx` uses `Stack.Protected` rather than an effect that calls
+`router.replace`. The effect version is the common pattern and it flickers: the
+guarded screen mounts, renders once with no data, and is then navigated away
+from. A guard keeps the route out of the tree entirely, so there is nothing to
+unmount and no frame of the wrong screen.
+
+The loading branch matters as much as the guards. While `refreshSession()` is
+asking SecureStore, **neither** guard is true — rendering the login form for
+the half second before a stored token resolves would show a sign-in screen to
+somebody already signed in. In practice this is what happened on the first
+launch after 3.2: the app went straight to the list, because the token from the
+previous session was still in the keystore.
+
+##### What is shared, and what could not be
+
+Every rule on these screens came from `@supplies/core`: `loginSchema` for the
+form, `itemListSearch` for the query, `fefoOrder` for the batch order,
+`batchExpiryState` for the per-batch chip, `formatQuantityWithUnit` and
+`formatExpiryLabel` for every number and date, and `MESSAGES` for the refusals.
+
+What could not be shared is the presentation, and that is the boundary §4.3
+drew: `packages/ui` renders `<span>` with class strings a browser resolves, so
+the badges, the button and the fields are rebuilt here. **The screens are a
+translation, not a port.**
+
+One place the phone genuinely differs, recorded because it is a real divergence
+from parity rather than an oversight: the web clients keep the whole list view
+state in the URL, so a filtered list is a shareable link and Back restores it.
+A phone has no address bar, and routing on every filter tap would make the back
+gesture undo a chip. So the state is local and only the *search string* becomes
+a request. Feature 28's pager is gone too — `perPage: "all"` and a scroll,
+because a pager on a touch screen is a control nobody uses.
+
+##### Native where it counts
+
+`FlatList`, not a `ScrollView` of rows and not `@expo/ui`'s `List` — that one
+renders native grouped rows and is explicitly **not** virtualized, so a
+household with two hundred items would mount two hundred views.
+
+Take and restock are a `formSheet` route rather than a hand-rolled `<Modal>`:
+the sheet animation, the grabber and drag-to-dismiss come from the platform.
+One file for both, because they differ by a verb, a field and an endpoint —
+splitting them would duplicate the shortfall handling, which is the interesting
+part.
+
+`KeyboardAvoidingView` from the first screen, and `SafeAreaView` inside one
+`Screen` component so no screen can forget it. Both are on SPA_API_PORT.md's
+list of four things that are free now and expensive to retrofit when Phase 5
+adds iOS.
+
+##### Driven, not asserted
+
+Signed in from a restored session → the list rendered the real household. Every
+expiry label was correct Ukrainian on Hermes — «182 дні», «295 днів», «2443 дні
+тому», «595 днів» — which is the hand-written plural rule getting `one`, `few`
+and `many` right across the range.
+
+Opened «Вода негазована 1,5 л»: 240 шт., minimum 4, **97 batches in FEFO
+order** with the 10.03.2027 ones ahead of the 10.06.2027 ones. Took one: 240 →
+**239**, batches 97 → **96**, drawn from the soonest-expiry batch exactly as
+§3.3 requires — and the number changed because the mutation invalidated
+`keys.item(id)`, which is the only thing that proves the invalidation map is
+right.
+
+Asked for 99 999: refused **inside the sheet, beside the field**, with «Не
+вистачає 99 760 штук — доступно (не прострочено) лише 239 штук». That sentence
+is `@supplies/core/messages` rendering the same key the web clients render, and
+its placement is the §3.3 argument: a shortfall names a number, so it belongs
+next to the number that caused it.
+
+The item was restored to 240 afterwards.
+
+##### Two things learned about Expo Router
+
+`experiments.typedRoutes` **does** enforce — `router.push("/nope")` fails
+typecheck — but the types only exist once `expo start` has run. `expo export`
+does not write them, so a clean checkout typechecks with a looser `Href`. CI's
+`mobile:bundle` proves the graph resolves; it does not prove the links are
+real.
+
+And a file created **while Metro is running** gets added to the route union
+even from outside `app/` — `components/ui/button.tsx` appearing as
+`/../components/ui/button`. Reproduced deliberately with a probe file, which
+showed up the instant it was written. It is a watcher artifact, not a
+configuration error: no runtime route, no warning, and a Metro restart clears
+it. Documented so nobody loses an afternoon.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, the Android
+bundle.
 
 ### Phases 3–5 — not started
 
