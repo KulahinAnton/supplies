@@ -192,14 +192,21 @@ export default function ScanScreen() {
                 серед ваших запасів.
               </Text>
               {/*
-                The web clients offer «Створити ‹code›» here. The phone has no
-                item form yet — that is Phase 3.6 — and a button that leads
-                nowhere is worse than saying so plainly.
+                The code goes with them. Arriving at the form with the barcode
+                already filled in is the whole point of having scanned it —
+                `replace`, so Back from the form returns to the list rather
+                than to a camera that would scan the same packet again.
               */}
-              <Text className="text-xs text-muted-foreground">
-                Додати новий товар поки можна у вебзастосунку.
-              </Text>
-              <Button label="Сканувати ще" onPress={scanAgain} />
+              <Button
+                label={`Створити «${outcome.code}»`}
+                onPress={() =>
+                  router.replace({
+                    pathname: "/items/new",
+                    params: { barcode: outcome.code },
+                  })
+                }
+              />
+              <Button label="Сканувати ще" variant="ghost" onPress={scanAgain} />
             </View>
           ) : null}
 

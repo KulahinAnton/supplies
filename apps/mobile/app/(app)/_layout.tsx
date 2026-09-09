@@ -45,7 +45,10 @@ export default function AppLayout() {
     >
       {/* The tabs carry their own titles; a header above them would be a second one. */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="items/[id]" options={{ title: "" }} />
+      <Stack.Screen name="items/[id]/index" options={{ title: "" }} />
+      <Stack.Screen name="items/[id]/edit" options={{ title: "Редагувати" }} />
+      <Stack.Screen name="items/new" options={{ title: "Новий товар" }} />
+      <Stack.Screen name="items/archive" options={{ title: "Архів" }} />
       <Stack.Screen name="status" options={{ title: "Стан" }} />
       {/*
         Full screen, not a sheet: a viewfinder wants the whole display, and a

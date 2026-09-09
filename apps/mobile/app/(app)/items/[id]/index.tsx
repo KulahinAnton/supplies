@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,6 +15,7 @@ import type { MovementReason } from "@supplies/core/units";
 import { Button } from "@/components/ui/button";
 import { ErrorNote, Spinner } from "@/components/ui/feedback";
 import { ExpiryBadge, StockBadge } from "@/components/ui/state-badges";
+import { api } from "@/lib/api/client";
 import { useItemDetail } from "@/hooks/use-item-detail";
 
 const REASON_LABEL: Record<MovementReason, string> = {
@@ -35,7 +37,8 @@ const REASON_LABEL: Record<MovementReason, string> = {
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { detail } = useItemDetail(id ?? "");
+  const { detail, write, pending } = useItemDetail(id ?? "");
+  const [archiveError, setArchiveError] = useState<string | null>(null);
   const today = todayUTC();
 
   if (detail.isPending) {
@@ -137,6 +140,47 @@ export default function ItemDetailScreen() {
             />
           </View>
         </View>
+
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Button
+              label="Редагувати"
+              variant="ghost"
+              onPress={() =>
+                router.push({
+                  pathname: "/items/[id]/edit",
+                  params: { id: item.id },
+                })
+              }
+            />
+          </View>
+          <View className="flex-1">
+            {/*
+              Feature 3 — archive, never delete. The movements still reference
+              this item, so removing it would take somebody's history with it;
+              archiving hides it from every list and reminder and keeps that.
+            */}
+            <Button
+              label={item.isArchived ? "Повернути" : "В архів"}
+              variant="ghost"
+              busy={pending}
+              onPress={() => {
+                setArchiveError(null);
+                void write(() =>
+                  api.post(`/api/items/${item.id}/archive`, {
+                    archived: !item.isArchived,
+                  }),
+                ).then((refusal) => setArchiveError(refusal));
+              }}
+            />
+          </View>
+        </View>
+
+        {archiveError ? (
+          <View className="rounded-lg bg-destructive/10 px-3 py-2.5">
+            <Text className="text-sm text-destructive">{archiveError}</Text>
+          </View>
+        ) : null}
 
         <View className="gap-2">
           <Text className="text-base font-semibold text-foreground">

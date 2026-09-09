@@ -13,6 +13,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * `edges` excludes the bottom by default: a scrolling list should run under the
  * gesture bar rather than stopping short of it, and screens with a fixed footer
  * ask for it explicitly.
+ *
+ * **A screen with a native header passes `["left", "right"]`.** The header has
+ * already cleared the status bar, so keeping `top` inserts the same inset
+ * twice — a finger-wide band of nothing under the title, which is what it
+ * looked like on «Новий товар» before this note existed.
  */
 export function Screen({
   children,

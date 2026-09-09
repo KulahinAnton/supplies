@@ -29,7 +29,7 @@ export default function ItemsScreen() {
   const rows = items.data?.rows ?? [];
 
   return (
-    <SafeAreaView edges={["left", "right"]} className="flex-1 bg-background">
+    <SafeAreaView edges={["top", "left", "right"]} className="flex-1 bg-background">
       <FlatList
         data={rows}
         keyExtractor={(item: ItemView) => item.id}
@@ -40,12 +40,19 @@ export default function ItemsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View>
+            <View className="gap-1 px-5 pb-1 pt-2">
+              <Text className="text-2xl font-semibold text-foreground">Запаси</Text>
+              <Text className="text-sm text-muted-foreground">
+                Усе, що є вдома — і скільки саме.
+              </Text>
+            </View>
             <ItemFilters
               query={query}
               onQuery={setQuery}
               filter={filter}
               onFilter={setFilter}
               onScan={() => router.push("/scan")}
+              onNew={() => router.push("/items/new")}
             />
             <ErrorNote error={items.error} />
           </View>
@@ -67,15 +74,30 @@ export default function ItemsScreen() {
               <Text className="text-xs text-muted-foreground">
                 {items.data.total > 0 ? `${items.data.total} позицій` : ""}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/status")}
-                className="px-3 py-1"
-              >
-                <Text className="text-xs text-muted-foreground underline">
-                  Стан збірки
-                </Text>
-              </Pressable>
+              <View className="flex-row gap-5">
+                {/*
+                  Feature 3 — archived items are hidden from every other
+                  screen, so this is the only way back to them.
+                */}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/items/archive")}
+                  className="px-3 py-1"
+                >
+                  <Text className="text-xs text-muted-foreground underline">
+                    Архів
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/status")}
+                  className="px-3 py-1"
+                >
+                  <Text className="text-xs text-muted-foreground underline">
+                    Стан збірки
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : null
         }

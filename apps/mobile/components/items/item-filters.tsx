@@ -23,12 +23,14 @@ export function ItemFilters({
   filter,
   onFilter,
   onScan,
+  onNew,
 }: {
   query: string;
   onQuery: (value: string) => void;
   filter: ItemFilter;
   onFilter: (value: ItemFilter) => void;
   onScan: () => void;
+  onNew: () => void;
 }) {
   return (
     <View className="gap-3 px-5 pb-3 pt-1">
@@ -59,6 +61,14 @@ export function ItemFilters({
           className="rounded-lg border border-border bg-card px-3 py-2.5 active:opacity-70"
         >
           <Text className="text-base">▣</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Новий товар"
+          onPress={onNew}
+          className="rounded-lg bg-primary px-3.5 py-2.5 active:opacity-80"
+        >
+          <Text className="text-base font-semibold text-primary-foreground">+</Text>
         </Pressable>
       </View>
 
