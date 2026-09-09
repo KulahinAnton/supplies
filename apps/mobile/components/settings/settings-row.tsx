@@ -49,9 +49,12 @@ export function SettingsGroup({
   children,
 }: {
   title?: string;
-  children: React.ReactNode[];
+  children: React.ReactNode;
 }) {
-  const rows = children.filter(Boolean);
+  // A group of one is legitimate — «Рецепти» is its own section when the
+  // household has the helper on — so this normalises rather than demanding an
+  // array in the type.
+  const rows = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
     <View className="gap-2">
       {title ? (

@@ -61,9 +61,15 @@ shape were enough: this package is portable by contract, so it does not get to
 find out one screen at a time which parts of `Intl` a runtime implements.
 
 **Before adding any `Intl` API here, check it against Hermes — and check the
-arguments, not just the constructor.** `DateTimeFormat` and `NumberFormat` with
-a `number` are the ones actually proven; `formatUsd` still calls
-`style: "currency"`, which no phone screen has rendered yet.
+arguments, not just the constructor.** What is proven on the emulator, by
+probe: `DateTimeFormat` with a `timeZone`, `NumberFormat` with a `number`, and
+`NumberFormat` with `style: "currency"` — `formatUsd(0.0123)` gives «0,0123
+USD» on Hermes and in a browser alike. What is not: `PluralRules`, which is
+absent, and `NumberFormat.format` with a **BigInt**, which throws.
+
+The probe is three lines at the top of `apps/mobile/app/_layout.tsx` and reads
+in the Metro log, not `adb logcat` — worth knowing, because it turns "is this
+safe on a phone" from an argument into a thirty-second answer.
 
 ## No barrel
 

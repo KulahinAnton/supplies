@@ -122,6 +122,18 @@ export default function SettingsScreen() {
         </View>
       ) : null}
 
+      {/*
+        Feature 32.1 — the row appears only for a household that turned the
+        helper on. Unlike the tab bar, a settings index can afford a row that
+        comes and goes, and offering a paid feature nobody enabled is worse
+        than not mentioning it.
+      */}
+      {household.data?.aiEnabled ? (
+        <SettingsGroup title="Помічник">
+          <SettingsRow label="Рецепти" onPress={() => router.push("/recipes")} />
+        </SettingsGroup>
+      ) : null}
+
       <SettingsGroup title="Акаунт">
         <SettingsRow
           label="Пароль"
