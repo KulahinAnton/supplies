@@ -17,6 +17,7 @@ import { ShoppingController } from "./shopping/shopping.controller";
 import { ShoppingGroupsController } from "./shopping/shopping-groups.controller";
 import { StockController } from "./stock/stock.controller";
 import { TelegramController } from "./telegram/telegram.controller";
+import { PushController } from "./push/push.controller";
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { TelegramController } from "./telegram/telegram.controller";
     ShoppingGroupsController,
     StockController,
     TelegramController,
+    PushController,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

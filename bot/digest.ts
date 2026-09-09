@@ -1,6 +1,7 @@
 import { Bot } from "grammy";
 import { prisma } from "../packages/db/src/prisma";
 import { getItemViews, getRestockEntries } from "../packages/db/src/queries";
+import { pushDigestToHousehold } from "../packages/db/src/push-service";
 import { needsAttention, splitExpiring } from "../packages/core/src/expiry";
 // Feature 30.3 — the digest is the one message that reaches a chat without
 // anyone opening the bot, so it doubles as the keyboard's delivery route.
@@ -107,6 +108,8 @@ export type HouseholdDigest = {
   chats: number;
   messages: number;
   failures: number;
+  /** Feature 35 — phones that got the same reminder as a notification. */
+  push: { devices: number; sent: number; failed: number };
 };
 
 /**
@@ -133,7 +136,13 @@ export async function sendDigestToHousehold(
 
   const text = await digestText(householdId, today);
   if (!text) {
-    return { hadNews: false, chats: linked.length, messages: 0, failures: 0 };
+    return {
+      hadNews: false,
+      chats: linked.length,
+      messages: 0,
+      failures: 0,
+      push: { devices: 0, sent: 0, failed: 0 },
+    };
   }
 
   let messages = 0;
@@ -168,7 +177,22 @@ export async function sendDigestToHousehold(
     }
   }
 
-  return { hadNews: true, chats: linked.length, messages, failures };
+  /**
+   * Feature 35 — the same reminder, to the phones.
+   *
+   * After Telegram rather than instead of it: somebody with both linked wants
+   * the reminder wherever they happen to be looking, and the app is not a
+   * replacement for the bot any more than the bot is for the app.
+   *
+   * This function is now the household's daily notification across every
+   * channel rather than only the Telegram one, which its file name no longer
+   * quite says. Renaming `bot/digest.ts` is a wider change than Feature 35
+   * and would move a module three callers import; the name is the thing
+   * lagging, not the arrangement.
+   */
+  const push = await pushDigestToHousehold(householdId, text);
+
+  return { hadNews: true, chats: linked.length, messages, failures, push };
 }
 
 /** The message body, or null when there is nothing worth saying. */

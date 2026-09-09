@@ -11,6 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { SessionUser, TokenPair } from "@supplies/core/contracts/auth";
 import { acceptTokens, api, forgetTokens, refreshSession } from "../api/client";
 import { readRefreshToken } from "./token-store";
+import { unregisterFromPush } from "../push/register";
 
 type AuthState =
   /** Still asking SecureStore, and then the API, whether there is a session. */
@@ -104,6 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      * return `{ ok: true }` (logout is idempotent by design) while leaving the
      * row live on the server. Signing out would then be a local illusion.
      */
+    /**
+     * Feature 35 — drop this device first, while the access token is still
+     * good. Afterwards the request would be refused, and the next person to
+     * sign in on this phone would keep receiving the previous household's
+     * reminders.
+     */
+    await unregisterFromPush();
+
     const stored = await readRefreshToken();
     await api
       .post("/api/auth/logout", stored ? { refreshToken: stored } : undefined)

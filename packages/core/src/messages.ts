@@ -121,6 +121,13 @@ export const MESSAGES = {
   "recipe.notEnoughFood":
     "Замало продуктів удома, щоб щось запропонувати.",
 
+  /**
+   * Feature 35 — a device that registers a malformed token is silently never
+   * notified again, and the only symptom is somebody saying they get no
+   * reminders. Worth refusing loudly at the door.
+   */
+  "push.tokenInvalid": "Не вдалося зареєструвати пристрій для сповіщень.",
+
   // --- generic ---
   "error.unexpected": "Щось пішло не так. Спробуйте ще раз.",
   /** Feature 34 — the API throttles; the web app has no equivalent. */

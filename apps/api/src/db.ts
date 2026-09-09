@@ -110,3 +110,9 @@ export {
 } from "../../../packages/db/src/account-service";
 
 export { createTelegramLink } from "../../../packages/db/src/telegram-service";
+
+export {
+  registerPushDevice,
+  unregisterPushDevice,
+  type PushPlatform,
+} from "../../../packages/db/src/push-service";

@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { useNotificationRouting } from "@/lib/push/use-notification-routing";
 
 /**
  * A form sheet, not a custom modal. `presentation: "formSheet"` gives the
@@ -33,6 +34,10 @@ const SHEET = {
  * screens themselves would not move.
  */
 export default function AppLayout() {
+  // Feature 35 — a tapped reminder opens «Огляд». Mounted inside the authed
+  // tree, because every destination it knows about is behind the guard.
+  useNotificationRouting();
+
   return (
     <Stack
       screenOptions={{
@@ -57,6 +62,7 @@ export default function AppLayout() {
       <Stack.Screen name="settings/members" options={{ title: "Учасники" }} />
       <Stack.Screen name="settings/password" options={{ title: "Пароль" }} />
       <Stack.Screen name="settings/telegram" options={{ title: "Telegram" }} />
+      <Stack.Screen name="settings/notifications" options={{ title: "Сповіщення" }} />
       <Stack.Screen name="recipes" options={{ title: "Рецепти" }} />
       <Stack.Screen name="status" options={{ title: "Стан" }} />
       {/*

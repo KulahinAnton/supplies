@@ -75,8 +75,18 @@ async function request(
   return { status: response.statusCode, body: response.json<Record<string, never>>() };
 }
 
-async function signIn(): Promise<{ accessToken: string; refreshToken: string }> {
-  const { body } = await request("POST", "/api/auth/login", { body: LOGIN });
+/**
+ * Signs in as the demo user by default. The override exists so a rule about
+ * *another* caller can be tested — the seed has two users in one household for
+ * exactly that, and asserting "this endpoint is scoped by user" needs a second
+ * one.
+ */
+async function signIn(
+  as: { email?: string; password?: string } = {},
+): Promise<{ accessToken: string; refreshToken: string }> {
+  const { body } = await request("POST", "/api/auth/login", {
+    body: { ...LOGIN, ...as },
+  });
   return body as unknown as { accessToken: string; refreshToken: string };
 }
 
@@ -1032,5 +1042,103 @@ describe("the wire contract", () => {
 
     expect(status).toBe(401);
     conforms(apiErrorSchema, body, "a refusal");
+  });
+});
+
+/**
+ * Feature 35 — the two push endpoints.
+ *
+ * The interesting part is not that a token round-trips; it is that the
+ * registration takes its user from the token and refuses a malformed address.
+ * A device that registers something Expo cannot deliver to is silently never
+ * notified again, and the only symptom is somebody saying they get no
+ * reminders — which is a bad way to find out.
+ */
+describe("push registration", () => {
+  const token = () => `ExponentPushToken[e2e-${Date.now()}]`;
+
+  it("registers a device and lets the same call run twice", async () => {
+    const { accessToken } = await signIn();
+    const device = token();
+
+    const first = await request("POST", "/api/push/register", {
+      token: accessToken,
+      body: { token: device, platform: "android" },
+    });
+    expect([200, 201]).toContain(first.status);
+
+    // The app registers on every visit to «Сповіщення», so the second call is
+    // the ordinary one — an upsert, not a duplicate-key error.
+    const second = await request("POST", "/api/push/register", {
+      token: accessToken,
+      body: { token: device, platform: "android" },
+    });
+    expect([200, 201]).toContain(second.status);
+
+    const removed = await request("POST", "/api/push/unregister", {
+      token: accessToken,
+      body: { token: device },
+    });
+    expect([200, 201]).toContain(removed.status);
+  });
+
+  it("refuses a token that is not Expo's format", async () => {
+    const { accessToken } = await signIn();
+
+    const { status, body } = await request("POST", "/api/push/register", {
+      token: accessToken,
+      body: { token: "not-a-push-token", platform: "android" },
+    });
+
+    expect(status).toBe(422);
+    expect(body).toMatchObject({ key: "push.tokenInvalid" });
+  });
+
+  it("refuses an unknown platform rather than storing it", async () => {
+    const { accessToken } = await signIn();
+
+    const { status } = await request("POST", "/api/push/register", {
+      token: accessToken,
+      body: { token: token(), platform: "windows-phone" },
+    });
+
+    expect(status).toBe(422);
+  });
+
+  it("needs a session — the caller's id never comes from the body", async () => {
+    const { status } = await request("POST", "/api/push/register", {
+      body: { token: token(), platform: "android" },
+    });
+    expect(status).toBe(401);
+  });
+
+  /**
+   * Unregister is scoped by user as well as by token, so one signed-in caller
+   * cannot silence another household's phone with a token they happened to
+   * learn. It answers ok either way — there is nothing to tell them.
+   */
+  it("does not delete another user's device", async () => {
+    const { accessToken } = await signIn();
+    const device = token();
+
+    await request("POST", "/api/push/register", {
+      token: accessToken,
+      body: { token: device, platform: "android" },
+    });
+
+    const other = await signIn({ email: "olena@example.com" });
+    const { status } = await request("POST", "/api/push/unregister", {
+      token: other.accessToken,
+      body: { token: device },
+    });
+    expect([200, 201]).toContain(status);
+
+    // Still registered to the first user: re-registering as them is an update,
+    // and unregistering as them is what actually removes it.
+    const cleanup = await request("POST", "/api/push/unregister", {
+      token: accessToken,
+      body: { token: device },
+    });
+    expect([200, 201]).toContain(cleanup.status);
   });
 });

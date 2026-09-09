@@ -25,6 +25,13 @@
           "cameraPermission": "Щоб сканувати штрихкоди товарів.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#297f48",
+          "defaultChannel": "digest"
+        }
       ]
     ],
     "experiments": {

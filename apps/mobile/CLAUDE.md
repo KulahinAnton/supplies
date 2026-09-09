@@ -205,6 +205,33 @@ every run, and it is being ignored on purpose: 9 MB buys a version pinned in
 the lockfile and a command that works without a network fetch, on a machine
 where "eas is not recognised" has already cost an afternoon once.
 
+## Adding `expo-notifications` ends Expo Go on Android
+
+Not "push stops working" — **the whole app stops working**. The module throws
+while it is being evaluated:
+
+    expo-notifications: Android Push notifications (remote notifications)
+    functionality provided by expo-notifications was removed from Expo Go
+    with the release of SDK 53. Use a development build instead.
+
+and Expo Router imports every route file to build its route table, so one
+throw turned all twenty-odd screens into «Route "./login.tsx" is missing the
+required default export». Twenty minutes of reading that message before the
+cause was obvious.
+
+`lib/push/module.ts` is the answer: nothing imports `expo-notifications`
+directly, and that wrapper loads it with a dynamic `import()` inside a
+try/catch. **A resolved import is not a working module** — the import settles
+and hands back a half-built namespace whose functions are `undefined`, so the
+guard checks for the API rather than for a rejection. Getting that wrong the
+first time left the settings screen spinning forever on an unhandled
+«undefined is not a function».
+
+The behaviour is right in production too: a device whose notification module
+will not initialise should lose its reminders, not its inventory. What it does
+NOT do is let the feature be tested here — remote push needs a development
+build or the APK, and the emulator has no push service either way.
+
 ## Reading a failed EAS build without a browser
 
 `eas build:view` prints a status and `EAS_BUILD_UNKNOWN_GRADLE_ERROR`, which
