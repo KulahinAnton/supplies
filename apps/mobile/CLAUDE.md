@@ -163,16 +163,21 @@ and for a cloud build it comes from an EAS environment variable rather than
 from `eas.json`, because the value is the LAN address of whoever is building:
 
 ```bash
-npx eas-cli env:create --environment preview \
+pnpm exec eas env:set --environment preview \
   --name EXPO_PUBLIC_API_URL --value "http://<your-lan-ip>:3200" --type string --visibility plaintext
-npx eas-cli build --platform android --profile preview
+pnpm exec eas build --platform android --profile preview
 ```
 
 Without it the APK falls back to `10.0.2.2`, which is the emulator's name for
 its host and means nothing on a phone.
 
-`npx eas-cli`, not `eas` — the CLI is not installed globally here, and
-`pnpm dlx eas-cli` resolves the package but not its bin on Windows.
+`pnpm exec eas`, not `eas` — `eas-cli` is a root devDependency rather than a
+global install, so the bare name only works if you happen to have one. `pnpm
+dlx eas-cli` is the trap: it resolves the package and then cannot find its bin
+on Windows. Expo's CLI prints a recommendation against the local install on
+every run, and it is being ignored on purpose: 9 MB buys a version pinned in
+the lockfile and a command that works without a network fetch, on a machine
+where "eas is not recognised" has already cost an afternoon once.
 
 ## Typed routes, and a watcher quirk worth recognising
 

@@ -57,7 +57,6 @@
     "grammy": "^1.44.0"
   },
   "devDependencies": {
-    "eas-cli": "^23.2.0",
     "@types/node": "^20",
     "concurrently": "^10.0.5",
     "dotenv": "^17.4.2",

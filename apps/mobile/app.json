@@ -9,7 +9,9 @@
     "newArchEnabled": true,
     "android": {
       "package": "ua.supplies.app",
-      "adaptiveIcon": { "backgroundColor": "#297f48" },
+      "adaptiveIcon": {
+        "backgroundColor": "#297f48"
+      },
       "edgeToEdgeEnabled": true
     },
     "ios": {
@@ -27,9 +29,16 @@
         }
       ]
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
-      "apiUrl": "http://10.0.2.2:3200"
-    }
+      "apiUrl": "http://10.0.2.2:3200",
+      "router": {},
+      "eas": {
+        "projectId": "4eaddeb5-ce6d-44e0-b22f-9fc3fc4eec28"
+      }
+    },
+    "owner": "kulahin"
   }
 }
