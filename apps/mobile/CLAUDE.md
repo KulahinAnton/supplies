@@ -195,7 +195,9 @@ pnpm exec eas build --platform android --profile preview
 ```
 
 Without it the APK falls back to `10.0.2.2`, which is the emulator's name for
-its host and means nothing on a phone.
+its host and means nothing on a phone. (A build connected to Metro — Expo Go or
+a development build — uses Metro's own host instead; see "`localhost` is a lie
+on a phone" below.)
 
 `pnpm exec eas`, not `eas` — `eas-cli` is a root devDependency rather than a
 global install, so the bare name only works if you happen to have one. `pnpm
@@ -347,6 +349,15 @@ the body; posting nothing returns `{ ok: true }` — it is idempotent by design 
 while leaving the row live on the server, so signing out would be a local
 illusion.
 
+**The browser preview keeps the token in memory.** `lib/auth/token-store.web.ts`
+is what Metro bundles for `expo start --web`, because `expo-secure-store`'s web
+build is an empty object: the native store threw on its first write, so sign-in
+in the browser failed with «Щось пішло не так» while the Network tab showed a
+201 and both tokens. Not `localStorage` — a thirty-day credential readable by
+any script on the origin — and not the SPA's cookie, which belongs to the real
+web client. A reload signs you out, which is the right amount of persistence for
+a preview. Push is refused on web for the same kind of reason (`lib/push/module.ts`).
+
 ## Hermes has a partial `Intl`
 
 The first thing this app did on a real device was crash: `format.ts`
@@ -408,9 +419,45 @@ ever doubt it.
 
 On an Android emulator it is the emulator's own loopback; the host machine is
 `10.0.2.2`. On the iOS simulator `localhost` works. On a real device neither
-does — it needs the machine's LAN address. `lib/api.ts` resolves this and
-`app/index.tsx` prints the answer on screen, because getting it wrong is
-indistinguishable from a dead API.
+does. `lib/api/url.ts` resolves the address in this order:
+
+1. **`EXPO_PUBLIC_API_URL`**, when set — always wins. Release builds get it
+   from EAS (see Builds above).
+2. **The dev server's own host**, in development. `Constants.expoConfig.hostUri`
+   is the address the device already used to reach Metro — `192.168.50.34:8081`
+   on a phone over Wi-Fi, `10.0.2.2:8081` on an emulator opened that way,
+   `localhost:8081` in a browser — and the API runs on the same machine, so the
+   same host on port 3200 is right in every case. Tunnel hostnames are skipped.
+3. `10.0.2.2` on Android, `localhost` elsewhere.
+
+Step 2 exists because the fallback alone made **`pnpm mobile:dev` + Expo Go on
+a real phone** fail in the worst possible way. With no `EXPO_PUBLIC_API_URL`,
+the phone called `10.0.2.2`, which on a real network is routable-looking and
+answered by nobody — and the sign-in button spun forever, because React
+Native's `fetch` has no timeout of its own (it builds OkHttp with zero connect,
+read and write timeouts). Now every request has one: 20 s by default,
+`SLOW_TIMEOUT_MS` (45 s) for the barcode lookup and recipe suggestions, whose
+servers wait on third parties, and `BEST_EFFORT_TIMEOUT_MS` (5 s) for sign-out's
+two courtesy calls. A refused connection and an unanswered one fail with
+different messages, and both name the address — the status screen («Ще» →
+«Стан збірки») prints it too.
+
+**The firewall is the other half.** A phone reaches the API only if Windows lets
+it in. Metro and the API run as the same `node.exe`, so if the phone loaded the
+bundle it can normally reach port 3200 as well; if it cannot, the error now says
+«API не відповідає (http://…:3200)» instead of spinning.
+
+**Rehearse a phone that cannot reach the API on the emulator**, which runs as
+root on the Google APIs image:
+
+```bash
+adb root
+adb shell iptables -A OUTPUT -p tcp --dport 3200 -j DROP   # packets vanish, like a wrong IP
+adb shell iptables -D OUTPUT -p tcp --dport 3200 -j DROP   # and back
+```
+
+Sign-in under the rule shows «Заходимо…» for twenty seconds and then the error;
+sign-out under it takes five seconds. Both used to take forever.
 
 ## Icons come from the web app's SVG, not from a second drawing
 

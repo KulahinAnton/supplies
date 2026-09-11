@@ -9,7 +9,13 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SessionUser, TokenPair } from "@supplies/core/contracts/auth";
-import { acceptTokens, api, forgetTokens, refreshSession } from "../api/client";
+import {
+  acceptTokens,
+  api,
+  BEST_EFFORT_TIMEOUT_MS,
+  forgetTokens,
+  refreshSession,
+} from "../api/client";
 import { readRefreshToken } from "./token-store";
 import { unregisterFromPush } from "../push/register";
 
@@ -115,7 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const stored = await readRefreshToken();
     await api
-      .post("/api/auth/logout", stored ? { refreshToken: stored } : undefined)
+      .post("/api/auth/logout", stored ? { refreshToken: stored } : undefined, {
+        timeoutMs: BEST_EFFORT_TIMEOUT_MS,
+      })
       // Best effort: a device with no signal must still be able to sign out of
       // itself, and the token is dropped below either way.
       .catch(() => undefined);

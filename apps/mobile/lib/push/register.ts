@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
-import { api } from "@/lib/api/client";
+import { api, BEST_EFFORT_TIMEOUT_MS } from "@/lib/api/client";
 import { loadNotifications } from "@/lib/push/module";
 
 /**
@@ -123,7 +123,7 @@ export async function unregisterFromPush(): Promise<void> {
     const projectId = easProjectId();
     if (!notifications || !projectId) return;
     const { data: token } = await notifications.getExpoPushTokenAsync({ projectId });
-    await api.post("/api/push/unregister", { token });
+    await api.post("/api/push/unregister", { token }, { timeoutMs: BEST_EFFORT_TIMEOUT_MS });
   } catch {
     // Nothing to do and nothing to say.
   }

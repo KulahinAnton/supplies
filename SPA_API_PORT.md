@@ -2257,6 +2257,31 @@ Android has not carried it since SDK 53 — and Android needs FCM credentials
 uploaded to the EAS project, which is the household owner's Firebase account
 and not something this repo can hold.
 
+### Phase 3 — two sign-ins that failed after the API said yes · 2026-09-11
+
+Found by using the app, not by any check. `pnpm mobile:dev`, then the same
+account in two places:
+
+- **In the browser** (`expo start --web`), «Щось пішло не так» — while the
+  Network tab showed `201 Created` and both tokens. `expo-secure-store`'s web
+  build is an empty object, so storing the refresh token threw. Fixed with
+  `token-store.web.ts`, which keeps it in memory; the same pass stopped
+  `expo-notifications` rejecting on web the moment the authed layout mounted.
+- **On a real phone**, a spinner that never stopped. With no
+  `EXPO_PUBLIC_API_URL` the app called `10.0.2.2` — the *emulator's* name for
+  its host, and on a real network an address nobody answers — and React
+  Native's `fetch` has no timeout of its own. The app now takes the API's host
+  from the dev server it was loaded from, and every request has a timeout that
+  ends in an error naming the address.
+
+**Why nothing caught either.** Every device check so far ran on the emulator,
+where `10.0.2.2` is correct and packets never vanish — the one configuration in
+which both bugs are invisible. The emulator can be made to lose packets
+(`iptables … --dport 3200 -j DROP`, recipe in apps/mobile/CLAUDE.md), and that
+is how the fix was proved: under the rule, sign-in fails after twenty seconds
+with «API не відповідає (http://192.168.50.34:3200)», and sign-out completes in
+five.
+
 ### Phases 3.8–5 — not started
 
 The Play listing, the deploy, iOS. Phase 3 is otherwise done: **the Phase 2.9

@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { Text, View } from "react-native";
 import { formatUsd } from "@supplies/core/format";
 import type { Household } from "@supplies/core/contracts/settings";
-import { api, type ApiError } from "@/lib/api/client";
+import { api, SLOW_TIMEOUT_MS, type ApiError } from "@/lib/api/client";
 import { keys } from "@/lib/api/keys";
 import { Button } from "@/components/ui/button";
 import { ErrorNote, Spinner } from "@/components/ui/feedback";
@@ -37,7 +37,10 @@ export default function RecipesScreen() {
   });
 
   const suggest = useMutation({
-    mutationFn: () => api.post<RecipeSuggestion>("/api/recipes/suggest"),
+    mutationFn: () =>
+      api.post<RecipeSuggestion>("/api/recipes/suggest", undefined, {
+        timeoutMs: SLOW_TIMEOUT_MS,
+      }),
   });
 
   if (household.isPending) {

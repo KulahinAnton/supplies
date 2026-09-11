@@ -38,8 +38,16 @@ type NotificationsModule = typeof import("expo-notifications");
  * Expo Go on Android, where remote push has not existed since SDK 53. A
  * development build or the APK reports a different execution environment and
  * takes the ordinary path.
+ *
+ * And the browser preview, which imports cleanly and then fails later: the web
+ * build implements `getPermissionsAsync` — so the check below passes — but
+ * not `getLastNotificationResponseAsync`, which rejected with ERR_UNAVAILABLE
+ * the moment the authed layout mounted. This app has no web push to offer
+ * anyway (no service worker, no VAPID key), so the preview says "unavailable"
+ * rather than half-working.
  */
 function knownUnsupported(): boolean {
+  if (Platform.OS === "web") return true;
   return (
     Platform.OS === "android" &&
     Constants.executionEnvironment === ExecutionEnvironment.StoreClient

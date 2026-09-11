@@ -12,7 +12,7 @@ import {
   useItemSave,
   type ItemFormValues,
 } from "@/hooks/use-item-save";
-import { api } from "@/lib/api/client";
+import { api, SLOW_TIMEOUT_MS } from "@/lib/api/client";
 import type { BarcodeLookup } from "@supplies/core/contracts/items";
 
 /**
@@ -71,6 +71,7 @@ export function ItemForm({
     try {
       const found = await api.get<BarcodeLookup>(
         `/api/barcode/${encodeURIComponent(code)}`,
+        { timeoutMs: SLOW_TIMEOUT_MS },
       );
       setLookup(found);
       // Into an EMPTY field only. Somebody who has typed a name has said what

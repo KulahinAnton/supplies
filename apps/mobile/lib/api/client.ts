@@ -61,10 +61,50 @@ export async function forgetTokens(): Promise<void> {
 
 type ErrorBody = { key?: string; message?: string };
 
-async function send(path: string, init: RequestInit): Promise<Response> {
+/**
+ * How long a request may go unanswered before it is given up on.
+ *
+ * **React Native's `fetch` has no timeout of its own.** React Native builds its
+ * OkHttp client with zero connect, read and write timeouts, which OkHttp reads
+ * as "never". A request to an address that silently drops packets (a wrong IP,
+ * a firewall, `10.0.2.2` on a real phone) is not refused but simply never
+ * answered, and it waits until the operating system abandons the connection
+ * minutes later — the sign-in button just spun, and nobody waits that long.
+ * Twenty seconds clears a Neon compute waking from zero with room to spare;
+ * nothing this app does normally takes a tenth of it.
+ */
+const DEFAULT_TIMEOUT_MS = 20_000;
+
+/**
+ * For the two requests whose server side waits on someone else: the barcode
+ * lookup walks Open Food Facts, GS1 and METRO in turn, and recipe suggestions
+ * wait on Claude, which `packages/core/src/claude.ts` bounds at 12 s with one
+ * retry. Both are slow by nature, and cutting them off at twenty seconds would
+ * turn an answer that was coming into an error.
+ */
+export const SLOW_TIMEOUT_MS = 45_000;
+
+/**
+ * For requests whose failure changes nothing the person sees — sign-out's two
+ * courtesy calls, dropping the push address and revoking the refresh token.
+ * Both are best effort by design, because a device with no signal must still
+ * be able to sign out of itself; forty seconds of a button that does nothing
+ * would honour that on paper only.
+ */
+export const BEST_EFFORT_TIMEOUT_MS = 5_000;
+
+export type RequestOptions = { timeoutMs?: number };
+
+async function send(
+  path: string,
+  { timeoutMs = DEFAULT_TIMEOUT_MS, ...init }: RequestInit & RequestOptions,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(`${apiUrl()}${path}`, {
       ...init,
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
@@ -77,10 +117,17 @@ async function send(path: string, init: RequestInit): Promise<Response> {
      * captive portal, or the laptop running the API asleep. `fetch` reports all
      * of them as the same opaque `TypeError`, so the message names the address
      * it tried rather than repeating "Network request failed".
+     *
+     * The two messages differ on purpose. Refused means nothing is listening
+     * at that address; unanswered usually means the address itself is wrong,
+     * or something between here and there is dropping the traffic.
      */
-    throw new ApiError(0, `Не вдалося зʼєднатися з API (${apiUrl()})`, undefined, {
-      cause,
-    });
+    const message = controller.signal.aborted
+      ? `API не відповідає (${apiUrl()})`
+      : `Не вдалося зʼєднатися з API (${apiUrl()})`;
+    throw new ApiError(0, message, undefined, { cause });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -130,7 +177,10 @@ export async function refreshSession(): Promise<boolean> {
   return refreshing;
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit & RequestOptions = {},
+): Promise<T> {
   // Which token each attempt carried, so the check below judges the attempt
   // whose answer it is holding — not the one before the retry.
   let sentWith = accessToken;
@@ -161,9 +211,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 }
 
 export const api = {
-  get: <T>(path: string) => apiFetch<T>(path),
-  post: <T>(path: string, body?: unknown) =>
+  get: <T>(path: string, options?: RequestOptions) => apiFetch<T>(path, { ...options }),
+  post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiFetch<T>(path, {
+      ...options,
       method: "POST",
       ...(body === undefined
         ? {}

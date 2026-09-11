@@ -34,9 +34,14 @@ export function useNotificationRouting(): void {
     void loadNotifications().then((notifications) => {
       if (cancelled || !notifications) return;
 
-      void notifications.getLastNotificationResponseAsync().then((response) => {
-        route(response?.notification.request.content.data);
-      });
+      void notifications
+        .getLastNotificationResponseAsync()
+        .then((response) => route(response?.notification.request.content.data))
+        // Nothing to route is the only sensible reading of a failure here, and
+        // an unhandled rejection on the authed layout is a red box on every
+        // screen — which is what the browser preview showed before `module.ts`
+        // learned to refuse the web.
+        .catch(() => undefined);
 
       const subscription = notifications.addNotificationResponseReceivedListener(
         (response) => route(response.notification.request.content.data),
