@@ -31,9 +31,23 @@ Pooled matters: Vercel runs the app as many short-lived serverless instances, an
    > changes on Vercel, and it has to change **in the same window** as the
    > commit that moves it: a build of the new tree with Root Directory `.`
    > finds a `package.json` with no `next` in it, and a build of the old tree
-   > with Root Directory `apps/web` finds nothing at all. Change the setting,
-   > then merge, then watch the first deploy. If it has to be reverted, revert
-   > both together.
+   > with Root Directory `apps/web` finds nothing at all. The cut-over, in
+   > order:
+   >
+   > 1. `pnpm backup:prod` and `pnpm backup:verify` — the dump is the undo for
+   >    the database, which no Vercel button reverts.
+   > 2. Change the setting. Nothing rebuilds, and the live deployment keeps
+   >    serving.
+   > 3. Push the branch. Vercel builds a **preview** of the new layout — the
+   >    dress rehearsal. It stops at `migrate:deploy` unless `DATABASE_URL` is
+   >    set for Preview too, and if it is, this is the build that applies the
+   >    pending migrations — so check they are additive before pushing.
+   > 4. Preview green → merge to `main`, watch the production build, then
+   >    check sign-in, the bot (send it any command), and **Settings → Cron
+   >    Jobs** for both digest entries.
+   > 5. Something wrong → **Instant Rollback** to the previous deployment. It
+   >    reuses the old build, so it needs no setting change. Reverting `main`
+   >    itself means reverting the setting with it.
    >
    > *Include files outside the root directory* is what lets pnpm install from
    > the workspace root, which is the only place `packages/core`,

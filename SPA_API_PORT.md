@@ -615,7 +615,23 @@ a harness with three tests in it.
 | 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **done** — APK built, installed and signed in as a standalone app |
 | 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | **done** — full parity with the SPA |
 | 3.7 | Push notifications via `expo-notifications` | 2–3 d | **done** — everything but delivery, which needs the APK and FCM credentials |
-| 3.8 | Play Console listing ($25, once) | 1 d | ⚠ needs an account |
+| 3.8 | Play Console listing ($25, once) | 1 d | optional — see below |
+
+**The household does not need the Play Store; push does need Google.** Two
+different Google accounts get conflated here, and checked on 2026-09-11:
+
+- **Firebase (free)** is required for push on Android at all. Every Android
+  push travels through FCM, Expo's push service only relays to it, and a
+  standalone build with no Firebase project cannot even obtain a token.
+- **Play Console ($25)** only buys a store listing. A personal account created
+  after 13 Nov 2023 must also run a closed test — 12 testers opted in for 14
+  continuous days — before it may publish to production. The APK installs
+  without any of this.
+- **Sideloading gets a condition in 2027.** Android developer verification
+  blocks APKs from unregistered developers on certified devices — Brazil,
+  Indonesia, Singapore and Thailand from 30 Sep 2026, everywhere else from
+  2027. A free *limited-distribution* account (no fee, no ID, up to 20 devices)
+  covers a household; `adb` installs are exempt.
 
 **Milestone A is a checkpoint, not a reduced scope.** Full parity is the
 destination; 3.3–3.5 just happen to be the order that proves the whole stack —
@@ -636,7 +652,7 @@ are free now and expensive to retrofit.
 | # | Task | Est. | State |
 |---|---|---|---|
 | 4.1 | **⚠ prod** Move the Next app to `apps/web`; set Vercel Root Directory | 0.5 d | **done, 2026-09-06** |
-| 4.2 | **⚠ prod** Verify the deploy: build, migrations, bot webhook, cron | 0.5 d | needs your say-so — it touches what the household is using |
+| 4.2 | **⚠ prod** Verify the deploy: build, migrations, bot webhook, cron | 0.5 d | needs your say-so — a fast-forward of `main`, three additive migrations, no new variables; the cut-over is in deployment-instructions.md §2 |
 | 4.3 | Deploy the API (Railway / Fly / Render) and the SPA (Vercel / Netlify) | 1 d | needs an account and a hosting choice |
 | 4.4 | README rewrite: diagram, stack table, screenshots, "where to look" | 1 d | **done** |
 | 4.5 | CI matrix — core, api, web, spa; Playwright on both web clients | 1 d | **done** — plus a mobile job, which is what the EAS failure argued for |
@@ -650,6 +666,9 @@ At the end of Phase 4 the portfolio is complete and showable: API, SPA, Android
 app, Next.js app, Telegram bot, one engine. Phase 5 extends it.
 
 ### Phase 5 — iOS · 1–1.5 weeks
+
+> **Parked 2026-09-11 — not a priority (decision 11).** The table below is
+> kept as the plan for when it comes back.
 
 Sequenced after Phase 4 on purpose, so nothing you show people is ever blocked
 on Apple's review queue.
@@ -799,12 +818,25 @@ Three corrections, all from reading the first SPA screens next to the Next app.
 |---|---|---|
 | 8 | **Phase 4.1 pulled forward — `apps/web` now** | Decision 3 said Vercel stays untouched *until* 4.1; it never said 4.1 had to be last. Keeping the Next app at the repo root while `apps/api` and `apps/spa` existed made the layout say the opposite of what it means: that the Next app is the project and the rest are attachments. The move is a rename plus one Vercel setting, and doing it on an unmerged branch costs nothing — doing it after three more phases means re-touching every file those phases add. |
 | 9 | **The design system is shared: `packages/ui`** | §4.3. The original plan factored the rules and forgot the components, which is the same duplication one layer up. |
+
+### Amended 2026-09-11
+
+| # | Decision | Consequence in this plan |
+|---|---|---|
+| 11 | **iOS is not a priority** | Phase 5 is parked, not cancelled. What it already has stays, because it cost nothing and protects Android too: safe areas and the keyboard live in `Screen`, the icons and splash are platform-neutral. Nothing further is built for iOS until this is reversed. |
 | 10 | **Parity gates Phase 3** | Phase 2.9. A React Native app built against a second-rate SPA inherits its gaps, and a phone is the slowest place to find them. Full parity was already decision 1; this says *when* it is checked, not just that it is owed. |
 
 ### Still open, but not blocking
 
 - **API host** — Railway, Fly or Render. Any of the three; pick when Phase 1
-  first needs to deploy, not before.
+  first needs to deploy, not before. Two facts found on 2026-09-11 that any
+  choice has to honour: **production's Neon database is in `us-east-2`
+  (Ohio)**, so the API belongs in US East — every request makes several
+  round trips to it — and **the rate limiter currently keys on the socket
+  address**, which behind any host's proxy is the proxy. Fastify's
+  `trustProxy` has to be set for the host before the first deploy, or the
+  whole household shares one 120-a-minute bucket and sign-in has no real
+  brute-force limit.
 - **Package build strategy** — ship `packages/core` as TypeScript source
   (simpler, one source of truth, needs `transpilePackages` + Metro config) or
   build to `dist` (works everywhere with no bundler config, adds a build step).

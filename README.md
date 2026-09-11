@@ -288,7 +288,7 @@ whole deploy. The API and the SPA are not deployed yet;
 
 ## Status
 
-Features 0–35 implemented. Features 0–33 are running in production on Vercel +
+Features 0–35 implemented. Features 0–32 are running in production on Vercel +
 Neon; the API, the SPA and the phone app live on this branch and have not
 shipped yet.
 
