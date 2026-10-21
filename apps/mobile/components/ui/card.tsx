@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 /**
  * The bordered block every dashboard-shaped screen is made of.
  *
- * `@supplies/ui`'s `Card` is web-only (SPA_API_PORT.md §4.3), so this is the
+ * `@supplies/ui`'s `Card` is web-only (docs/ARCHITECTURE.md §4), so this is the
  * same idea rebuilt with the same tokens rather than a missed reuse. It stays
  * one component with two optional slots: a card that needed a `CardFooter`
  * would be a screen section pretending to be a card.

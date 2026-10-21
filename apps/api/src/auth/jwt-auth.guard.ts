@@ -16,7 +16,13 @@ export const IS_PUBLIC = "isPublic";
 /** Opts a route out of the global guard. Login cannot require a login. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
 
-export type Caller = { userId: string; householdId: string; email: string };
+export type Caller = {
+  userId: string;
+  householdId: string;
+  email: string;
+  /** The caller's session (`AccessClaims.sid`), absent on tokens minted before it existed. */
+  sessionId?: string;
+};
 
 type AuthedRequest = FastifyRequest & { caller?: Caller };
 
@@ -61,6 +67,7 @@ export class JwtAuthGuard implements CanActivate {
       userId: claims.sub,
       householdId: claims.householdId,
       email: claims.email,
+      sessionId: claims.sid,
     };
     return true;
   }

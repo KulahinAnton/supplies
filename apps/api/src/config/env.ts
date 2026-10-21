@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * Every origin this API knows about is a variable with a localhost default
- * (SPA_API_PORT.md §4.2). No domain appears in source, so the first deploy is
+ * (docs/ARCHITECTURE.md §5). No domain appears in source, so the first deploy is
  * a matter of filling values in rather than editing code.
  *
  * Validated **once, at boot**, and loudly. A missing or malformed origin has
@@ -34,6 +34,29 @@ const originList = (fallback: string) =>
 const booleanish = z
   .enum(["true", "false", "1", "0"])
   .transform((value) => value === "true" || value === "1");
+
+/**
+ * Fastify's `trustProxy`: `false`, `true`, a hop count, or a list of
+ * addresses and CIDRs (`"10.0.0.0/8,127.0.0.1"`).
+ */
+export type TrustProxy = boolean | number | string;
+
+const ADDRESS_LIST = /^[0-9a-fA-F:./]+(\s*,\s*[0-9a-fA-F:./]+)*$/;
+
+const trustProxy = z
+  .string()
+  .default("false")
+  .transform((raw): TrustProxy => {
+    const value = raw.trim();
+    if (value === "" || value === "false") return false;
+    if (value === "true") return true;
+    if (/^\d+$/.test(value)) return Number(value);
+    return value;
+  })
+  .refine((value) => typeof value !== "string" || ADDRESS_LIST.test(value), {
+    message:
+      "TRUST_PROXY must be true, false, a number of proxy hops, or comma-separated addresses/CIDRs",
+  });
 
 const schema = z
   .object({
@@ -75,6 +98,19 @@ const schema = z
     COOKIE_DOMAIN: z.string().optional(),
     COOKIE_SAMESITE: z.enum(["lax", "strict", "none"]).default("lax"),
     COOKIE_SECURE: booleanish.default(false),
+
+    /**
+     * Whether to believe `X-Forwarded-For`. Off by default, which is right
+     * locally and wrong behind any host's proxy: there, every request arrives
+     * from the proxy's address, so the in-memory rate limiter puts the whole
+     * household in one bucket and sign-in has no per-client limit at all.
+     *
+     * Prefer a **hop count** (`1` behind one load balancer) or the proxy's
+     * addresses. `true` trusts any `X-Forwarded-For`, so it is only safe when
+     * the API cannot be reached except through the proxy; otherwise a client
+     * can pick its own address and with it its own rate-limit bucket.
+     */
+    TRUST_PROXY: trustProxy,
 
     /**
      * Signs access and refresh tokens. Deliberately NOT `AUTH_SECRET`: that one

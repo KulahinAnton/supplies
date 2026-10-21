@@ -4,7 +4,7 @@
 server, a NestJS API, a Vite SPA and a React Native bundle can each import
 without any of them dragging in the other three's dependencies.
 
-Plan and phases: [SPA_API_PORT.md](../../SPA_API_PORT.md).
+Where it sits and what may import it: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §1 and §3.
 
 ## The rule that matters
 
@@ -17,9 +17,11 @@ every consumer inherits it.
 exactly this reason. They are where the database meets these rules, and that
 seam belongs to whoever owns the database, not to the rules.
 
-`telegram-link.ts` uses `node:crypto` and is the one module here a React Native
-build must not import. That is safe because of how the package is exported,
-below — not because anyone remembered.
+Two modules are server-only, and ESLint forbids the SPA and the phone from
+importing either: `telegram-link.ts` uses `node:crypto` (the one builtin the
+package-wide ban allows), and `claude.ts` holds the Anthropic client. That is
+safe because of how the package is exported, below, and because the lint rule
+names them. Nobody has to remember.
 
 ## The runtimes disagree about `Intl`, and Hermes is the strict one
 
@@ -90,8 +92,11 @@ Subpaths also mean the import says what it needs, which is the same reason
 
 The package ships TypeScript and has no build step. One source of truth, no
 stale artefact, and no watcher to forget to run. The cost is one line per
-consumer that bundles it — `transpilePackages: ["@supplies/core"]` in
-`next.config.ts`, and the equivalent when the SPA and the mobile app arrive.
+consumer that bundles it: `transpilePackages` in `apps/web/next.config.ts`,
+and `watchFolders` plus `unstable_enablePackageExports` in
+`apps/mobile/metro.config.js`. Vite needs nothing. The API compiles the
+sources into its own `dist` and reaches them through relative bridge files
+([apps/api/CLAUDE.md](../../apps/api/CLAUDE.md)).
 
 ## Decimal
 
@@ -102,8 +107,8 @@ with values computed here — decimal.js identifies instances by a prototype
 `toStringTag` rather than `instanceof`, precisely so a value from a second copy
 of the library still counts.
 
-That property is load-bearing and invisible. `packages/db/src/prisma-decimal.test.ts` — in the
-app, where importing Prisma is free — pins it, because a regression would be
+That property is load-bearing and invisible. `packages/db/src/prisma-decimal.test.ts`,
+in the package where importing Prisma is allowed, pins it, because a regression would be
 silently wrong quantities rather than a crash.
 
 Values reach the database as strings, through `toDbQuantity()`.
@@ -121,13 +126,21 @@ Colocated, and they moved with the code they cover. They import relatively, so
 `pnpm test` runs them identically from a checkout that has no database, no
 `.env` and no generated client.
 
-The exceptions live in `lib/` on purpose: the drift guards above need Prisma to
-compare against, which is exactly what this package may not have.
+The exceptions live in `packages/db/src/` on purpose: the drift guards above
+need Prisma to compare against, which is exactly what this package may not
+have.
 
 ## Messages
 
 Pure functions return a message **key plus params** (`ruleMessage(...)`), never
-a formatted sentence — `src/messages.ts` holds the Ukrainian. That predates this
-package and matters more now: the API will send keys over HTTP, and three
-clients will render them. A rule that returned prose would force the same
-sentence to be translated in three places.
+a formatted sentence. `src/messages.ts` holds the Ukrainian. That predates this
+package and matters more now: the API sends keys over HTTP, and three clients
+render them. A rule that returned prose would force the same sentence to be
+written in three places.
+
+## Contracts
+
+`src/contracts/` holds one zod object per API response shape. The clients'
+types, the OpenAPI schemas and the API's contract tests all derive from them
+([docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §7). A field an endpoint
+starts sending is added here first, or no client can read it.

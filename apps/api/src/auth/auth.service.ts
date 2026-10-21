@@ -66,25 +66,33 @@ export class AuthService {
     };
   }
 
-  /** Issues a pair and records the refresh token's hash. */
+  /**
+   * Issues a pair and records the refresh token's hash.
+   *
+   * The row is written first so the access token can carry its id as `sid`:
+   * that is how a password change knows which session is the caller's own and
+   * keeps it (Feature 1).
+   */
   async issue(user: SessionUser, userAgent?: string): Promise<TokenPair> {
-    const claims: AccessClaims = {
-      sub: user.id,
-      householdId: user.householdId,
-      email: user.email,
-    };
-    const accessToken = await this.jwt.signAsync(claims);
-
     const refreshToken = newRefreshToken();
     const days = this.config.get("REFRESH_TOKEN_TTL_DAYS", { infer: true });
-    await this.prisma.client.apiRefreshToken.create({
+    const session = await this.prisma.client.apiRefreshToken.create({
       data: {
         userId: user.id,
         tokenHash: hashToken(refreshToken),
         expiresAt: refreshExpiry(days),
         userAgent: userAgent?.slice(0, 255),
       },
+      select: { id: true },
     });
+
+    const claims: AccessClaims = {
+      sub: user.id,
+      householdId: user.householdId,
+      email: user.email,
+      sid: session.id,
+    };
+    const accessToken = await this.jwt.signAsync(claims);
 
     return { accessToken, refreshToken, expiresIn: this.accessTtlSeconds() };
   }
@@ -135,6 +143,9 @@ export class AuthService {
         `Refresh race for user ${stored.userId}; issuing a pair inside the grace window`,
       );
     }
+    // Ended by a password reset or change. Refused, and deliberately not read
+    // as theft: that device was signed out on purpose and does not know it yet.
+    if (verdict.status === "revoked") throw new ApiRuleError(401, "auth.sessionRequired");
     if (verdict.status === "expired") throw new ApiRuleError(401, "auth.sessionRequired");
     if (!stored.user.isActive) throw new ApiRuleError(401, "auth.sessionRequired");
 

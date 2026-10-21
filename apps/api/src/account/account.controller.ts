@@ -23,7 +23,8 @@ export class AccountController {
 
   @Post("password")
   @ApiOperation({
-    summary: "Change your own password. The current one has to be right.",
+    summary:
+      "Change your own password. The current one has to be right. Signs out every other session.",
   })
   async password(
     @CurrentUser() caller: Caller,
@@ -32,7 +33,10 @@ export class AccountController {
     // The zod schema in `@supplies/core/validation/auth` is applied inside the
     // service, so the web form and this endpoint refuse the same passwords for
     // the same reasons — and both answer with a message key.
-    return unwrap(await changePassword(caller, body));
+    // Every other session for this user ends; this one stays signed in.
+    return unwrap(
+      await changePassword(caller, body, { keepSessionId: caller.sessionId }),
+    );
   }
 
   @Post("invite")

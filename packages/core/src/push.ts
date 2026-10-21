@@ -30,7 +30,7 @@ export type PushMessage = {
 
 /**
  * The endpoint, overridable for tests. No domain is hardcoded anywhere else in
- * this repo (SPA_API_PORT.md §4.2); this one is Expo's own and cannot be
+ * this repo (docs/ARCHITECTURE.md §5); this one is Expo's own and cannot be
  * configured per deployment, so it is a constant with an escape hatch rather
  * than an environment variable nobody would ever set.
  */

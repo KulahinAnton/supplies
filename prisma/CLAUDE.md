@@ -5,10 +5,11 @@ Domain rules these tables serve: [PROJECT_PROMPT.md §3](../PROJECT_PROMPT.md).
 ## Workflow
 
 - Config lives in `prisma.config.ts` at the repo root (Prisma 7 — **not** in `schema.prisma` or `package.json`). The datasource URL comes from there, which is why the `datasource db` block has no `url`.
-- `pnpm db:up` — Postgres 17 via docker compose, host port **5434**.
+- `pnpm db:up` — Postgres 17 via docker compose, host port **5434**. (Production runs Postgres 18 on Neon; see docs/ROADMAP.md.)
 - `pnpm db:migrate` — `prisma migrate dev`, writes to `prisma/migrations/`.
 - `pnpm db:seed` — runs `prisma/seed.ts` via tsx.
-- `pnpm prisma generate` regenerates the client into `lib/generated/prisma/` (gitignored; also runs on `postinstall`).
+- `pnpm prisma generate` regenerates the one client into `packages/db/src/generated/prisma/` (gitignored; also runs on `postinstall` and in `pnpm build`). It is generated as **CommonJS** (`moduleFormat = "cjs"`) so that Nest can run it and Next, Vite and the scripts can all load it.
+- Production migrations run through `pnpm migrate:deploy`, never `prisma migrate deploy` against the pooled URL ([docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) §2).
 
 ## Conventions
 
@@ -45,12 +46,12 @@ Every seeded batch also writes its `PURCHASE` movement, so the seed obeys the sa
 
 ## After changing the schema: clear `.next`, not just restart
 
-`pnpm prisma generate` rewrites `lib/generated/prisma/`, but **Turbopack has already compiled the old client into `.next/dev/server/chunks/`** and keeps serving that chunk across a restart. The symptom is a `PrismaClientValidationError` naming your new column — *"Unknown argument `note`. Did you mean `item`?"* — while the generated client on disk plainly has it. Reads often keep working (the missing field just comes back `undefined`), so only writes fail, which makes it look like an action bug.
+`pnpm prisma generate` rewrites `packages/db/src/generated/prisma/`, but **Turbopack has already compiled the old client into `apps/web/.next/dev/server/chunks/`** and keeps serving that chunk across a restart. The symptom is a `PrismaClientValidationError` naming your new column — *"Unknown argument `note`. Did you mean `item`?"* — while the generated client on disk plainly has it. Reads often keep working (the missing field just comes back `undefined`), so only writes fail, which makes it look like an action bug.
 
 The fix, in this order:
 
-1. stop the dev server
-2. `rmdir /s /q .next` (it is locked while the server runs)
+1. stop the dev server (`pnpm dev:stop` if you used `dev:all`)
+2. `rm -rf apps/web/.next` (it is locked while the server runs)
 3. `pnpm dev`
 
 ## A stale `.next` also breaks auth, not just Prisma

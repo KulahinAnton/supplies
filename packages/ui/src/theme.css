@@ -3,7 +3,7 @@
 
   Shared by every web client. `apps/web` and `apps/spa` each `@import` this
   after `tailwindcss`, so a colour changed here changes both, and neither can
-  drift into its own palette. See SPA_API_PORT.md §4.3.
+  drift into its own palette. See docs/ARCHITECTURE.md §6.
 
   Light is defined on bare `:root` and dark under `.dark`. Never define a
   colour only inside `.dark` — the light value is the fallback for every

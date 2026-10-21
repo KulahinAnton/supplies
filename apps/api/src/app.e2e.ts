@@ -844,6 +844,72 @@ describe("account and telegram", () => {
     expect((body as unknown as { key: string }).key.startsWith("auth.")).toBe(true);
   });
 
+  /**
+   * Feature 1 — a new password ends the API sessions the old one opened.
+   *
+   * Run as the seed's second member, so the demo login the rest of the suite
+   * signs in with is never touched, and with the SAME password: the hash
+   * changes and the password does not, so a run that fails half way leaves
+   * nothing to put back. The reset token row is removed by `afterAll`.
+   */
+  const OLENA = { email: "olena@example.com" };
+
+  it("ends every API session when the password is reset", async () => {
+    const phone = await signIn(OLENA);
+
+    const raw = `e2e-reset-${Date.now()}`;
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: OLENA.email } });
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: sha256(raw),
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    const reset = await request("POST", "/api/auth/reset-password", {
+      body: { token: raw, password: LOGIN.password },
+    });
+    expect([200, 201]).toContain(reset.status);
+
+    // The session that existed before the reset is gone. Without this, a
+    // stolen phone session would outlive the reset meant to end it.
+    const refresh = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: phone.refreshToken },
+    });
+    expect(refresh.status).toBe(401);
+
+    // A reset ends sessions, not the account.
+    const again = await request("POST", "/api/auth/login", {
+      body: { ...LOGIN, ...OLENA },
+    });
+    expect(again.status).toBe(201);
+  });
+
+  it("keeps the session that changed the password, and ends the others", async () => {
+    const thisPhone = await signIn(OLENA);
+    const otherPhone = await signIn(OLENA);
+
+    const change = await request("POST", "/api/account/password", {
+      token: thisPhone.accessToken,
+      body: { currentPassword: LOGIN.password, newPassword: LOGIN.password },
+    });
+    expect([200, 201]).toContain(change.status);
+
+    // The other device finds out at its next refresh...
+    const other = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: otherPhone.refreshToken },
+    });
+    expect(other.status).toBe(401);
+
+    // ...and that refusal is not read as theft. Were it `reuse`, it would have
+    // burned every session, this one included, and this would be 401 too.
+    const kept = await request("POST", "/api/auth/refresh", {
+      body: { refreshToken: thisPhone.refreshToken },
+    });
+    expect(kept.status).toBe(201);
+  });
+
   it("names the household behind a live invite, and 404s a spent one", async () => {
     const { accessToken } = await signIn();
     const created = await request("POST", "/api/account/invite", {

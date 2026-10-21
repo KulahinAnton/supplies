@@ -2,7 +2,7 @@
 
 /*
   The palette, the radius scale, the dark variant and the base layer live in
-  `packages/ui`, shared with the SPA (SPA_API_PORT.md §4.3). Anything added
+  `packages/ui`, shared with the SPA (docs/ARCHITECTURE.md §6). Anything added
   below is, by definition, something only the Next app has — which today is
   the font.
 

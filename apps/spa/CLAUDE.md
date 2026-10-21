@@ -1,12 +1,14 @@
 # apps/spa — React without a meta-framework
 
 Vite + React Router + TanStack Query, against the API in
-[`apps/api`](../api/CLAUDE.md). Plan and phases:
-[SPA_API_PORT.md](../../SPA_API_PORT.md).
+[`apps/api`](../api/CLAUDE.md). Where it sits:
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md). How it was built, screen by
+screen: [docs/archive/SPA_API_PORT.md](../../docs/archive/SPA_API_PORT.md)
+Phases 2.9 and 2.10. Not deployed yet:
+[docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md) §6.
 
 **Parity is reached.** Every screen the Next app has, this one has, including
-the four public auth flows — and the Phase 2.9 checklist in SPA_API_PORT.md is
-clear. Phase 2.10's audit closed the last of it. The one route with no Next
+the four public auth flows. The one route with no Next
 counterpart is `/status`, which exists to prove the engine runs in a browser
 bundle with no Prisma in it.
 
@@ -27,7 +29,7 @@ pnpm spa:dev     # just this one
 ```
 
 `VITE_API_URL` defaults to `http://localhost:3200`; `src/api/client.ts` is the
-only file that knows a URL (SPA_API_PORT.md §4.2). Vite inlines it at build
+only file that knows a URL (docs/ARCHITECTURE.md §5). Vite inlines it at build
 time, so it is a build-time variable, not a runtime lookup.
 
 ## What this replaces, and with what
@@ -42,8 +44,8 @@ time, so it is a build-time variable, not a runtime lookup.
 | `next-themes` | `src/components/theme.tsx` + an inline script in `index.html` |
 | `next/font` | the system UI stack — see `src/index.css` |
 
-**Write the query-key map before porting screens, not during** (SPA_API_PORT.md
-§9.5). `revalidatePath` had no equivalent here; every mutation needs an explicit
+**Write the query-key map before porting screens, not during**
+(docs/ARCHITECTURE.md §9). `revalidatePath` had no equivalent here; every mutation needs an explicit
 decision about what it invalidates, and making those up one screen at a time is
 how a cache starts lying. `e2e/spa.spec.ts` is what proves the map is right: a
 forgotten key looks exactly like a successful write until someone notices the
@@ -143,9 +145,9 @@ app turned itself in; the symptom was being signed out immediately after
 registering.
 
 The guard is per **document**, so it fixes a double mount and not two tabs
-loading at the same instant — those have two module instances and two guards.
-That race is real and narrow, and it is an open item in SPA_API_PORT.md §10
-rather than something this fixed.
+loading at the same instant: those have two module instances and two guards.
+The server covers that case with a 10-second grace window for a token revoked
+by rotation (`REFRESH_GRACE_MS`, docs/ARCHITECTURE.md §8).
 
 Related, in `api/client.ts`: a 401 clears the access token only when the token
 still installed is the one that failing attempt carried. Otherwise a slow

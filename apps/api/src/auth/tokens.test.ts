@@ -153,3 +153,34 @@ describe("classifyRefresh — the grace window", () => {
     expect(classifyRefresh(rotated(ago(50)), now, 10)).toEqual({ status: "reused" });
   });
 });
+
+/**
+ * Feature 1 — a token ended by a password reset or change.
+ *
+ * The device it belonged to was signed out on purpose and will still try to
+ * refresh. Reading that as theft would burn every session, including the one a
+ * password change deliberately kept, so it is refused and nothing more.
+ */
+describe("classifyRefresh — a password reset or change", () => {
+  const future = new Date("2026-12-31T00:00:00Z");
+  const now = new Date("2026-06-01T00:00:00Z");
+  const byPassword = (revokedAt: Date) => ({
+    expiresAt: future,
+    revokedAt,
+    revokedReason: "password" as const,
+  });
+
+  it("refuses it without calling it reuse", () => {
+    expect(classifyRefresh(byPassword(new Date("2026-05-01T00:00:00Z")), now)).toEqual({
+      status: "revoked",
+    });
+  });
+
+  it("gives it no grace, however recent", () => {
+    // A grace window here would hand the device that was just signed out a
+    // fresh pair, which is exactly what the reset was for.
+    expect(classifyRefresh(byPassword(new Date(now.getTime() - 1_000)), now)).toEqual({
+      status: "revoked",
+    });
+  });
+});

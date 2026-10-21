@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIGEST_HOUR_KYIV, kyivHour } from "./digest";
+import { DIGEST_HOUR_KYIV, isDigestHour, kyivHour } from "./digest";
 
 /**
  * Feature 19 — the DST arithmetic behind the scheduled digest.
@@ -48,5 +48,29 @@ describe("kyivHour", () => {
     expect(kyivHour(new Date("2026-07-15T09:00:00Z"))).toBe(
       kyivHour(new Date("2026-07-15T12:00:00+03:00")),
     );
+  });
+});
+
+/**
+ * Feature 19 — `pnpm digest:run` honours each household's `digestHour`, and
+ * that hour is Kyiv local time. It was compared with the UTC hour, which put a
+ * digest set for 08:00 at 11:00 in summer and 10:00 in winter.
+ */
+describe("isDigestHour", () => {
+  it("matches 08:00 Kyiv at 05:00 UTC in summer (EEST, UTC+3)", () => {
+    expect(isDigestHour(8, new Date("2026-07-15T05:00:00Z"))).toBe(true);
+    // The old comparison would have fired here instead.
+    expect(isDigestHour(8, new Date("2026-07-15T08:00:00Z"))).toBe(false);
+  });
+
+  it("matches 08:00 Kyiv at 06:00 UTC in winter (EET, UTC+2)", () => {
+    expect(isDigestHour(8, new Date("2026-01-15T06:00:00Z"))).toBe(true);
+    expect(isDigestHour(8, new Date("2026-01-15T08:00:00Z"))).toBe(false);
+  });
+
+  it("handles midnight, where the Kyiv day and the UTC day differ", () => {
+    // 22:00 UTC on 14 July is 01:00 on 15 July in Kyiv.
+    expect(isDigestHour(1, new Date("2026-07-14T22:00:00Z"))).toBe(true);
+    expect(isDigestHour(0, new Date("2026-07-14T21:00:00Z"))).toBe(true);
   });
 });

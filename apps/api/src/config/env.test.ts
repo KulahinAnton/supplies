@@ -102,6 +102,36 @@ describe("production tightens what development allows", () => {
   });
 });
 
+/**
+ * Behind a host's proxy every request arrives from the proxy's address, and
+ * the in-memory rate limiter then puts the whole household in one bucket.
+ * Off by default, because locally there is no proxy to believe.
+ */
+describe("TRUST_PROXY", () => {
+  it("is off unless asked for", () => {
+    expect(validateEnv(MINIMAL).TRUST_PROXY).toBe(false);
+    expect(validateEnv({ ...MINIMAL, TRUST_PROXY: "" }).TRUST_PROXY).toBe(false);
+    expect(validateEnv({ ...MINIMAL, TRUST_PROXY: "false" }).TRUST_PROXY).toBe(false);
+  });
+
+  it("reads a hop count as a number, which is the form Fastify needs", () => {
+    expect(validateEnv({ ...MINIMAL, TRUST_PROXY: "1" }).TRUST_PROXY).toBe(1);
+  });
+
+  it("accepts true, and a list of proxy addresses and ranges", () => {
+    expect(validateEnv({ ...MINIMAL, TRUST_PROXY: "true" }).TRUST_PROXY).toBe(true);
+    expect(
+      validateEnv({ ...MINIMAL, TRUST_PROXY: "10.0.0.0/8, 127.0.0.1,::1" }).TRUST_PROXY,
+    ).toBe("10.0.0.0/8, 127.0.0.1,::1");
+  });
+
+  it("refuses a value that is none of those, rather than guessing", () => {
+    // "yes" is not an address. Passing it through would make Fastify trust
+    // nothing while the deployment believed it trusted its proxy.
+    expect(() => validateEnv({ ...MINIMAL, TRUST_PROXY: "yes" })).toThrow(/TRUST_PROXY/);
+  });
+});
+
 describe("error reporting", () => {
   it("names every bad variable at once, not the first one", () => {
     // Fixing a config one restart at a time is how a five-minute job becomes

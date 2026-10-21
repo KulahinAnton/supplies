@@ -1,8 +1,9 @@
 # packages/ui — the design system, shared by both web clients
 
-The tokens, the primitives and the two domain badges that `apps/web` and
-`apps/spa` both render. Why it exists rather than each app owning its own:
-[SPA_API_PORT.md](../../SPA_API_PORT.md) §4.3.
+The tokens, the primitives, the domain badges and the few stateful pieces that
+`apps/web` and `apps/spa` both render. Why it exists rather than each app
+owning its own: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §6, and the
+rule that decides what may be added here: §4 of the same file.
 
 **Web only.** React Native has no DOM and no Tailwind class strings, so
 `apps/mobile` will share `packages/core` and the API client and write its own
@@ -15,6 +16,10 @@ components. That is a real boundary, not a failure to reuse.
 | `theme.css` | the oklch palette, `.dark`, the radius scale, `@theme inline`, and the base layer |
 | `button` `card` `dialog` `dropdown-menu` `input` `label` `separator` `switch` `textarea` | shadcn/ui on **Base UI** (not Radix — `render` prop, never `asChild`), base-nova preset |
 | `state-badges` | `StockBadge` and `ExpiryBadge` |
+| `barcode-scan-button` | the camera dialog: `BarcodeDetector`, with `@zxing/browser` loaded lazily as the fallback (it is larger than the rest of a first paint) |
+| `settings-list-panel` | Feature 15's list: drag to reorder (dnd-kit, touch included), star a default, add, rename, delete. Categories, locations and sets all use it |
+| `id-set-store`, `use-collapsed-groups`, `use-shown-archived` | per-person, per-device sets of ids in localStorage (Features 11 and 14.2), read through `useSyncExternalStore` |
+| `use-item-sort` | the remembered sort mode for the items list (Feature 12.2) |
 | `utils` | `cn()` |
 
 Imported by subpath, no barrel, the same as `@supplies/core`:
@@ -28,9 +33,17 @@ like".
 
 ## Adding a component
 
+`shadcn` is a devDependency of `apps/web`, which also holds the
+`components.json`. From `apps/web`:
+
 ```bash
-pnpm dlx shadcn@latest add <name>     # from apps/web, then move the file here
+pnpm exec shadcn add <name>
 ```
+
+Then move the file from `apps/web/components/ui/` into `packages/ui/src/`,
+and change its `@/lib/utils` import to `./utils` (`components.json` still
+names an alias that no longer exists). **Not `pnpm dlx shadcn`**: under
+pnpm's dlx sandbox it cannot resolve `zod` and dies.
 
 Twelve primitives that `shadcn add` had installed and nothing ever imported
 were deleted when this package was extracted — `alert`, `avatar`, `badge`,

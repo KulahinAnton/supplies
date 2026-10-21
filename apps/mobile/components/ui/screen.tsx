@@ -6,9 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * Every screen's outer frame.
  *
  * `SafeAreaView` from `react-native-safe-area-context` on all of them, even
- * though Android mostly does not need it — SPA_API_PORT.md names this as one of
- * four things that are free now and expensive to retrofit when Phase 5 adds
- * iOS. Doing it in one component means no screen can forget.
+ * though Android mostly does not need it — docs/ARCHITECTURE.md §11 names this as one of
+ * the things that are free now and expensive to retrofit if iOS comes back. Doing it in one component means no screen can forget.
  *
  * `edges` excludes the bottom by default: a scrolling list should run under the
  * gesture bar rather than stopping short of it, and screens with a fixed footer

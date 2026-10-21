@@ -3,7 +3,7 @@ const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
 /**
- * SPA_API_PORT.md §9.2 — the risk this file exists to close.
+ * docs/ARCHITECTURE.md §11 (Metro and pnpm) — the risk this file exists to close.
  *
  * Metro was written for a single application directory and finds modules by
  * walking `node_modules` upward from the importer. pnpm gives every package a

@@ -1,7 +1,7 @@
 /**
  * The one place the SPA knows a URL, and the one place it knows about tokens.
  *
- * `VITE_API_URL` with a localhost default, per SPA_API_PORT.md §4.2 — no domain
+ * `VITE_API_URL` with a localhost default, per docs/ARCHITECTURE.md §5 — no domain
  * is written into this source tree, so deploying is filling a value in rather
  * than editing code. Vite inlines `import.meta.env` at build time, which is why
  * this is a build-time variable and not a runtime fetch.

@@ -1,5 +1,5 @@
 /**
- * The query-key map, written before the screens (SPA_API_PORT.md §9.5) — and
+ * The query-key map, written before the screens (docs/ARCHITECTURE.md §9) — and
  * deliberately the same shape as the SPA's `api/keys.ts`.
  *
  * `revalidatePath` has no equivalent on a phone either. Every mutation has to

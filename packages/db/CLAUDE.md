@@ -20,9 +20,23 @@ implementation. `bot/CLAUDE.md` has made the same promise since Feature 9.
   Next writes a NextAuth cookie, the API issues a token pair, both from the row
   this returns
 - `queries.ts` — the only place the DB meets the pure engine; pages and
-  endpoints never compute states themselves
-- `stock-service.ts` — the single write path, taking an `Actor` rather than
-  reading a session, which is what makes "one implementation, N front ends" real
+  endpoints never compute states themselves. The item list loads every item
+  and pages in memory on purpose (spec Feature 28)
+- `stock-service.ts` — the single stock write path, taking an `Actor` rather
+  than reading a session, which is what makes "one implementation, N front
+  ends" real. Every batch update is conditional on the quantity it planned
+  from, and a conflict re-plans the whole operation (spec §3.7);
+  `stock-conflict.test.ts` drives that branch without a database
+- `item-service.ts`, `shopping-service.ts`, `shopping-groups-service.ts`,
+  `settings-service.ts` — every other write, each moved here when the API
+  needed the same rule (Feature 34): "at most one default", the whole-list
+  reorder, refusing to delete a set with members, ticking a row being a
+  stock-in
+- `barcode-service.ts` — the lookup chain (household → Open Food Facts →
+  METRO → GEPIR) and the `BarcodeFact` cache
+- `recipes-service.ts` — Feature 32's prompt and its `aiEnabled` refusal
+- `push-service.ts` — Feature 35's device registry and send
+- `telegram-service.ts` — minting the chat-link token
 - `email.ts` — Resend over plain fetch, plus the two templates. **Both take the
   base URL as an argument** rather than reading `process.env.APP_URL`: the Next
   app and the API are separate processes with separate environments, and

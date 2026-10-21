@@ -12,7 +12,7 @@ import { apiUrl } from "./url";
  * never sees the value. Here there are no cookies — the token comes back in
  * the JSON body, goes to SecureStore, and is sent explicitly. Sharing this
  * module would mean one of the two clients pretending to be the other, which
- * is exactly the sharing SPA_API_PORT.md §4.3 rules out.
+ * is exactly the sharing docs/ARCHITECTURE.md §4 rules out.
  *
  * What IS shared is everything above it: the contracts, the message catalogue,
  * and the rules.

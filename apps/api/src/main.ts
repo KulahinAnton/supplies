@@ -13,12 +13,18 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { EmptyBodyPipe } from "./common/empty-body.pipe";
 import { RuleErrorFilter } from "./common/rule-error.filter";
-import type { Env } from "./config/env";
+import { validateEnv, type Env } from "./config/env";
 
 async function bootstrap(): Promise<void> {
+  /**
+   * `trustProxy` belongs to the Fastify instance, which exists before Nest's
+   * `ConfigService` does, so this one setting is read here. Same schema, same
+   * refusal: `ConfigModule` validates the environment again a moment later.
+   */
+  const { TRUST_PROXY } = validateEnv(process.env);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter({ trustProxy: TRUST_PROXY }),
   );
 
   const config = app.get<ConfigService<Env, true>>(ConfigService);
@@ -37,7 +43,7 @@ async function bootstrap(): Promise<void> {
   /**
    * `credentials` because the refresh token travels as an httpOnly cookie for
    * browser clients. The React Native app sends a bearer token instead and
-   * needs none of this — see SPA_API_PORT.md §4.2 for why the cookie settings
+   * needs none of this — see docs/ARCHITECTURE.md §5 for why the cookie settings
    * are environment variables rather than constants.
    *
    * `methods` is spelled out because `@fastify/cors` defaults to

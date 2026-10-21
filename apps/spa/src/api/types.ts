@@ -3,7 +3,7 @@
  * plus the revivers JSON forces on top of them.
  *
  * These used to be hand-written here, 332 lines of it, copied from what the
- * endpoints were observed to send. SPA_API_PORT.md Phase 2.2 replaces that
+ * endpoints were observed to send. The contracts (docs/ARCHITECTURE.md §7) replace that
  * with one definition per shape in the engine, inferred here and **parsed by
  * the API's own e2e suite against a live database**, so the copy that could
  * drift no longer exists. See `packages/core/src/contracts/common.ts` for why

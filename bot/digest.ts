@@ -45,6 +45,18 @@ export function kyivHour(now: Date = new Date()): number {
   );
 }
 
+/**
+ * Whether a household's chosen `digestHour` is the current hour.
+ *
+ * The hour is **Kyiv local time**, the clock Settings shows and the one
+ * `DIGEST_HOUR_KYIV` uses. This used to compare it with `getUTCHours()`, so
+ * `pnpm digest:run` delivered a digest set for 08:00 at 11:00 in summer and
+ * 10:00 in winter.
+ */
+export function isDigestHour(digestHour: number, now: Date = new Date()): boolean {
+  return kyivHour(now) === digestHour;
+}
+
 export type DigestResult = {
   households: number;
   messages: number;
@@ -66,7 +78,7 @@ export async function sendDigests(options: {
 
   const bot = new Bot(token);
   const today = todayUTC();
-  const currentHour = new Date().getUTCHours();
+  const now = new Date();
 
   const households = await prisma.household.findMany({
     include: { users: { include: { telegramLink: true } } },
@@ -76,7 +88,7 @@ export async function sendDigests(options: {
 
   for (const household of households) {
     if (!options.force) {
-      if (options.respectHour && household.digestHour !== currentHour) continue;
+      if (options.respectHour && !isDigestHour(household.digestHour, now)) continue;
       if (
         household.lastDigestOn &&
         formatDateKey(household.lastDigestOn) === formatDateKey(today)

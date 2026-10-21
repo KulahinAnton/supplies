@@ -11,7 +11,7 @@ Spec: [PROJECT_PROMPT.md Feature 9](../PROJECT_PROMPT.md).
 ## Running it
 
 - `pnpm bot:dev` / `pnpm bot:start` — long polling, for local development (`bot/index.ts`).
-- Production uses the webhook at `app/api/telegram/route.ts` (Node runtime — the bot touches Prisma). Telegram echoes `TELEGRAM_WEBHOOK_SECRET` in the `x-telegram-bot-api-secret-token` header and the route rejects anything else, so the URL alone is not a credential.
+- Production uses the webhook at `apps/web/app/api/telegram/route.ts` (Node runtime — the bot touches Prisma). Whether a call may reach the bot is decided by `bot/webhook-gate.ts`: the secret header must match, and **with no secret configured everything is refused (503)**. Telegram echoes `TELEGRAM_WEBHOOK_SECRET` in the `x-telegram-bot-api-secret-token` header and the route rejects anything else, so the URL alone is not a credential.
 - Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME` (for the deep link), plus `AUTH_SECRET` (signs link tokens).
 
 ## Linking a chat
@@ -31,7 +31,17 @@ Stateless on purpose: no table, no cleanup job, and it cannot be replayed once e
 | `/list` | the unchecked shopping list |
 | `/add` | guided: item → quantity → expiry |
 | `/took` | guided: item → quantity (FEFO consume) |
+| `/menu` | the home screen (Feature 17.5) |
 | `/cancel` | drop the current conversation |
+
+## The daily digest
+
+`digest.ts` builds and sends it; `apps/web/app/api/cron/digest/route.ts` (Vercel
+Cron, noon Kyiv) and `pnpm digest:run` (hourly, respecting
+`Household.digestHour`) both call it. Timing and its limits:
+[docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) §5. Phones get the same text as a
+push notification after the chats have theirs (Feature 35), and push failures
+never fail the run.
 
 ## Switching between the deployed bot and your machine
 

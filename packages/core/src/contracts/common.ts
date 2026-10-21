@@ -4,7 +4,7 @@ import { MOVEMENT_REASONS, UNITS } from "../units";
 /**
  * The wire, described once.
  *
- * SPA_API_PORT.md Phase 2.2 asked for types generated from the OpenAPI
+ * The original plan asked for types generated from the OpenAPI
  * document. That turned out to be the wrong direction. The document is
  * produced by decorators, and nothing checks a decorator against what the
  * handler actually returns — so generating clients from it would have made a

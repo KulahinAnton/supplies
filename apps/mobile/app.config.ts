@@ -28,7 +28,7 @@ const profile = process.env.EAS_BUILD_PROFILE ?? "preview";
  * Allowing it is a real weakening: it is app-wide, not scoped to one host,
  * because the only alternative Expo exposes is a network security config
  * naming a domain, and the LAN address belongs to whoever is building — it
- * cannot live in this repo (SPA_API_PORT.md §4.2).
+ * cannot live in this repo (docs/ARCHITECTURE.md §5).
  *
  * Hence the profile check. A production build gets **no** cleartext and will
  * therefore refuse to talk to a dev machine at all, which is the correct

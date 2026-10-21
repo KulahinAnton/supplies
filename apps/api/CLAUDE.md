@@ -1,7 +1,10 @@
 # apps/api — NestJS over the shared engine
 
-The HTTP API the SPA and the React Native app will both talk to. Plan and
-phases: [SPA_API_PORT.md](../../SPA_API_PORT.md).
+The HTTP API the SPA and the React Native app talk to. The rules it enforces:
+[PROJECT_PROMPT.md](../../PROJECT_PROMPT.md) Feature 34. The auth design and
+the configuration model: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md)
+§5 and §8. Not deployed yet; what the first deploy needs is in
+[docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md) §6.
 
 Nothing here owns a rule. The rules are in
 [`@supplies/core`](../../packages/core/CLAUDE.md); this is the layer that
@@ -42,20 +45,26 @@ extensions in its source — and Turbopack does not resolve `./decimal.js` to
 `decimal.ts`. One of the two consumers breaks whichever way core is written. The
 generator option avoids the choice entirely.
 
-**Its own generated client, and one file allowed `../../../`.** A tsconfig
-`paths` alias resolves for the type checker and is left verbatim in the emitted
+**Four bridge files, and only they may use `../../../`.** A tsconfig `paths`
+alias resolves for the type checker and is left verbatim in the emitted
 JavaScript, so an aliased import reaches Node as a specifier nothing can
-resolve. Hence a second generator writing to `src/generated/prisma`, and
-`src/core.ts` reaching into `packages/core/src` relatively so the emitted
-specifier still lands on something real inside `dist`. Every other file imports
-`./core`.
+resolve. `src/core.ts`, `src/db.ts`, `src/contracts.ts` and `src/bot.ts`
+re-export what the API needs from `packages/core`, `packages/db`,
+`packages/core/src/contracts` and `bot/`, relatively, so the emitted
+specifier still lands on something real inside `dist`. Every other file
+imports `./core`, `./db` and so on. Because `nest build` compiles those
+packages' sources too, they import each other relatively as well.
+
+There is **one** generated Prisma client, in `packages/db`. The API briefly had
+its own; `moduleFormat = "cjs"` on the shared generator made that
+unnecessary.
 
 ## No class-validator
 
 `ValidationPipe` is deliberately absent. Nest's default is built on
 class-validator, and this API validates with the zod schemas in
 `@supplies/core/validation` — the same objects the Next app's forms resolve
-against, and soon the SPA's and the phone's. Two validation libraries would
+against, and the SPA's and the phone's. Two validation libraries would
 mean two definitions of a valid item, and the second one always drifts.
 
 ## Config fails at boot, loudly
@@ -65,15 +74,27 @@ constructed, and throws with every bad variable named at once. A CORS origin
 that is not a URL, or `SameSite=None` without `Secure`, is a refusal to start —
 not a browser mystery at 2am. `src/config/env.test.ts` covers both.
 
-Every origin is a variable with a localhost default (SPA_API_PORT.md §4.2). No
-domain appears anywhere in this source tree.
+Every origin is a variable with a localhost default (docs/ARCHITECTURE.md §5).
+No domain appears anywhere in this source tree.
 
 ## Rate limiting is in-memory
 
-`ThrottlerModule` counts in the process, which is correct for one long-lived
-container and is one of the reasons this API does not belong on a serverless
-platform — every request would arrive at a fresh instance and the counter would
-always read zero.
+`ThrottlerModule` counts in the process: 120 requests a minute per client,
+and 6 for recipe suggestions, which spend money. That is correct for one
+long-lived container and is one of the reasons this API does not belong on a
+serverless platform, where every request would arrive at a fresh instance and
+the counter would always read zero.
+
+**The counter keys on the client address**, which behind a host's proxy is
+the proxy, unless `TRUST_PROXY` says how many proxies to believe
+(docs/DEPLOYMENT.md §6). It is read in `main.ts` before Nest starts, because
+`trustProxy` is a property of the Fastify instance, which exists before the
+`ConfigService` does.
+
+**No stricter limit on the credential endpoints yet.** `login` and friends
+share the global 120 a minute. A tighter `@Throttle` there would trip the e2e
+suite, which signs in about fifty times from one address, so it needs a
+configurable limit to land with it; see docs/ROADMAP.md.
 
 ## Tests
 

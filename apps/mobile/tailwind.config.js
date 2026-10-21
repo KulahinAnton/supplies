@@ -6,7 +6,7 @@
  * as hex rather than oklch: React Native's colour parser does not know oklch,
  * and a token the runtime cannot read is a token that silently renders black.
  * They are duplicated on purpose — `@supplies/ui` is web-only by design
- * (SPA_API_PORT.md §4.3), and the alternative was a colour package existing
+ * (docs/ARCHITECTURE.md §4), and the alternative was a colour package existing
  * solely to be read by two different CSS dialects.
  */
 module.exports = {

@@ -58,9 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * restoring at the same instant is still a race the client cannot close from
    * here. It is narrow — the first rotation usually lands before the second
    * request is sent, and a probe with two simultaneous loads did not reproduce
-   * it — but narrow is not never. Closing it properly needs a cross-tab lock
-   * (`navigator.locks`) or a short grace window on the server; SPA_API_PORT.md
-   * §10 carries it as an open item rather than a fixed one.
+   * it — but narrow is not never. The server closes it: a token revoked by
+   * rotation still answers within `REFRESH_GRACE_MS` (docs/ARCHITECTURE.md §8), so the
+   * second tab is not mistaken for a thief.
    */
   useEffect(() => {
     let cancelled = false;

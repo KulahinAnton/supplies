@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
-  The same tokens the Next app renders with — see SPA_API_PORT.md §4.3. This
+  The same tokens the Next app renders with — see docs/ARCHITECTURE.md §6. This
   file used to be the single line above, which is most of why the SPA and the
   Next app looked like different products.
 */

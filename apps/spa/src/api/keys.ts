@@ -1,5 +1,5 @@
 /**
- * The query-key map, written **before** the screens (SPA_API_PORT.md §9.5).
+ * The query-key map, written **before** the screens (docs/ARCHITECTURE.md §9).
  *
  * `revalidatePath` has no equivalent here. In the Next app a server action
  * says "this path is stale" and the framework re-renders it; here every

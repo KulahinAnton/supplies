@@ -1,14 +1,20 @@
 # apps/mobile — React Native, on the same engine
 
 Expo SDK 57 + Expo Router + NativeWind 4, against the API in
-[`apps/api`](../api/CLAUDE.md). Plan and phases:
-[SPA_API_PORT.md](../../SPA_API_PORT.md) Phase 3.
+[`apps/api`](../api/CLAUDE.md). Where it sits:
+[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md). How it was built:
+[docs/archive/SPA_API_PORT.md](../../docs/archive/SPA_API_PORT.md) Phase 3.
 
-**Status: Phase 3.6 — parity.** Every screen the SPA has, this has: four
-native tabs (Огляд · Запаси · Покупки · Ще), the item list and detail, the
-item form, the archive, the shared shopping list, Feature 26 sets, seven
-settings screens, «Рецепти», the scanner, and the four public auth routes.
-3.7 is push; 3.5's APK is built on EAS.
+**Status: at parity with the SPA.** Four native tabs (Огляд · Запаси ·
+Покупки · Ще), the item list and detail, the item form, the archive, the shared
+shopping list, Feature 26 sets, seven settings screens, «Рецепти», the
+scanner, the four public auth routes, and push registration (Feature 35). A
+release APK builds on EAS and has been installed and signed into.
+
+What it cannot do yet: **reach an API away from home**, because the API is not
+deployed and a production build allows no cleartext HTTP; and **receive a
+push**, which needs FCM credentials on the EAS project. iOS is parked. All
+three are on [docs/ROADMAP.md](../../docs/ROADMAP.md).
 
 ## Four decisions where this app is not the SPA
 
@@ -183,7 +189,7 @@ so it is switched on `EAS_BUILD_PROFILE`: allowed everywhere except
 `production`, which gets none and therefore cannot talk to a dev machine at
 all. That is the right failure; production points at the deployed HTTPS API.
 
-**The API address is not in this repo, deliberately** (SPA_API_PORT.md §4.2).
+**The API address is not in this repo, deliberately** (docs/ARCHITECTURE.md §5).
 `EXPO_PUBLIC_API_URL` is read by `lib/api/url.ts` and inlined at build time,
 and for a cloud build it comes from an EAS environment variable rather than
 from `eas.json`, because the value is the LAN address of whoever is building:
@@ -392,7 +398,7 @@ schemas. Same functions the Next app, the SPA, the API and the Telegram bot
 call.
 
 **`@supplies/ui` is not, and that is a boundary rather than a failure to
-reuse** (SPA_API_PORT.md §4.3). React Native has no DOM and no Tailwind class
+reuse** (docs/ARCHITECTURE.md §4). React Native has no DOM and no Tailwind class
 strings in the web sense, so the primitives are rebuilt here. The colour tokens
 in `tailwind.config.js` are transcribed from `packages/ui/src/theme.css` as
 hex, because React Native's colour parser does not know `oklch` and a token the
@@ -475,8 +481,11 @@ resolves — pnpm does not hoist it to the root.
 
 ## Not painting into Android
 
-Phase 5 is iOS, and SPA_API_PORT.md names four things that are free now and
-expensive to retrofit: `react-native-safe-area-context` on every screen even
-though Android mostly does not need it, no Android-only libraries,
-`expo-camera` rather than anything platform-specific, and keyboard handling
-written against `KeyboardAvoidingView`. The first is already in `_layout.tsx`.
+iOS is parked (decision 11 in docs/ARCHITECTURE.md §12), not cancelled. Four
+things are free now and expensive to retrofit, and all four hold:
+`react-native-safe-area-context` on every screen even though Android mostly
+does not need it, no Android-only libraries, `expo-camera` rather than
+anything platform-specific, and keyboard handling written against
+`KeyboardAvoidingView`. Safe areas and the keyboard both live in
+`components/ui/screen.tsx`, so no screen can forget them. Haptics are the
+part of the iOS platform pass that is not done.

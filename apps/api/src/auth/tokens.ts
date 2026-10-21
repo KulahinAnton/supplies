@@ -11,6 +11,14 @@ export type AccessClaims = {
   sub: string;
   householdId: string;
   email: string;
+  /**
+   * The session: the id of the `ApiRefreshToken` row issued alongside this
+   * access token. A password change uses it to keep the device that made the
+   * change signed in while every other session ends (Feature 1). Optional
+   * because a token minted before the claim existed has none, and the only
+   * consequence is that such a change spares nothing.
+   */
+  sid?: string;
 };
 
 /**
@@ -42,7 +50,7 @@ export function refreshExpiry(days: number, now = new Date()): Date {
  * declared here so this module stays free of the generated client — the same
  * reason `@supplies/core/units` restates `Unit`.
  */
-export type RevocationReason = "rotated" | "reuse" | "logout";
+export type RevocationReason = "rotated" | "reuse" | "logout" | "password";
 
 export type StoredToken = {
   expiresAt: Date;
@@ -69,7 +77,14 @@ export type RefreshVerdict =
    * the user goes, and they sign in again. A legitimate user re-authenticating
    * is a smaller harm than an attacker keeping a session alive.
    */
-  | { status: "reused" };
+  | { status: "reused" }
+  /**
+   * Ended on purpose by a password reset or change. Refused like any revoked
+   * token, but NOT read as theft: the device it belonged to does not know it
+   * was signed out and will try to refresh, and burning the family on that
+   * would sign out the session the change was meant to keep.
+   */
+  | { status: "revoked" };
 
 /**
  * How long a just-rotated refresh token still answers, instead of being read
@@ -116,6 +131,7 @@ export function classifyRefresh(
      * again with any of them. The window neutered the very thing it was
      * bolted onto.
      */
+    if (stored.revokedReason === "password") return { status: "revoked" };
     if (stored.revokedReason !== "rotated") return { status: "reused" };
 
     const since = now.getTime() - stored.revokedAt.getTime();

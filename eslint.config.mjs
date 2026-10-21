@@ -153,7 +153,7 @@ const eslintConfig = defineConfig([
      * bundle can all import it. Nothing in the type system enforces that: a
      * single `import { Prisma }` would typecheck, pass every test, and break
      * the mobile build weeks later, in a phase where the cause is no longer
-     * obvious. SPA_API_PORT.md §9.1 calls this out as the first risk, and a
+     * obvious. docs/ARCHITECTURE.md §11 calls this out as the first friction, and a
      * convention that is not enforced is a convention that breaks.
      *
      * `node:crypto` is the one exception, for `telegram-link.ts`. It is safe

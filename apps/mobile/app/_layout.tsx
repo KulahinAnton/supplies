@@ -11,7 +11,7 @@ import "../global.css";
  * The root: providers, then the auth gate.
  *
  * `SafeAreaProvider` is here from the first commit even though Android mostly
- * does not need it — SPA_API_PORT.md is explicit that Phase 5 exists and that
+ * does not need it — iOS is parked, not cancelled (docs/ARCHITECTURE.md §11), and
  * safe areas are free now and expensive to retrofit.
  */
 const queryClient = new QueryClient({

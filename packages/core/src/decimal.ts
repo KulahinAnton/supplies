@@ -1,5 +1,5 @@
 /**
- * The engine's Decimal (ARCHITECTURE_REVIEW.md F4, SPA_API_PORT.md Phase 0.2).
+ * The engine's Decimal (docs/archive/ARCHITECTURE_REVIEW.md F4).
  *
  * `lib/stock.ts`, `lib/item-group.ts` and `lib/shopping.ts` used to reach
  * `Prisma.Decimal` through `import { Prisma } from "./generated/prisma/client"`.

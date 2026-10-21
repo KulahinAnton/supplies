@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * SPA_API_PORT.md Phase 2.8 — the same bargain `apps/web` makes, against the
+ * docs/archive/SPA_API_PORT.md Phase 2.8 — the same bargain `apps/web` makes, against the
  * client that has no server.
  *
  * The pyramid underneath is already good: 357 unit tests over pure rules, 50

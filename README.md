@@ -2,7 +2,7 @@
 
 Household stock and expiry tracker for a family. **Four clients over one
 engine**: a Next.js web app, a React Native phone app, a Vite SPA, a Telegram
-bot — and a NestJS API that three of them speak to.
+bot — and a NestJS API that the SPA and the phone speak to.
 
 **The interface is Ukrainian.** Everything technical — this file, the docs,
 code, comments, identifiers, commit messages — is English. See
@@ -267,18 +267,23 @@ because a hook that fails when Docker is down teaches people to reach for
 
 ## Deployment
 
-[deployment-instructions.md](deployment-instructions.md) — Vercel + Neon, free
-tier. Migrations run as part of the build, so an ordinary `git push` is the
-whole deploy. The API and the SPA are not deployed yet;
-[SPA_API_PORT.md](SPA_API_PORT.md) Phase 4.3 is where that lands.
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Vercel + Neon, free tier. Migrations
+run as part of the build, so merging to `main` is the whole deploy. The API
+and the SPA are not deployed yet; that section of the guide lists what their
+first deploy needs.
 
 ## Documentation
 
 - [PROJECT_PROMPT.md](PROJECT_PROMPT.md) — the specification: domain rules,
-  data model, every feature, and notes recording what changed and why.
-- [CLAUDE.md](CLAUDE.md) — stack, layout, auth model, conventions.
-- [SPA_API_PORT.md](SPA_API_PORT.md) — the plan for the API, the SPA and the
-  phone app, and a running log of what each phase actually found.
+  data model, and every feature with the reason for each rule.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — boundaries, what is shared
+  and why, configuration, auth, hosting, and the decision log.
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what is left to build, known defects,
+  and proposed improvements.
+- [CLAUDE.md](CLAUDE.md) — stack, layout, commands, conventions.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — the branch, PR and CI flow.
+- [docs/archive/](docs/archive/README.md) — the original plans and the full
+  story of how each feature was built.
 - Per-area: [prisma](prisma/CLAUDE.md) ·
   [apps/web/components](apps/web/components/CLAUDE.md) ·
   [apps/api](apps/api/CLAUDE.md) · [apps/spa](apps/spa/CLAUDE.md) ·
@@ -288,9 +293,10 @@ whole deploy. The API and the SPA are not deployed yet;
 
 ## Status
 
-Features 0–35 implemented. Features 0–32 are running in production on Vercel +
-Neon; the API, the SPA and the phone app live on this branch and have not
-shipped yet.
+Features 0–35 are implemented, except offline writes (Feature 31), which are
+parked. Features 0–32 are running in production on Vercel + Neon. The API, the
+SPA and the phone app live on `feature/shared-core` and have not shipped yet.
+What is left is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Not exercised by any automated check: the **camera barcode scan** and the
 **drag-to-reorder gesture** on the web clients — a headless browser can supply

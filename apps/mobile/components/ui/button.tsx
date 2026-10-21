@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, Text } from "react-native";
 /**
  * The two button shapes this app needs, and no variant system yet.
  *
- * `packages/ui`'s `Button` is web-only by design (SPA_API_PORT.md §4.3) —
+ * `packages/ui`'s `Button` is web-only by design (docs/ARCHITECTURE.md §4) —
  * React Native has no DOM and no class strings in that sense — so this is a
  * deliberate rebuild rather than a missed reuse. It stays small until a third
  * variant actually earns itself.

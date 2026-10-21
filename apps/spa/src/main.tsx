@@ -9,7 +9,7 @@ import "./index.css";
 /**
  * TanStack Query is what replaces `revalidatePath`. There is no server to
  * revalidate from here: a mutation invalidates the keys it affected and the
- * cache refetches. SPA_API_PORT.md §9.5 — the key map gets written before the
+ * cache refetches. docs/ARCHITECTURE.md §9 — the key map gets written before the
  * screens are ported, not during.
  */
 const queryClient = new QueryClient({

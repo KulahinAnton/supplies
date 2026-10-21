@@ -1,6 +1,6 @@
 # The root is the workspace and nothing else. Every deployable is under
 # `apps/`, including the Next.js app, which moved out of the root on
-# 2026-09-06 (SPA_API_PORT.md decision 8).
+# 2026-09-06 (docs/ARCHITECTURE.md §12, decision 8).
 #
 # `bot` is a package rather than a loose folder because `apps/web` imports the
 # digest from it — the cron route sends it — and a relative path out of an app

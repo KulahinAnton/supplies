@@ -8,8 +8,8 @@ import { Screen } from "@/components/ui/screen";
  *
  * The keyboard is `Screen`'s problem, not this one's — it wraps its scroller
  * in a `KeyboardAvoidingView` rather than relying on Android's `adjustResize`.
- * SPA_API_PORT.md names that as one of four things free now and expensive to
- * retrofit for Phase 5: Android mostly handles it and iOS does not, so writing
+ * docs/ARCHITECTURE.md §11 names that as one of the things free now and expensive to
+ * retrofit for iOS: Android mostly handles it and iOS does not, so writing
  * it the portable way costs nothing here and saves a pass later.
  */
 export function AuthShell({

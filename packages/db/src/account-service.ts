@@ -51,9 +51,40 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * Feature 1 — what a new password does to the API sessions the old one opened.
+ *
+ * Every live refresh token for the user ends, except `keepSessionId`: the
+ * session that made a change, so the device in someone's hand stays signed in.
+ * Marked `password` rather than `reuse`, because those devices will still try
+ * to refresh and that must be refused, not read as theft — which would burn the
+ * kept session along with the rest (see `RefreshRevocation` in the schema).
+ *
+ * Auth.js sessions on the web app are JWTs and cannot be revoked here; they
+ * expire on their own within eight hours.
+ */
+function apiSessionsToEnd(userId: string, keepSessionId?: string) {
+  return {
+    where: {
+      userId,
+      revokedAt: null,
+      ...(keepSessionId ? { id: { not: keepSessionId } } : {}),
+    },
+    data: { revokedAt: new Date(), revokedReason: "password" as const },
+  };
+}
+
+/**
+ * Change your own password. The current one has to be right.
+ *
+ * `keepSessionId` is the caller's API session, when there is one. The web app
+ * has none to pass, so a change made there signs out every phone and SPA
+ * session; a change made in the SPA or on a phone keeps that one.
+ */
 export async function changePassword(
   actor: Actor,
   input: unknown,
+  options: { keepSessionId?: string } = {},
 ): Promise<ActionResult> {
   const parsed = changePasswordSchema.safeParse(input);
   if (!parsed.success) return actionError(firstIssueAsRuleMessage(parsed.error));
@@ -64,9 +95,10 @@ export async function changePassword(
   const valid = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
   if (!valid) return actionError(ruleMessage("auth.currentPasswordWrong"));
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: await bcrypt.hash(parsed.data.newPassword, 12) },
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await tx.apiRefreshToken.updateMany(apiSessionsToEnd(user.id, options.keepSessionId));
   });
 
   return actionOk();
@@ -174,6 +206,10 @@ export async function requestPasswordReset(
  *
  * The update and the marking are one transaction. Without that, a crash
  * between them leaves a changed password and a token that still works.
+ *
+ * It also ends **every** API session the user had. A reset is what someone
+ * does when they believe the account is compromised, and a stolen phone
+ * session surviving it would make the reset a formality.
  */
 export async function resetPassword(input: unknown): Promise<ActionResult> {
   const parsed = resetPasswordSchema.safeParse(input);
@@ -196,6 +232,7 @@ export async function resetPassword(input: unknown): Promise<ActionResult> {
       where: { id: record.id },
       data: { usedAt: new Date() },
     });
+    await tx.apiRefreshToken.updateMany(apiSessionsToEnd(record.userId));
   });
 
   return actionOk();

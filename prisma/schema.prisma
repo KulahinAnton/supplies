@@ -43,7 +43,8 @@ model Household {
   name           String
   /// PROJECT_PROMPT.md §3.5 — how many days ahead counts as "expiring soon".
   expiryWarnDays Int       @default(7)
-  /// Local hour (0-23) the Telegram digest is sent at (Feature 9).
+  /// Hour (0-23), Kyiv local time, the digest is sent at (Feature 9). Honoured
+  /// by `pnpm digest:run`; the Vercel cron sends at noon regardless (Feature 19).
   digestHour     Int       @default(8)
   /// Feature 32.1 — whether this household has turned the AI recipe helper on.
   /// Default OFF: the feature spends money at an external provider on every
@@ -393,6 +394,12 @@ enum RefreshRevocation {
   reuse
   /// The person signed out on this device.
   logout
+  /// Ended by a password reset or change (PROJECT_PROMPT.md Feature 1). Unlike
+  /// `reuse`, presenting one of these is NOT treated as theft: the device it
+  /// belonged to was signed out on purpose and will try to refresh, and
+  /// burning the family on that would sign out the very session a password
+  /// change keeps.
+  password
 }
 
 model PasswordResetToken {
