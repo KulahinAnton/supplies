@@ -95,8 +95,14 @@ jobs:
       # Chromium only: the "mobile" project runs the same specs in the same
       # engine at a phone viewport, so downloading a second browser would test
       # Playwright's device emulation rather than this app.
+      #
+      # Through `apps/web`, because that is where Playwright is a dependency.
+      # The root has none since the Next app moved out of it, and pnpm does not
+      # hoist, so a bare `pnpm exec playwright` at the root finds nothing. The
+      # SPA pins the same version, and browsers are shared per version, so one
+      # install serves both suites — if the two ever diverge, install twice.
       - name: Install Chromium for Playwright
-        run: pnpm exec playwright install chromium --with-deps
+        run: pnpm --filter @supplies/web exec playwright install chromium --with-deps
 
       - name: End-to-end tests — the Next app
         run: pnpm test:e2e
@@ -113,10 +119,11 @@ jobs:
         if: failure()
         with:
           name: playwright-report
+          # Each suite writes its failure traces and screenshots next to its
+          # own config. The root paths this used to list stopped existing when
+          # the Next app moved to apps/web, so a failing Next run uploaded nothing.
           path: |
-            playwright-report/
-            test-results/
-            apps/spa/playwright-report/
+            apps/web/test-results/
             apps/spa/test-results/
           retention-days: 7
 
