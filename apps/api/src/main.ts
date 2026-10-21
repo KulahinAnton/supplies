@@ -1,0 +1,105 @@
+import "./env-first";
+import "reflect-metadata";
+import cookie from "@fastify/cookie";
+import helmet from "@fastify/helmet";
+import { Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
+import {
+  FastifyAdapter,
+  type NestFastifyApplication,
+} from "@nestjs/platform-fastify";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { AppModule } from "./app.module";
+import { EmptyBodyPipe } from "./common/empty-body.pipe";
+import { RuleErrorFilter } from "./common/rule-error.filter";
+import { validateEnv, type Env } from "./config/env";
+
+async function bootstrap(): Promise<void> {
+  /**
+   * `trustProxy` belongs to the Fastify instance, which exists before Nest's
+   * `ConfigService` does, so this one setting is read here. Same schema, same
+   * refusal: `ConfigModule` validates the environment again a moment later.
+   */
+  const { TRUST_PROXY } = validateEnv(process.env);
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter({ trustProxy: TRUST_PROXY }),
+  );
+
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const origins = config.get("CORS_ORIGINS", { infer: true });
+  const jwtSecret = config.get("API_JWT_SECRET", { infer: true });
+
+  await app.register(helmet, {
+    // The API serves JSON and an OpenAPI page, never a document that embeds
+    // third-party script. CSP off here would be one fewer thing lying.
+    contentSecurityPolicy: false,
+  });
+  await app.register(cookie, {
+    secret: jwtSecret,
+  });
+
+  /**
+   * `credentials` because the refresh token travels as an httpOnly cookie for
+   * browser clients. The React Native app sends a bearer token instead and
+   * needs none of this — see docs/ARCHITECTURE.md §5 for why the cookie settings
+   * are environment variables rather than constants.
+   *
+   * `methods` is spelled out because `@fastify/cors` defaults to
+   * `GET,HEAD,POST` — unlike the Express middleware most CORS examples are
+   * written against. Without it the preflight for a PATCH or a DELETE
+   * succeeds with 204 and the real request is then blocked by the browser,
+   * which surfaces as an opaque network failure with no server-side trace at
+   * all. Found by clicking a checkbox in the SPA.
+   */
+  app.enableCors({
+    origin: origins,
+    credentials: true,
+    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+  });
+
+  /**
+   * No global `ValidationPipe` here, deliberately. Nest's default one is built
+   * on class-validator, and this API validates with the zod schemas in
+   * `@supplies/core/validation` — the same objects the Next app's forms, and
+   * soon the SPA's and the phone's, resolve against. Two validation libraries
+   * would mean two definitions of a valid item, and the second one always
+   * drifts.
+   *
+   * The zod pipe lands with the first endpoint that takes a body (Phase 1.5).
+   */
+  app.useGlobalPipes(new EmptyBodyPipe());
+  app.useGlobalFilters(new RuleErrorFilter());
+
+  app.setGlobalPrefix("api", { exclude: ["health", "health/ready"] });
+  app.enableShutdownHooks();
+
+  SwaggerModule.setup(
+    "docs",
+    app,
+    SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder()
+        .setTitle("Supplies API")
+        .setDescription(
+          "Household stock and expiry tracking. The rules behind these endpoints live in @supplies/core and are shared with the Next.js app, the SPA, the React Native app and the Telegram bot.",
+        )
+        .setVersion("0.0.0")
+        .addBearerAuth()
+        .build(),
+    ),
+  );
+
+  const port = config.get("API_PORT", { infer: true });
+  // 0.0.0.0, not localhost: a phone on the same network has to reach this, and
+  // so does a container's own health check.
+  await app.listen(port, "0.0.0.0");
+
+  const logger = new Logger("bootstrap");
+  logger.log(`Listening on http://localhost:${port}`);
+  logger.log(`OpenAPI at http://localhost:${port}/docs`);
+  logger.log(`CORS allows ${origins.join(", ")}`);
+}
+
+void bootstrap();

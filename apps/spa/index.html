@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Запаси</title>
+
+    <!--
+      Feature 7 — installable, the same way the Next app is.
+
+      A static file rather than Next's generated `manifest.ts`, because there
+      is no framework here to generate one; the contents are deliberately
+      identical, down to `start_url`, so installing either client puts the
+      same icon on the same home screen and opens on the same page.
+
+      No service worker. Installability and offline are different features,
+      and the offline branch is parked — shipping a worker now would cache a
+      shell that the parked work is going to change.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#2f7d5b" />
+    <script>
+      /*
+        Sets `.dark` before the first paint.
+
+        Without it a dark-mode visitor gets one white frame on every load,
+        because React cannot run until the bundle has. This is what
+        `next-themes` injects into the Next app's document for the same
+        reason; `src/components/theme.tsx` keeps it in step afterwards.
+
+        Inline and blocking on purpose — deferring it is the flash.
+      */
+      (function () {
+        try {
+          var stored = localStorage.getItem("supplies-theme");
+          var dark =
+            stored === "dark" ||
+            ((stored === "system" || stored === null) &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* Storage blocked; light is the correct fallback. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

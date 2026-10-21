@@ -1,18 +1,17 @@
 import { Bot, type Context } from "grammy";
-import { prisma } from "@/lib/prisma";
-import { MESSAGES, renderMessage } from "@/lib/messages";
-import { verifyLinkToken } from "@/lib/telegram-link";
-import { UNIT_SHORT } from "@/lib/format";
-import { getItemViews } from "@/lib/queries";
-import { botConsume, botAddStock } from "@/bot/actions";
+import { prisma } from "../packages/db/src/prisma";
+import { MESSAGES, renderMessage } from "../packages/core/src/messages";
+import { verifyLinkToken } from "../packages/core/src/telegram-link";
+import { UNIT_SHORT } from "../packages/core/src/format";
+import { getItemViews } from "../packages/db/src/queries";
+import { botConsume, botAddStock } from "./actions";
 import {
   clearPending,
   getPending,
-  keyboardVersionOf,
   markKeyboardSent,
   setPending,
-} from "@/bot/state";
-import { resolveChat, type BotUser } from "@/bot/auth";
+} from "./state";
+import { resolveChat, type BotUser } from "./auth";
 import {
   CB,
   KEYBOARD_VERSION,
@@ -24,14 +23,14 @@ import {
   shortcutFor,
   type Shortcut,
   type View,
-} from "@/bot/menu";
+} from "./menu";
 import {
   addRow,
   createGroup,
   groupListView,
   groupView,
   toggleRow,
-} from "@/bot/shopping";
+} from "./shopping";
 
 /**
  * Feature 9 + 17 — the bot is a SECOND FRONT END, never a second
@@ -158,7 +157,8 @@ export function createBot(token: string) {
    */
   async function settleKeyboardDebt(ctx: Context, user: BotUser) {
     try {
-      if ((await keyboardVersionOf(user.chatId)) >= KEYBOARD_VERSION) return;
+      // Read by `resolveChat` a moment ago — no second lookup.
+      if (user.keyboardVersion >= KEYBOARD_VERSION) return;
       await ctx.reply(MESSAGES["bot.keyboardRefreshed"], {
         reply_markup: replyKeyboard(),
       });

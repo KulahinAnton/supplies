@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "target": "ES2022",
+    "lib": ["esnext"],
+    "types": ["node"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -11,24 +12,40 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
       "@/*": ["./*"]
     }
   },
+  // What is left at the root once the Next app moved to `apps/web`: the
+  // Telegram bot, the operational scripts, the Prisma config and the shared
+  // packages. All of it is plain Node — no DOM lib, no JSX, no `next` plugin.
+  //
+  // `packages/*` is deliberately compiled here rather than left to whichever
+  // app imports it. That makes this config one of the things keeping the
+  // engine honest: `packages/core` has to typecheck with no React types and
+  // no DOM in `lib`, which is most of what "framework-free by contract" means.
+  //
+  // `packages/ui` is the one package that legitimately needs the DOM and JSX,
+  // so it is excluded below and typechecked under its own tsconfig instead.
+  // That exclusion is the boundary working, not a hole in it: the moment
+  // something in `core` or `db` reaches for `window`, this config says so.
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "bot/**/*.ts",
+    "scripts/**/*.ts",
+    "packages/**/*.ts",
+    "prisma/**/*.ts",
+    "prisma.config.ts",
+    "*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Each app owns its compiler settings. The API needs
+    // `experimentalDecorators` and `emitDecoratorMetadata`, the SPA and the web
+    // app need `jsx` and the DOM lib, and none of that may leak into the
+    // packages above. `pnpm -r typecheck` runs each of them under its own.
+    "apps/**",
+    "packages/ui/**",
+    "packages/db/src/generated/**"
+  ]
 }

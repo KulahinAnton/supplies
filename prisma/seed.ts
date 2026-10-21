@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../lib/generated/prisma/client";
-import type { Unit } from "../lib/generated/prisma/enums";
+import { PrismaClient } from "@supplies/db/generated/prisma/client";
+import type { Unit } from "@supplies/db/generated/prisma/enums";
 
 /**
  * Demo data (PROJECT_PROMPT.md Feature 0).

@@ -28,7 +28,8 @@
 ## Checklist
 
 - [ ] `pnpm verify` passes (lint, typecheck, unit tests)
-- [ ] `pnpm test:db` passes, or this change cannot affect it
-- [ ] Docs updated — PROJECT_PROMPT.md for a rule or feature, the relevant CLAUDE.md for a convention
+- [ ] `pnpm test:db` and `pnpm test:api:e2e` pass, or this change cannot affect them
+- [ ] Docs updated: PROJECT_PROMPT.md for a rule or feature, the relevant CLAUDE.md for a convention, docs/ROADMAP.md if this closes or opens an item
+- [ ] The other clients: at parity, or the gap is listed under "not verified" above
 - [ ] Migrations included, and safe to run against production data
 - [ ] Ukrainian for anything a user reads; English for code, comments and this PR

@@ -1,0 +1,2298 @@
+# Rebuilding Supplies as SPA + API + React Native
+
+A plan for turning one Next.js app into **one domain engine with four clients**:
+the existing Next.js app, a plain React SPA, a React Native app, and the
+Telegram bot that already exists.
+
+The goal is not new features. It is to make the codebase say, without a cover
+letter, that the author can build a standalone API and a React front end that
+is not Next.js — and can put a phone in front of the same API.
+
+This absorbs and supersedes [REACT_NATIVE_PORT.md](REACT_NATIVE_PORT.md), which
+answered "can we go native" and correctly found that the real work is the
+missing API. It also picks up **F4** from
+[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md), which is now a blocker rather
+than a nice-to-have.
+
+---
+
+> **Decided 2026-09-04.** Full parity · NestJS · one workspace · offline branch
+> parked · iOS as a later phase after Android ships · no deadline. §10 records
+> the answers; the plan below is written to them.
+
+---
+
+## 1. Repo shape — one workspace
+
+The reasoning is kept rather than deleted, because it is what an interviewer
+will ask about the moment they see four apps in one repository — and because
+the condition attached to it is real work, not a formality.
+
+### Why one repo
+
+The strongest thing this codebase can claim is not "it has a React SPA in it".
+It is that **the rules were already factored so a second and third client could
+be added without rewriting them** — 339 unit tests over pure functions, a
+single stock write path, and a Telegram bot that has been proving the "one
+implementation, two front ends" rule in production for months.
+
+Copy the engine into a second repo and that claim evaporates. You get two
+repositories that each demonstrate one thing, plus a divergence problem: the
+day FEFO changes in one and not the other, the portfolio is actively
+misleading. In one repo, adding a third and fourth client *without duplicating
+a single rule* is the demonstration.
+
+Practical arguments in the same direction:
+
+- The 20-odd pure modules move once and are then imported by four consumers.
+- One CI run proves the engine, the API, the web app and the SPA together.
+- Workspace/monorepo setup is itself a thing job ads ask for, and it is only
+  visible if there is a workspace.
+- Nothing has to be kept in sync by hand — `packages/core` is either green for
+  everyone or red for everyone.
+
+### The condition
+
+A reviewer gives a repository somewhere between 60 seconds and 10 minutes. If
+they open the README and see a Next.js household tracker, they will conclude
+"Next.js developer" and close the tab — which is the exact outcome this whole
+exercise exists to prevent.
+
+So: **the README is part of the deliverable, not documentation of it.** It has
+to open with the architecture (one engine, four clients), a diagram, and a
+table pointing at where each stack lives. Phase 4 treats that as work, with
+hours attached.
+
+### What was rejected, and why it is worth being able to say
+
+A separate `supplies-api` + `supplies-spa` showcase repo reads in three minutes;
+this one will not, at ~20k lines before any of this starts. That is a genuine
+cost and the honest answer to "why is your portfolio repo so big" is the trade
+above: brevity was given up to keep one engine and one set of rules.
+
+The other case for splitting — not wanting to touch a live app — is handled by
+sequencing instead. Every phase before the last is additive, and production
+configuration does not change until Phase 4.1.
+
+---
+
+## 2. Where the app actually stands today
+
+Counted, not estimated:
+
+| | Count | Ports to a new client? |
+|---|---|---|
+| Screens (`page.tsx`) | 16 + 1 redirect | No — RSC, `next/*`, server actions |
+| Feature components | 26 (~6.7k lines) | **Mostly, to the SPA.** Not to RN |
+| UI primitives (`components/ui`) | 22 | **Yes, to the SPA**, nearly verbatim |
+| Server actions | 46 across 9 files | No — become HTTP endpoints |
+| Query readers (`lib/queries.ts`) | 17 | Server-side; reused by the API as-is |
+| Modules in `lib/` (non-test) | 44 | 20-odd are pure and move to `packages/core` |
+| Unit tests | 339 across 22 files | **Move with the code, unchanged** |
+| DB integration checks | 52 (`pnpm test:db`) | Stay with the API |
+| Playwright specs | 4 | Adapt to the SPA nearly as-is |
+| Migrations | 14 | Untouched — one schema, one database |
+
+**Prisma coupling is the only structural obstacle**, and it is small. Seven
+modules import `Prisma` as a *value*; only three of those are pure engine —
+`lib/stock.ts`, `lib/item-group.ts`, `lib/shopping.ts` — and each does it for
+exactly one reason: to reach `Prisma.Decimal`. That single import drags the
+generated client into any bundle touching the engine, which already breaks
+browser builds (`node:module`) and would break Metro identically.
+
+`lib/format.ts` imports from the generated client too, but **type-only**, so it
+is erased at compile time and is genuinely portable.
+
+That is the whole blast radius. Everything else is additive.
+
+---
+
+## 3. Stack
+
+### API — NestJS + REST + OpenAPI
+
+| Concern | Choice |
+|---|---|
+| Framework | **NestJS** (Fastify adapter) |
+| ORM | Prisma 7 — unchanged, same schema, same migrations |
+| Validation | **`nestjs-zod`** over the existing `lib/validation/` schemas |
+| Auth | JWT access (15 min) + rotating refresh (30 d), `bcryptjs` hashes reused |
+| Docs | `@nestjs/swagger` → OpenAPI at `/docs` |
+| Hardening | `helmet`, CORS allowlist, `@nestjs/throttler` |
+| Tests | `supertest` e2e against a seeded database |
+
+**Why Nest.** It is the Node backend framework job ads name most often after
+Express, and unlike Express it *forces* structure — modules, DI, guards,
+interceptors, pipes. That structure is the signal. It also generates OpenAPI,
+which is what lets the SPA and the RN app share one typed client instead of two
+hand-written ones.
+
+**Fastify standalone was the alternative** and would have saved roughly 3–4 days
+of ceremony. Declined: with no deadline, the ceremony *is* the deliverable —
+modules and guards are the part a reviewer reads to judge whether you can
+structure a backend, and a single `server.ts` with 40 routes does not show it.
+
+**Rejected: tRPC.** Excellent DX, wrong instrument here. It hides the API behind
+a TypeScript function call, which is precisely the thing you are trying to
+prove you can build — and a reviewer cannot open `/docs` and see an API. It is
+also perceived as Next-adjacent, which does not help.
+
+### SPA — Vite + React Router + TanStack Query
+
+| Concern | Choice | Notes |
+|---|---|---|
+| Build | **Vite** | Pin at scaffold time |
+| Router | **React Router 7** | The default non-Next answer; 16 routes to map |
+| Server state | **TanStack Query 5** | The direct replacement for RSC + `revalidatePath` |
+| Forms | react-hook-form + zod | Already used — ports with no changes |
+| Styling | Tailwind v4 + shadcn/Base UI | Same config, same components |
+| Tests | Vitest + Testing Library, Playwright | Existing specs adapt |
+
+The insight worth planning around: **the SPA is much cheaper than it looks.**
+Those 48 components are DOM React and Tailwind. They do not care that Next.js
+rendered them. What actually changes is three things — `next/link` and
+`next/navigation` become React Router, RSC data loading becomes `useQuery`, and
+server actions become `useMutation` + `invalidateQueries`. The markup, the
+styling and the Ukrainian copy survive intact.
+
+### React Native — Expo
+
+| Concern | Choice |
+|---|---|
+| Runtime | Expo (current SDK), EAS Build |
+| Router | Expo Router — file-based, same mental model as App Router |
+| Styling | NativeWind 4 — Tailwind class names, native primitives |
+| Server state | **TanStack Query — the same hooks the SPA uses** |
+| Camera | `expo-camera` (replaces `BarcodeDetector` + `@zxing/browser`) |
+| Tokens | `expo-secure-store` |
+| Push | `expo-notifications` — in scope (Phase 3.7); today Telegram fills this gap |
+
+### Shared packages
+
+- **`packages/core`** — the pure engine, `lib/messages.ts`, `lib/format.ts`,
+  and `lib/validation/`. Imported by all four clients *and* the API.
+- **`packages/api-client`** — `openapi-typescript` types generated from the
+  Nest OpenAPI doc, `openapi-fetch` for calls, plus TanStack Query hooks.
+  **Written once, consumed by the SPA and the RN app.**
+
+The zod schemas in `lib/validation/` become the API's request validation, the
+SPA's form resolver *and* the RN form resolver — one schema, three consumers,
+no drift possible. That is worth a paragraph in the README on its own.
+
+---
+
+## 4. Target layout
+
+```
+supplies/
+├── apps/
+│   ├── web/          Next.js 16 — today's app, moved 2026-09-06
+│   ├── api/          NestJS — the new backend
+│   ├── spa/          Vite + React — the new web client
+│   └── mobile/       Expo + React Native
+├── packages/
+│   ├── core/         pure engine, messages, formatting, zod schemas + tests
+│   ├── db/           Prisma client, queries, and every write service
+│   ├── ui/           design system — theme tokens + Base UI primitives
+│   └── api-client/   generated types + fetch client + TanStack Query hooks
+├── prisma/           one schema, one seed — unchanged
+└── bot/              @supplies/bot — Telegram bot, still on the engine directly
+```
+
+**One database.** All four clients point at the same Postgres on port 5434 with
+the same seed. That is not just convenient — being able to take a bottle of
+water on the phone, watch it drop in the SPA, and see the same number come back
+from the Telegram bot is the single most persuasive thing you can put in front
+of an interviewer, and it costs nothing extra to arrange.
+
+The bot keeps importing `lib/stock-service.ts` directly. It is a server-side
+Node process with database access; routing it through HTTP would add a network
+hop and a failure mode to buy nothing. Worth one line in the README explaining
+that, because it is a deliberate call and reads as one.
+
+### 4.1 Hosting — what actually changes on Vercel
+
+**In Phase 0, nothing.** The Next app does not have to move for the workspace to
+exist. The root `package.json` stays the Next.js app; `pnpm-workspace.yaml`
+gains a `packages:` key (today it holds only `allowBuilds`); the root depends on
+`@supplies/core` with `workspace:*`. Root Directory stays `.`, install and build
+commands stay as they are, the domain and the bot webhook are untouched.
+
+The only code change is `transpilePackages: ["@supplies/core"]` in
+`next.config.ts`, because the shared package ships TypeScript source rather than
+a built `dist` — the standard internal-package arrangement, and the reason Vite
+and Metro can consume the same files.
+
+| Deployment | Host | Root Directory | Cost |
+|---|---|---|---|
+| Next.js app | Vercel — **same project, same domain** | `.`, becoming `apps/web` in Phase 4.1 | unchanged |
+| API | Railway / Fly / Render | `apps/api` | new service, ~$5/mo |
+| SPA | Vercel — **second project, same repo** | `apps/spa` | free tier |
+
+Two Vercel projects from one repository is an ordinary supported setup: create a
+second project against the same Git repo, give it a different Root Directory,
+and enable including files outside it so Vercel installs from the workspace root
+and resolves `packages/core` through the pnpm link. Phase 4.1 then changes
+exactly one setting on the existing project — Root Directory `.` → `apps/web` —
+and is verified against a preview deploy before it touches production.
+
+**Why the API should not live on Vercel.** It can; Nest runs behind a serverless
+handler. But Nest is built for a long-lived process and three things get worse
+without one: cold starts on every call the phone makes, `@nestjs/throttler`'s
+in-memory rate limiting stops meaning anything once each request may be a fresh
+lambda, and Prisma needs the pooled Neon endpoint plus connection-limit care.
+Railway or Fly gives a normal Node process, a subdirectory setting for
+monorepos, and a health check, for a few dollars a month.
+
+**Stop rebuilding everything on every push.** Give each Vercel project an
+Ignored Build Step so an SPA-only commit does not rebuild the Next app:
+
+```bash
+git diff --quiet HEAD^ HEAD -- apps/web packages prisma
+```
+
+Exit 0 means nothing that project cares about changed, and Vercel skips the
+build.
+
+**Three origins means CORS is real work, not a checkbox.** The SPA and the API
+will be on different domains, so the API needs an explicit allowlist, and the
+refresh-token cookie needs either a shared parent domain (`api.supplies.app` +
+`app.supplies.app`, cookie `Domain=.supplies.app`, `SameSite=Lax`) or
+`SameSite=None; Secure` cross-site.
+
+### 4.2 Domains are unknown — so nothing hard-codes one
+
+Decided 2026-09-04: **every origin is an environment variable with a working
+localhost default.** No domain appears in source, and the first deploy is a
+matter of filling values in, not editing code.
+
+| Variable | Local default | Read by |
+|---|---|---|
+| `API_PORT` | `3200` | API |
+| `CORS_ORIGINS` | `http://localhost:5173,http://localhost:3000` | API — comma-separated allowlist |
+| `COOKIE_DOMAIN` | *empty* → host-only cookie | API |
+| `COOKIE_SAMESITE` | `lax` | API |
+| `COOKIE_SECURE` | `false` | API |
+| `VITE_API_URL` | `http://localhost:3200` | SPA build |
+| `EXPO_PUBLIC_API_URL` | `http://<LAN-ip>:3200` | RN build |
+| `APP_URL` | `http://localhost:3000` | already exists — Next app |
+
+Local port map, so nothing collides: **3000** Next dev · **3100** Playwright's
+production build · **3200** API · **5173** Vite.
+
+Two rules that make this hold up rather than merely look tidy:
+
+1. **The config module fails loudly on a bad value, at boot.** Nest reads and
+   validates these once through a zod schema at startup, so a missing or
+   malformed origin is a refusal to start with a named variable — not a CORS
+   error at 2am that reads like a browser bug.
+2. **Cross-site cookie settings are a matched set.** `SameSite=None` without
+   `Secure` is silently dropped by every current browser. The three cookie
+   variables are validated together, and the schema rejects the combination
+   rather than letting it fail at runtime in one browser and not another.
+
+Phone testing needs a LAN IP rather than `localhost`, which is why
+`EXPO_PUBLIC_API_URL` is separate — the same reason `TELEGRAM_WEBHOOK_URL` is
+already separate from `APP_URL` today.
+
+### 4.3 The design system is shared too — `packages/ui`
+
+**Added 2026-09-06, after the first SPA screens made the omission obvious.**
+
+The plan was careful about one kind of duplication and blind to another. It
+said, correctly and at length, that the *rules* must have one implementation.
+It said nothing about the *presentation*, and so the SPA grew its own: a single
+`components/ui.tsx` with four hand-rolled components and a hard-coded
+neutral/emerald palette, next to a Next app with twenty-two Base UI primitives,
+a themed token set in `oklch`, and a dark mode.
+
+That is the same mistake in a different layer, and it fails for the same
+reason. Two definitions of a card diverge exactly as fast as two definitions of
+a stock rule; the only difference is that nobody writes a test for the card, so
+the divergence is discovered by looking at it. Which is how it *was* discovered.
+
+**What makes this fixable is that almost none of it was ever Next-specific.**
+The primitives are Base UI plus `class-variance-authority` plus Tailwind — plain
+React with no framework dependency at all. A grep for `next` across
+`components/ui/` returns exactly one hit, `sonner.tsx`, which reads
+`next-themes` for the toaster's colour scheme. Twenty-one of twenty-two files
+move as they are.
+
+```
+packages/ui/
+├── src/
+│   ├── theme.css      the oklch tokens, .dark, and the @theme inline map
+│   ├── lib/utils.ts   cn()
+│   ├── primitives/    button, card, badge, input, select, checkbox, switch, …
+│   └── domain/        state-badges — the one place expiry/stock colours live
+└── package.json       "./*": "./src/*.tsx", same subpath pattern as core
+```
+
+Three things this buys, in the order they matter:
+
+1. **The parity work stops being cosmetic.** With one token set and one button,
+   aligning a screen is a question of structure and content — which is where
+   the real gaps are — instead of re-deriving a colour and getting it nearly
+   right.
+2. **The domain colours get one home.** `--warning` and `--success` exist
+   because an expiry chip must not hardcode a hex value. That argument does not
+   weaken when a second client renders the same chip; it gets stronger.
+3. **It is the claim the project is trying to make, in a second layer.** "One
+   engine, four clients" reads better when the design system is shared by a
+   Next.js app and a Vite SPA than when the SPA visibly is not the same product.
+
+Two costs, both known and both small:
+
+- **Tailwind v4 must be told to scan the package.** Content detection follows
+  imports from the entry CSS, and a linked workspace package under
+  `node_modules` is skipped by default. Both apps add one
+  `@source "../../packages/ui/src"` line. Without it the classes exist in the
+  source and not in the stylesheet, which looks like the components are broken.
+- **`sonner.tsx` and the theme toggle stay app-local.** They depend on how the
+  host app stores the theme — `next-themes` on a class attribute for Next, a
+  small hook for the SPA. The *tokens* are shared; the mechanism that flips
+  them is not, and pretending otherwise would drag `next-themes` into a Vite
+  bundle to serve one component.
+
+`@supplies/ui` is web-only on purpose. React Native has no DOM and no Tailwind
+class strings, so Phase 3 shares `core` and the API client and gets its own
+components — that is a real boundary, not a failure to reuse.
+
+---
+
+## 5. Phases
+
+Marked **⚠ prod** where a step can affect the running deployment. There are
+exactly two, and both are last.
+
+### Phase 0 — make the engine shareable · 3–4 days
+
+| # | Task | Est. |
+|---|---|---|
+| 0.1 | Add `packages:` to `pnpm-workspace.yaml` (today it is only a build allowlist) | 1 h |
+| 0.2 | **F4:** decouple `stock.ts`, `item-group.ts`, `shopping.ts` from `Prisma.Decimal` → `decimal.js`; convert at the DB edge in `queries.ts` / `stock-service.ts` | 1 d |
+| 0.3 | Create `packages/core`; move the pure modules **and their tests**; leave `lib/*.ts` re-export shims so the app compiles unchanged | 1 d |
+| 0.4 | Repoint the Next app at `@supplies/core`; delete the shims | 0.5 d |
+| 0.5 | Wire vitest + ESLint + tsconfig project references for the workspace | 0.5 d |
+
+**Gate:** `pnpm verify`, `pnpm test:db`, `pnpm test:e2e` and a Vercel preview
+deploy all green before anything else starts. 0.2 touches the arithmetic of a
+stock tracker; the 339 tests are the reason this is a day and not a fortnight.
+
+### Phase 1 — the API · 2–3 weeks
+
+| # | Task | Est. |
+|---|---|---|
+| 1.1 | Scaffold Nest, config module, Prisma module (`--schema` at repo root) | 1 d |
+| 1.2 | Auth: `register` / `login` / `refresh` / `logout` / `me`; reuse bcrypt hashes so existing users work | 3 d |
+| 1.3 | `JwtAuthGuard` + a household-scoping guard, so no handler can forget `householdId` | 1 d |
+| 1.4 | Resource modules — see the endpoint sketch below | 6–8 d |
+| 1.5 | `nestjs-zod` pipes over `packages/core/validation` | 1 d |
+| 1.6 | Error envelope carrying **message keys + params**, never formatted prose — the existing `RuleMessage` rule, extended to HTTP | 1 d |
+| 1.7 | OpenAPI at `/docs`, CORS allowlist, helmet, throttler | 1 d |
+| 1.8 | `supertest` e2e mirroring what `scripts/smoke.ts` covers | 2–3 d |
+
+Endpoint sketch — 46 actions and 17 readers collapse to roughly 40 routes:
+
+| Resource | Routes |
+|---|---|
+| `/auth` | register, login, refresh, logout, me, change-password, forgot, reset, invite |
+| `/items` | list (paged/filtered), get, create, update, archive, names, archived |
+| `/items/:id/stock` | add, consume, consume-batch, discard, correct |
+| `/dashboard` | one composed read |
+| `/shopping` | list, add row, check, uncheck, update, delete, archive, bulk |
+| `/shopping-groups` | CRUD + reorder + move row |
+| `/settings` | household, categories, locations, item-groups (CRUD + reorder + defaults) |
+| `/barcode/:code` | lookup (OFF → GEPIR → METRO chain, server-side) |
+| `/recipes` | suggest (Claude; gated on `aiEnabled`) |
+| `/telegram` | link token, send digest now |
+
+### Phase 2 — the SPA · 2–3 weeks
+
+| # | Task | Est. |
+|---|---|---|
+| 2.1 | Vite scaffold, Tailwind v4 config, copy the 22 UI primitives | 1 d |
+| 2.2 | The wire contract in `packages/core/contracts` — client types, the OpenAPI schemas and the e2e parser from one zod object each. **Done, inverted:** see the 2026-09-08 log for why generating FROM the document was the wrong direction | 2 d |
+| 2.3 | Auth context, protected routes, token storage | 1 d |
+| 2.4 | Router: 16 routes + the authed shell | 1 d |
+| 2.5 | TanStack Query hooks + invalidation map (the `revalidatePath` replacement) | 2 d |
+| 2.6 | Port screens: login → items → item detail → add/take → shopping → dashboard → settings → groups → recipes | 6–9 d |
+| 2.7 | Barcode scanner — lift the existing DOM code verbatim | 0.5 d |
+| 2.8 | Playwright against the SPA — 14 checks on the production build, two `webServer` entries, desktop and mobile | 1 d |
+| 2.9 | **Parity gate** — extract `packages/ui`, then align screen by screen | 4–6 d |
+
+#### Phase 2.9 — the parity gate
+
+**Added 2026-09-06.** The first pass built the SPA screens as *translations* —
+same data, same endpoints, whatever layout fell out. Put side by side with the
+Next app they are visibly a different product, and in a few places a
+functionally poorer one. Since the entire point is to demonstrate that the same
+application can be built twice on one engine, "roughly equivalent" is the one
+outcome that proves nothing.
+
+So parity is now an explicit gate with a checklist, and **Phase 3 does not
+start until it closes** (decided 2026-09-06 — see §10).
+
+Two rules for the work, because they change what "aligned" means:
+
+- **The Next app is the reference.** Where the two differ, the SPA moves. Where
+  the Next app is itself wrong, both change, and the fix lands in `web` first.
+- **A missing rule counts as a missing feature.** A screen is not aligned
+  because it looks the same. If the Next page calls `splitExpiring` from the
+  engine and the SPA re-derives the split with an inline filter, that is a
+  second implementation of a rule, and it is the exact failure this whole plan
+  exists to prevent — it just slipped in through the view layer.
+
+| # | Screen | Gap | State |
+|---|---|---|---|
+| — | *design system* | SPA had 4 hand-rolled components and a bare palette against 22 primitives + tokens + dark mode | **done** — `packages/ui` (§4.3) |
+| — | *shell* | text tabs vs icon nav with a mobile bottom bar; no expiring badge; no theme toggle; no user menu; `max-w-2xl` vs `max-w-5xl` | **done** |
+| 1 | dashboard | rule duplicated (inline filter, not `splitExpiring`); no expiry/stock badges; no «Останні дії»; no warn-days caption; group rows linked to a page that does not exist; no minimum shown | **done** |
+| 2 | login | bare inputs; no shell; validated nothing before submitting | **done** |
+| 3 | items | search, barcode scan, sort menu, filter and category chips, pagination and page size, the «Набори» shortcut, group badge, location and minimum — and the list URL is now literally the same link in both clients. The two stragglers, Feature 16.2's create affordance and the archive link, closed in Phase 2.10.4 | **done** |
+| 4 | item detail | FEFO-ordered batches with expired appended, per-batch take/correct/discard, «Поповнити» with Feature 4's multi-row form and its barcode check, «Взяли» with the shortfall refusal inline, barcode and notes, movement history, archive and restore | **done** |
+| 5 | item form | duplicate warning while typing, barcode lookup on scan or blur with the GS1 fallback and the Open Food Facts opt-in, the set picker that hides the minimum, the unit lock, notes | **done** |
+| 6 | shopping | full port: drag between groups, the move menu, group create/rename/delete, per-group add, the buy dialog with its stock-in, check/uncheck, archive and its reveal toggle, row editing, candidates with their detail lines, and who added or bought each row | **done** |
+| 7 | settings | all seven panels: household, categories with per-category warn days, locations, item groups with their thresholds, duplicates, members and invites, Telegram, password — with drag-to-reorder, star-a-default, add and delete throughout | **done** |
+| 8 | recipes | matched | **done** |
+| 9 | groups + group detail | both screens, with the membership editor and its barcode scan | **done** |
+| 10 | items archive | **missing entirely** | **done** — Phase 2.10.4 |
+| 11 | register · join · forgot · reset | **missing entirely** — 4 public routes, one of them blocked on the API | **done** — Phase 2.10.3–4 |
+
+Rows 3–7 were audited against their Next counterparts rather than guessed, and
+what is listed is what was actually found. They are on the shared design system
+and read as the same product; the remainder is content, and each gets its own
+pass.
+
+#### Phase 2.10 — the architecture audit
+
+**Added 2026-09-07**, after a four-part review asked of the whole workspace:
+is each client a showcase in its own right, what is left for parity, are the
+imports right where the two hosts differ, and is the SPA actually decomposed.
+
+The constraint that frames all four answers, stated by the owner and now
+binding:
+
+> The two apps share a **database, not a codebase**. Duplicated views or
+> duplicated logic between them is acceptable. A shared component is
+> acceptable **only while it costs neither host its own rules** — the moment
+> sharing forces either app into an idiom it would not otherwise choose, the
+> sharing is wrong and the duplication is right.
+
+That is a sharper test than "is this reused twice", and `packages/ui` passes
+it today (§4.3, re-verified below). It is not a licence to keep sharing: each
+new candidate gets tested against it individually.
+
+##### What the audit found
+
+**The parts that already hold up.** The engine boundary is enforced rather
+than documented — `eslint.config.mjs` bans Prisma, `next`, `react` and Node
+builtins inside `packages/core`, with `node:crypto` as a named exception.
+`lib/queries.rsc.ts` collapses the layout's and the page's duplicate scans
+through `React.cache` behind `server-only`. `lib/auth-guard.ts` re-reads the
+user row rather than trusting an eight-hour JWT. The SPA keeps its access
+token in memory with an httpOnly refresh cookie and single-flight rotation.
+None of that changes.
+
+**1 · Architecture.** Four gaps, two per client.
+
+- *Web has none of the App Router's error primitives.* No `error.tsx`, no
+  `global-error.tsx`, no `not-found.tsx`, no `loading.tsx`, and not one
+  `Suspense` boundary in the app. Every page is a blocking await and any throw
+  in a server component lands on Next's default screen. For an App Router
+  showcase this is the most conspicuous omission and the cheapest to close.
+- *Web never reaches for `useActionState` / `useFormStatus` / `useOptimistic`.*
+  Server actions everywhere, forms on react-hook-form plus a hand-written
+  runner. Coherent, but not the React 19 idiom a reviewer looks for.
+- *The SPA does not code-split.* All twelve routes are static imports in
+  `App.tsx`, so the build is one 749 KB chunk (240 KB gzip) and Vite's own
+  output names the fix. The technique is plainly understood — `@zxing/browser`
+  is already lazy behind the scan button — it just was not applied at the
+  route boundary, where it pays most.
+- *Neither client has an error boundary or a single component test.* All 357
+  tests are engine tests. Web has one Playwright spec; the SPA has none. The
+  SPA is also not installable while the Next app is, which is backwards: a
+  Vite SPA is where a manifest is nearly free.
+
+**2 · Parity.** Confirmed against the route inventory, not against this
+table's own claims. Five rows remain, and only one of them is blocked:
+
+| Missing | Blocked on |
+|---|---|
+| `/items/archive` | nothing — `GET /items/archive` already exists |
+| `/items`: the create affordance and the archive link | nothing |
+| `/register` | nothing — `POST /auth/register` already takes `inviteToken` |
+| `/join/:token` | one endpoint; `inviteHouseholdName` has no API equivalent |
+| `/forgot-password`, `/reset-password` | **two endpoints that do not exist** |
+
+The last row is the sixth instance of a pattern this plan has already fixed
+five times. `apps/web/lib/actions/auth.ts` hand-rolls token hashing, the
+one-hour expiry, single-use marking and the enumeration-safe always-ok
+response **directly against Prisma** — while `changePasswordAction` and
+`createInviteAction`, in the same file, correctly delegate to
+`@supplies/db/account-service`. The API cannot offer password reset because
+the rules are not reachable from it. Note this is *not* a code-sharing
+question: the rule belongs in the service layer both hosts already call
+through, which is the boundary the whole plan is built on.
+
+Features 7, 9 and 19 (PWA, Telegram webhook, cron digest) show up as web-only
+in a feature-marker diff and are **not** parity gaps — they are properties of
+the Next deployment.
+
+**3 · Imports.** `packages/ui` passes the constraint above: zero `next/*`,
+`react-router`, `sonner` or `@tanstack` imports, navigation injected through
+Base UI's `render` prop, refusals returned as booleans from host-supplied
+callbacks. One React copy resolves across all three packages, and the
+`"use client"` directives are inert under Vite while load-bearing under Next.
+Two real problems:
+
+- *The boundary is enforced for `core` and nowhere else.* Core's own config
+  comment reads "a convention that is not enforced is a convention that
+  breaks" — and then `packages/ui` and `apps/spa` run on convention alone.
+  Nothing stops the shared package importing `next/link` tomorrow, or the
+  browser app importing `@supplies/db`.
+- *`packages/core` exports everything with no condition split.* A browser can
+  reach `@supplies/core/claude` (the Anthropic SDK) or
+  `@supplies/core/telegram-link` (`node:crypto`); the lint rule governs what
+  core *imports*, not what a consumer *reaches*. `@supplies/core/stock.test`
+  is a public entry point too.
+
+**4 · SPA componentisation.** The clearest finding, and the sharpest contrast
+between the two clients:
+
+| SPA route | lines | largest single component |
+|---|---|---|
+| `shopping.tsx` | 1097 | `ShoppingRoute` — **444 lines, 9 `useState`** |
+| `settings.tsx` | 736 | 11 components — this one is right |
+| `item-detail.tsx` | 715 | `ItemDetailRoute` — 273 |
+| `item-form.tsx` | 544 | one component plus three helpers |
+| `items.tsx` | 509 | `ItemsRoute` — **426 lines, one component** |
+
+Web made the opposite call on the same screens: shopping is `shopping-list` +
+`shopping-group-header` + `shopping-row-edit`, settings is five panel files.
+Same product, 25 SPA files against ~60. The SPA has seven files in
+`components/` and twelve routes, so nearly everything lives in whichever route
+first needed it. `settings.tsx` — ported last, and decomposed — proves the app
+can do it; the earlier screens simply were not.
+
+In fairness to web, `shopping-list.tsx` at 803 lines is the same smell one
+size down.
+
+##### The board
+
+Ordered by value, not by file count. Each row is independently shippable.
+
+| # | Work | Closes | State |
+|---|---|---|---|
+| 2.10.1 | Decompose the SPA route monoliths into `components/` and `hooks/` | audit 4 | **done** |
+| 2.10.2 | Lazy route boundaries and an error boundary in the SPA | audit 1 | **done** |
+| 2.10.3 | Move the reset flow — and registration — into `@supplies/db/account-service`; four new endpoints | audit 2 blocker | **done** |
+| 2.10.4 | The five remaining screens: archive, register, join, forgot, reset | Phase 2.9 rows 10-11 | **done** |
+| 2.10.5 | `error.tsx`, `global-error.tsx`, `not-found.tsx`, `loading.tsx` in web | audit 1 | **done** |
+| 2.10.6 | ESLint boundaries for `packages/ui`, `apps/spa` and `apps/web` | audit 3 | **done** |
+| 2.10.7 | SPA web-app manifest | audit 1 | **done** |
+
+**Deferred, with reasons.** `useActionState` in web is a rewrite of seven
+working forms for idiom alone, and the custom runner exists partly to keep
+`SettingsListPanel` host-neutral — revisit only if the runner stops paying for
+itself. Component tests for both clients are Phase 4.5's CI work, where they
+belong with the matrix that runs them; adding a lone Vitest setup now would be
+a harness with three tests in it.
+
+### Phase 3 — React Native, Android · 3–4 weeks
+
+> **Was blocked on Phase 2.9; unblocked 2026-09-07.** The reasoning is in §10:
+> a third client built against a second-rate second client copies its gaps, and
+> the phone is the most expensive place to discover that. The gate is now
+> closed — see Phase 2.9's table and the Phase 2.10 audit that finished it.
+
+| # | Task | Est. | State |
+|---|---|---|---|
+| 3.1 | Expo + Expo Router + NativeWind scaffold; Metro workspace resolution | 1.5 d | **done** |
+| 3.2 | `expo-secure-store` tokens, the contracts from `packages/core`, refresh on 401 | 1 d | **done** |
+| 3.3 | **Milestone A** — login, items list, item detail with take/add | 4–5 d | **done** — the scan moved to 3.4, where it belongs |
+| 3.4 | `expo-camera` barcode scanning | 1 d | **done** — and driven end to end on the emulator, which was not expected to be possible |
+| 3.5 | EAS Build → internal-distribution APK on your phone | 1 d | **done** — APK built, installed and signed in as a standalone app |
+| 3.6 | Remaining 12 screens: dashboard, shopping + groups, settings panels, item form, archive, recipes, join/reset | 2–2.5 w | **done** — full parity with the SPA |
+| 3.7 | Push notifications via `expo-notifications` | 2–3 d | **done** — everything but delivery, which needs the APK and FCM credentials |
+| 3.8 | Play Console listing ($25, once) | 1 d | optional — see below |
+
+**The household does not need the Play Store; push does need Google.** Two
+different Google accounts get conflated here, and checked on 2026-09-11:
+
+- **Firebase (free)** is required for push on Android at all. Every Android
+  push travels through FCM, Expo's push service only relays to it, and a
+  standalone build with no Firebase project cannot even obtain a token.
+- **Play Console ($25)** only buys a store listing. A personal account created
+  after 13 Nov 2023 must also run a closed test — 12 testers opted in for 14
+  continuous days — before it may publish to production. The APK installs
+  without any of this.
+- **Sideloading gets a condition in 2027.** Android developer verification
+  blocks APKs from unregistered developers on certified devices — Brazil,
+  Indonesia, Singapore and Thailand from 30 Sep 2026, everywhere else from
+  2027. A free *limited-distribution* account (no fee, no ID, up to 20 devices)
+  covers a household; `adb` installs are exempt.
+
+**Milestone A is a checkpoint, not a reduced scope.** Full parity is the
+destination; 3.3–3.5 just happen to be the order that proves the whole stack —
+workspace, API, auth, camera, real write — before twelve more screens are built
+on top of it. If something is structurally wrong, it surfaces in week one of
+this phase rather than week four. Ship an APK to your own phone at 3.5 and use
+it for a few days before continuing.
+
+**Do not paint yourself into Android**, since Phase 5 exists. Concretely, from
+3.1 onward: `react-native-safe-area-context` on every screen even though Android
+mostly does not need it, no Android-only libraries, `expo-camera` rather than
+anything platform-specific, and keyboard handling written against
+`KeyboardAvoidingView` rather than Android's default resize behaviour. All four
+are free now and expensive to retrofit.
+
+### Phase 4 — finish and present · 3–5 days
+
+| # | Task | Est. | State |
+|---|---|---|---|
+| 4.1 | **⚠ prod** Move the Next app to `apps/web`; set Vercel Root Directory | 0.5 d | **done, 2026-09-06** |
+| 4.2 | **⚠ prod** Verify the deploy: build, migrations, bot webhook, cron | 0.5 d | needs your say-so — a fast-forward of `main`, three additive migrations, no new variables; the cut-over is in deployment-instructions.md §2 |
+| 4.3 | Deploy the API (Railway / Fly / Render) and the SPA (Vercel / Netlify) | 1 d | needs an account and a hosting choice |
+| 4.4 | README rewrite: diagram, stack table, screenshots, "where to look" | 1 d | **done** |
+| 4.5 | CI matrix — core, api, web, spa; Playwright on both web clients | 1 d | **done** — plus a mobile job, which is what the EAS failure argued for |
+
+Phase 4.1 is deliberately **the last thing that touches production**. Until
+then the Next app stays at the repo root and Vercel's configuration never
+changes, so every phase before it is additive and cannot break what your
+household is using.
+
+At the end of Phase 4 the portfolio is complete and showable: API, SPA, Android
+app, Next.js app, Telegram bot, one engine. Phase 5 extends it.
+
+### Phase 5 — iOS · 1–1.5 weeks
+
+> **Parked 2026-09-11 — not a priority (decision 11).** The table below is
+> kept as the plan for when it comes back.
+
+Sequenced after Phase 4 on purpose, so nothing you show people is ever blocked
+on Apple's review queue.
+
+| # | Task | Est. | State |
+|---|---|---|---|
+| 5.1 | Apple Developer account ($99/yr), EAS credentials, bundle id | 0.5 d | needs an Apple account |
+| 5.2 | Platform pass: safe areas, keyboard, scroll behaviour, haptics | 2–3 d | **keyboard and safe areas done** — both live in `Screen`, so no screen can forget; haptics remain |
+| 5.3 | `Info.plist` usage strings (camera), icons, splash | 0.5 d | **done** — the camera string is on the plugin, the icons render from the web app's SVG |
+| 5.4 | APNs push, if 3.7 shipped | 1 d | 3.7 shipped; the client half is platform-neutral |
+| 5.5 | TestFlight build, install, fix what only shows on a real device | 1–2 d | needs 5.1 |
+| 5.6 | App Store submission: demo account, privacy policy, App Privacy answers | 1–2 d + review latency | needs 5.1 |
+
+**You need a Mac or EAS cloud builds.** EAS removes the hardware requirement,
+not the $99. Review latency is usually a day or two and is entirely outside your
+control — which is the whole reason this phase sits where it does.
+
+---
+
+## 6. Scope and timeline
+
+**Full parity.** Every endpoint, all 16 screens on the SPA, all 16 on React
+Native, push notifications, both stores.
+
+Estimates below are **working days of focused effort** — a "week" is five of
+them. Translate to calendar at whatever rate you actually work; the two columns
+on the right are the honest arithmetic, not a hedge.
+
+| Phase | Effort | Full-time | ~15 h/week |
+|---|---|---|---|
+| 0 · shareable engine | 3–4 d | <1 wk | ~2 wk |
+| 1 · API | 10–15 d | 2–3 wk | 5–7 wk |
+| 2 · SPA | 10–15 d | 2–3 wk | 5–7 wk |
+| 3 · Android | 15–20 d | 3–4 wk | 7–10 wk |
+| 4 · finish + present | 3–5 d | ~1 wk | ~2 wk |
+| **Showable total** | **41–59 d** | **8–12 wk** | **5–7 months** |
+| 5 · iOS | 5–8 d | 1–1.5 wk | 2–4 wk |
+
+Two things follow from choosing parity with no deadline, and both are worth
+building in from the start rather than discovering later:
+
+**Order matters more than scope now.** Milestone A in Phase 3 exists precisely
+because the total is long: it puts a working end-to-end vertical — workspace,
+API, auth, camera, real write — on your phone inside the first week of that
+phase, so a structural mistake surfaces at day 5 rather than day 25.
+
+**Something has to be presentable at every point after Phase 2.** Five months is
+long enough that a job opportunity will appear mid-way through. Keep the README
+current as each phase lands, so the repo is never in a state where the honest
+description is "half-migrated". That is a habit, not a task — but it is the one
+that pays if a recruiter appears in week nine.
+
+---
+
+## 7. Testing and CI
+
+The existing test story is unusually strong for a personal project and is worth
+protecting — it is itself a hiring signal.
+
+| Layer | Tool | Where it lands |
+|---|---|---|
+| Rules | vitest, 339 tests | `packages/core` — **moved, not rewritten** |
+| API contract | supertest + seeded Postgres | `apps/api` — absorbs `scripts/smoke.ts` |
+| SPA units | Vitest + Testing Library | `apps/spa` |
+| SPA e2e | Playwright, desktop + Pixel 7 | `apps/spa` — the 4 specs adapt |
+| Next e2e | Playwright, unchanged | `apps/web` |
+| RN | Maestro flows over the critical paths | `apps/mobile` — cheaper to write and maintain than Detox |
+
+CI becomes a matrix: `core` (fast, always), then `api` / `web` / `spa` in
+parallel behind a Postgres service. The pre-commit hook stays as it is —
+lint + typecheck + unit — because 20 seconds is the budget that keeps it from
+being bypassed.
+
+---
+
+## 8. What a reviewer will be able to verify
+
+The point of the whole exercise, mapped to evidence:
+
+| Claim | Where it is provable |
+|---|---|
+| React without a meta-framework | `apps/spa` — Vite, React Router, TanStack Query |
+| Backend API design | `apps/api` — Nest modules, guards, DTOs, OpenAPI at `/docs` |
+| Auth beyond a library default | Access + rotating refresh, cookie for web, secure-store for native |
+| React Native | `apps/mobile` — real APK, camera, same API |
+| Monorepo | pnpm workspace, four apps, two shared packages |
+| Domain modelling | `packages/core` — FEFO, expiry states, Decimal arithmetic, 339 tests |
+| Testing judgement | Four layers with a written rationale for the size of each |
+| Not just greenfield | An existing production app refactored without downtime |
+
+That last row is the one most portfolios cannot claim, and it comes free with
+the one-repo decision.
+
+---
+
+## 9. Risks and frictions
+
+1. **Prisma must never enter the SPA or Metro bundle.** Already true for the
+   browser; Phase 0.2 is what makes it enforceable across three build systems.
+   Add a lint rule banning `@/lib/generated/*` outside `apps/api`, `apps/web`
+   and `bot/` — a convention that is not enforced is a convention that breaks.
+2. **Metro and workspaces.** `nodeModulesPaths` and symlink resolution need
+   configuring or Metro will not resolve `packages/core`. Budget half a day and
+   do not be surprised by it.
+3. **The `@/` alias.** Everything imports `@/lib/...` today. Shared code becomes
+   `@supplies/core`; this is mechanical but touches many files, which is why
+   Phase 0.3 keeps re-export shims so it lands as its own reviewable commit.
+4. **Auth divergence.** Two auth systems will coexist — Auth.js cookies for
+   `apps/web`, JWT bearer for everything else. Acceptable and normal, but say
+   so in the README before someone calls it an inconsistency. Unifying `web`
+   onto the API is possible later and is not worth doing now.
+5. **`revalidatePath` has no equivalent.** Every mutation needs an explicit
+   invalidation decision. Write the query-key map (2.5) *before* porting
+   screens, not during.
+6. **Scope creep into features.** The temptation to "improve it while I'm in
+   there" is what turns 7 weeks into 20. The API is a translation of 46
+   existing actions. Behaviour changes go on a separate list.
+7. **`feature/offline-sync` is parked, and parking it has a cost.** It stays on
+   its branch, out of scope, not merged. Be clear-eyed that Phase 0 moves the
+   engine into `packages/core` and rewrites every `@/lib/*` import the branch
+   touches — after that, rebasing it is not a merge conflict, it is a rewrite.
+   Treat the branch as a **design record** rather than resumable code: the
+   IndexedDB outbox, the idempotency keys and the `navigator.onLine` fast-path
+   are the parts worth re-reading if offline is ever rebuilt on the API, which
+   is where it belongs anyway — one queue serving two mobile clients instead of
+   a browser-only one.
+
+---
+
+## 10. Decisions taken — 2026-09-04
+
+| # | Decision | Consequence in this plan |
+|---|---|---|
+| 1 | **Full parity** | All 16 screens on RN too; Phase 3 is 3–4 weeks, not one |
+| 2 | **NestJS** | Modules/DI/guards; OpenAPI at `/docs`; Fastify declined |
+| 3 | **One workspace** | §1; Vercel untouched until Phase 4.1 |
+| 4 | **Offline parked** | Out of scope; §9.7 on why the branch will not rebase |
+| 5 | **iOS later** | Its own Phase 5, after Phase 4 ships; §3 stays cross-platform |
+| 6 | **No deadline** | Buys the Nest ceremony and full parity; §6 on what it costs |
+| 7 | **Domains unknown → env-driven** | §4.2; localhost defaults, no origin in source |
+
+### Amended 2026-09-06
+
+Three corrections, all from reading the first SPA screens next to the Next app.
+
+| # | Decision | Consequence in this plan |
+|---|---|---|
+| 8 | **Phase 4.1 pulled forward — `apps/web` now** | Decision 3 said Vercel stays untouched *until* 4.1; it never said 4.1 had to be last. Keeping the Next app at the repo root while `apps/api` and `apps/spa` existed made the layout say the opposite of what it means: that the Next app is the project and the rest are attachments. The move is a rename plus one Vercel setting, and doing it on an unmerged branch costs nothing — doing it after three more phases means re-touching every file those phases add. |
+| 9 | **The design system is shared: `packages/ui`** | §4.3. The original plan factored the rules and forgot the components, which is the same duplication one layer up. |
+
+### Amended 2026-09-11
+
+| # | Decision | Consequence in this plan |
+|---|---|---|
+| 11 | **iOS is not a priority** | Phase 5 is parked, not cancelled. What it already has stays, because it cost nothing and protects Android too: safe areas and the keyboard live in `Screen`, the icons and splash are platform-neutral. Nothing further is built for iOS until this is reversed. |
+| 10 | **Parity gates Phase 3** | Phase 2.9. A React Native app built against a second-rate SPA inherits its gaps, and a phone is the slowest place to find them. Full parity was already decision 1; this says *when* it is checked, not just that it is owed. |
+
+### Still open, but not blocking
+
+- **API host** — Railway, Fly or Render. Any of the three; pick when Phase 1
+  first needs to deploy, not before. Two facts found on 2026-09-11 that any
+  choice has to honour: **production's Neon database is in `us-east-2`
+  (Ohio)**, so the API belongs in US East — every request makes several
+  round trips to it — and **the rate limiter currently keys on the socket
+  address**, which behind any host's proxy is the proxy. Fastify's
+  `trustProxy` has to be set for the host before the first deploy, or the
+  whole household shares one 120-a-minute bucket and sign-in has no real
+  brute-force limit.
+- **Package build strategy** — ship `packages/core` as TypeScript source
+  (simpler, one source of truth, needs `transpilePackages` + Metro config) or
+  build to `dist` (works everywhere with no bundler config, adds a build step).
+  Source is the default; revisit only if Metro fights back in Phase 3.1.
+- **Cross-tab refresh — closed 2026-09-09.** `REFRESH_GRACE_MS` in
+  `apps/api/src/auth/tokens.ts` lets a just-rotated token answer once more, so
+  two tabs restoring together stop looking like theft. A `revokedReason`
+  column is what keeps it honest: only a rotation earns the grace, because
+  `revokeAllFor` stamps `revokedAt = now()` and would otherwise put a whole
+  revoked family inside the window — the API's own e2e suite caught that.
+
+  **Two things in the original note were wrong, and are worth keeping visible.**
+  It said the React Native app would have the same problem: it does not. Each
+  device holds its own token, and concurrent refreshes inside one JS context
+  are handled by the single-flight guard. The window exists for the cookie
+  clients, and the phone simply costs nothing by it. It also framed
+  `navigator.locks` as the smaller fix; it is smaller in lines and worse in
+  scope, since it puts a cross-client invariant in one of three clients.
+
+---
+
+## 11. Progress log
+
+### Phase 0 — done, 2026-09-04
+
+| # | Task | Commit |
+|---|---|---|
+| 0.1 | `packages:` key in `pnpm-workspace.yaml`; Next app stays the root package | `5396ea1` |
+| 0.2 | Engine decoupled from `Prisma.Decimal` → decimal.js; units moved out of the generated enums | `abadd29` |
+| 0.3 | 28 modules + their tests moved to `packages/core`, subpath exports, no barrel | `5396ea1` |
+| 0.4 | Every app import repointed to `@supplies/core/*` — done directly, no shim commit | `5396ea1` |
+| 0.5 | vitest over three roots, ESLint boundary rule, `transpilePackages` | — |
+
+**Gate met:** 351 unit tests (339 + 12 new), lint, typecheck, production build,
+and all 52 live-database smoke checks. Not yet run: `pnpm test:e2e` and a Vercel
+preview deploy — both belong to the `chore/post-review` PR this branch is
+stacked on.
+
+Three things worth knowing before Phase 1:
+
+**The boundary is enforced, not documented.** `eslint.config.mjs` bans Prisma,
+React, Next, `server-only`, the `@/` alias and Node builtins inside
+`packages/core`, with `node:crypto` the single exception for
+`telegram-link.ts`. Verified against a file that deliberately imports all of
+them, rather than assumed from a passing lint run. Core's *tests* keep every
+ban but the Node one — they run in Node, and `gepir.test.ts` reads fixtures off
+disk.
+
+**No barrel, and it must stay that way.** `exports` is `"./*": "./src/*.ts"`.
+An `index.ts` would put `node:crypto` in the module graph of any mobile screen
+that imported anything at all.
+
+**The engine's tests no longer need a database, an `.env`, or a generated
+client.** That is the property Phase 1 will lean on when the API imports the
+same rules, and Phase 3 when Metro does.
+
+### Phase 1.1 — done, 2026-09-04
+
+`apps/api` boots, connects, and serves. Verified by running it, not by building
+it: `/health`, `/health/ready` (real `SELECT 1`), `/api/meta`, and Swagger UI at
+`/docs` all answered on port 3200.
+
+| Piece | State |
+|---|---|
+| NestJS 11 on Fastify, helmet, cookie, throttler | done |
+| `PrismaService` — eager connect, real shutdown hook | done |
+| Env config: zod-validated at boot, 11 tests | done |
+| `GET /api/meta` — units and movement reasons from `@supplies/core` | done |
+| OpenAPI at `/docs` | done |
+| Auth, resource modules, zod pipe | Phase 1.2+ |
+
+**§4.2 is implemented.** No domain appears anywhere in `apps/api`. The config
+refuses to boot on `SameSite=None` without `Secure`, refuses an origin that is
+not a URL, refuses plain `http://` origins in production, and names every bad
+variable in one message rather than one per restart. `API_JWT_SECRET` is the
+only value with no default — a fallback secret is a fallback that reaches
+production.
+
+**`GET /api/meta` is the wiring proof, not a placeholder.** It serves the unit
+list from the same module the zod schemas validate against, which is the same
+one `lib/units.test.ts` pins to the Prisma enum. The SPA and the phone will both
+need that list for their «Одиниця» dropdowns, and a hardcoded copy in either is
+a copy that still says six units the day the schema has seven.
+
+**Toolchain, in one line each** — the detail is in
+[apps/api/CLAUDE.md](apps/api/CLAUDE.md):
+
+- The API is **CommonJS**, and Prisma's generator is told `moduleFormat = "cjs"`
+  for it. Its default ESM output carries `import.meta`, which survives a
+  CommonJS build and makes Node reject the file.
+- **ESM is a dead end here.** Node ESM needs file extensions, tsc never adds
+  them on emit, and Turbopack will not resolve `./decimal.js` to `decimal.ts` —
+  so one of the two consumers of `packages/core` breaks whichever way its source
+  is written. Tried, reverted, documented.
+- A tsconfig `paths` alias does not survive emit, so the API has its **own
+  generated client** and one file (`src/core.ts`) that reaches into
+  `packages/core/src` relatively.
+- **No `ValidationPipe`.** Nest's default needs class-validator; this API
+  validates with the zod schemas in `@supplies/core/validation`. Two validation
+  libraries would be two definitions of a valid item.
+
+### Phase 2.1 — done, 2026-09-04
+
+`apps/spa` — Vite, React 19, React Router 7, TanStack Query, Tailwind v4. One
+route so far, and **nothing on it is mocked**: it fetches the API's liveness,
+readiness and unit list, and formats a quantity through `@supplies/core/format`
+to show the engine running in a browser bundle with no Prisma in it.
+
+**All three run together:**
+
+```bash
+pnpm dev:all     # Next :3000 · API :3200 · SPA :5173
+```
+
+Verified in a browser, not just with curl: the SPA's cross-origin requests to
+:3200 return 200 with `credentials: "include"`, the console is clean, and the
+Next app still serves `/login` alongside them.
+
+`credentials: "include"` is set before there is a cookie to send. Credentialed
+CORS is the configuration that fails loudest and most confusingly when wrong, so
+it gets exercised now rather than on the day the refresh token needs it.
+
+One fix on the way: `nest start --watch` looks for `dist/main`, but including
+`packages/core` in the API's tsconfig makes tsc infer the repo root as
+`rootDir`, so the entry is `dist/apps/api/src/main`. `entryFile` in
+`nest-cli.json` now says so.
+
+### Phase 1 — the API · substantially done, 2026-09-05
+
+Documented as **Feature 34** in PROJECT_PROMPT.md before any of it was written.
+
+| # | Task | State |
+|---|---|---|
+| 1.1 | Nest on Fastify, config, Prisma, health, OpenAPI | done |
+| 1.2 | Auth: register/login/refresh/logout/me, rotation + reuse detection | done |
+| 1.3 | Global guard, `@CurrentUser` household scoping | done |
+| 1.4 | Items, dashboard, shopping, taxonomy, groups, movements, 5 stock writes | done |
+| 1.5 | zod pipe over `@supplies/core/validation` | done |
+| 1.6 | Error envelope carrying message keys + params | done |
+| 1.7 | CORS allowlist, helmet, throttler | done |
+| 1.8 | 19 e2e checks against a live database | done |
+| — | Items, shopping and settings writes | done |
+| — | Barcode and recipes endpoints | done |
+| — | Telegram link/digest endpoints | **skipped** — see below |
+
+**`packages/db` arrived here, and it had to.** Feature 34 makes the API a third
+front end, and one that wrote its own queries would be a third implementation.
+So `prisma.ts`, `queries.ts` and `stock-service.ts` moved into a package every
+consumer shares — which needed one generated client instead of two
+(`moduleFormat = "cjs"`), and needed Feature 4's discard and correct to move out
+of `lib/actions/stock.ts` into the write path where the bot and the API can
+reach them.
+
+**Three toolchain findings, each verified rather than assumed:**
+
+- Prisma 7's ESM output carries `import.meta`, which survives a CommonJS build
+  and leaves a file Node rejects.
+- **ESM for the API is a dead end.** Node ESM needs file extensions, tsc never
+  adds them on emit, and Turbopack will not resolve `./decimal.js` to
+  `decimal.ts` — so `packages/core` breaks one of its two consumers whichever
+  way its source is written. Tried, reverted, documented.
+- **tsc does not rewrite module specifiers**, so anything `nest build` compiles
+  must import across packages relatively. This bit three times before it was
+  written down.
+
+**The Telegram endpoints are deliberately not built.** `createTelegramLinkAction`
+mints a deep-link token and `sendDigestNowAction` triggers the daily digest —
+both are settings-page conveniences that only make sense next to a bot the web
+app already links. Adding them to the API would mean pulling grammy and
+`lib/digest.ts` into it to serve a button no other client has. If the SPA or
+the phone ever grows a Telegram settings screen, they are two thin wrappers.
+
+> **Reversed 2026-09-07.** The SPA grew that settings screen, so the "no other
+> client has it" clause expired. Both endpoints exist now, and the prediction
+> held: they are two thin wrappers. The cost was as stated — `apps/api`
+> depends on `@supplies/bot` and therefore grammy — and it also dragged the
+> bot into the API's compile graph, which broke the API until the bot's
+> cross-package imports were made relative. See the Phase 2.9 entry for 7
+> September.
+
+### Phase 2 — the SPA · in progress, 2026-09-05
+
+| # | Task | State |
+|---|---|---|
+| 2.1 | Vite, React Router, TanStack Query, Tailwind scaffold | done |
+| 2.3 | Auth context, in-memory access token, refresh-cookie recovery | done |
+| 2.5 | Query-key map, written before the screens | done |
+| 2.6 | Login, dashboard, items, item detail, item form, shopping, settings, recipes | done |
+| 2.6 | Groups, archive, register, invite, password reset | **remaining** |
+| 2.2 | Generate the client from OpenAPI (hand-written types for now) | **remaining** |
+| 2.7 | Barcode scanner | done — shared, in `packages/ui` |
+| 2.8 | Playwright against the SPA | **remaining** |
+
+Verified in a browser rather than only by build: sign in, the dashboard shows
+the seeded household's expired/expiring/low items, open an item, press «Взяли»
+— 120 becomes 119 — press «Поповнити» and it is 120 again.
+
+Two bugs that only running it could find:
+
+- A reload landed on the login page with a valid session in the cookie jar.
+  `api.post` with no body still sent `Content-Type: application/json`, and
+  Fastify answers an empty JSON body with 400 *before the handler runs* — so
+  `/auth/refresh`, which needs no body, was answered by the body parser.
+- The item detail type was invented rather than read. `getItemDetail` returns
+  the row alongside the states computed from it, and sends no per-batch expiry
+  state — correctly, since shipping one would put a second copy of Feature 13's
+  category inheritance on the wire.
+
+### Review — three gaps found, 2026-09-06
+
+Raised after the first implementation round, and all three were right.
+
+**1. `apps/web` does not exist.** §4 has drawn the target layout since day one
+and the one app that was already finished was the one still at the repo root.
+The deferral had a reason — Phase 4.1 is the only step that touches production —
+but the reason had quietly stopped applying: nothing on this branch is pushed,
+production runs from `main`, and the "risk" was one Vercel setting flipped at
+merge time rather than at commit time. Meanwhile the layout was actively
+misleading, and every phase added files to a root that was going to move
+anyway. Decision 8; done below.
+
+**2. The SPA is a different product to look at.** Not a difference of taste: 22
+themed primitives and a dark mode against four hand-rolled components and
+`@import "tailwindcss"` on its own. Worse, some of the difference is
+functional — the dashboard alone is missing the badges, the recent-activity
+card and the warn-days caption, has a link that goes nowhere for group rows,
+and re-implements Feature 30's split with an inline filter instead of calling
+`splitExpiring`. That last one is a duplicated *rule*, in the layer nobody was
+watching. Decision 9 and Phase 2.9.
+
+**3. Native before parity is the wrong order.** Agreed and adopted as decision
+10. Building a third client against a second client that is missing four routes
+and three cards just copies the gaps somewhere more expensive to fix.
+
+### Phase 4.1 — `apps/web`, moved early · done, 2026-09-06
+
+The Next app is now `apps/web` and the root holds no application code. Verified
+by running it, not only by building it: `pnpm dev`, sign in as the demo
+household, dashboard renders from the real database; `pnpm build`; all 8
+Playwright checks across desktop and mobile; lint, both typechecks, 351 unit
+tests, 20 API tests.
+
+**One Vercel setting changes: Root Directory `.` → `apps/web`.** The Build
+Command does not, because `apps/web` grew its own `build` and `migrate:deploy`
+that delegate to the repo root through `pnpm -C ../..` — Prisma has to run
+where `prisma.config.ts` and the schema are. The setting and the merge have to
+happen in the same window; deployment-instructions.md §2 says so at the point
+someone would need to know.
+
+Four things the move forced, each worth more than the tidiness:
+
+- **`bot/` became `@supplies/bot`.** `apps/web`'s cron route sends the digest,
+  and the digest imports the bot's reply keyboard, so `lib/digest.ts` could not
+  come along to `apps/web` and could not go to `packages/db` either. Making the
+  bot a package was the answer, and it removed the last `@/`-alias import
+  crossing a boundary — those were the imports that would have broken silently
+  on the next move rather than loudly on this one.
+- **The two drift guards moved to `packages/db`.** `prisma-decimal.test.ts` and
+  `prisma-units.test.ts` compare the engine's types against the generated
+  client's, a comparison `packages/core` is forbidden by lint to make. They
+  were in `lib/` because that was the only other place with Prisma; now they
+  are where Prisma actually lives.
+- **Next reads the repo-root `.env`.** Next only looks in its own project
+  directory, which is now `apps/web`, while the Prisma CLI, the bot, the
+  scripts and the API all read the root file. `next.config.ts` loads it
+  explicitly with `override: false`, so a real environment variable — which is
+  how Vercel supplies every one of these — still wins. The alternative was two
+  env files and an afternoon, one day, wondering why migrations ran against a
+  different database than the app.
+- **Two ESLint warnings that had been hiding.** `eslint-plugin-react`'s version
+  detection found no React at the root (correctly — it is in the two clients
+  now), and `no-html-link-for-pages` looked for a `pages/` directory. The
+  second had been dead the whole time: it is a Pages Router rule and this is an
+  App Router app. Both are now settled explicitly rather than by coincidence of
+  layout.
+
+### Phase 2.9 — `packages/ui`, the shell, the dashboard · 2026-09-06
+
+Twenty-one primitives moved out of `apps/web/components/ui` unchanged, plus
+`state-badges` and `cn`. Twelve that `shadcn add` had installed and nothing
+ever imported were deleted rather than carried — `alert`, `avatar`, `badge`,
+`checkbox`, `field`, `popover`, `select`, `sheet`, `skeleton`, `table`, `tabs`,
+`tooltip`. `sonner` stayed in the Next app because it reads `next-themes`.
+
+Both apps now `@import "@supplies/ui/theme.css"`. The SPA's stylesheet before
+this was one line: `@import "tailwindcss"`.
+
+Verified by running all three against one database — sign in on the SPA, the
+dashboard renders the same words the Next app renders, «Взяли» takes 130 to
+129, «Поповнити» puts it back. Dark mode works in both.
+
+Three things worth keeping:
+
+- **A CSS import needs a `style` condition.** `"./theme.css": "./src/theme.css"`
+  does not resolve; Tailwind resolves `@import`s itself and looks for `style`.
+  The failure is loud, which is lucky — the neighbouring failure mode is a
+  stylesheet that compiles, is valid, and has no tokens in it.
+- **`@source "."` belongs in the package.** Tailwind's content detection skips
+  `node_modules`, which is where a linked workspace package lives. Declared in
+  `theme.css`, every consumer gets it by importing the theme.
+- **`Button render={<Link/>}` needs `nativeButton={false}`.** Found by reading
+  the browser console after the screens rendered, not by any test. The Next app
+  already does this in eight places; the port had dropped it.
+
+The SPA bundle went from 400 kB to 590 kB (127 → 192 kB gzipped) — Base UI and
+lucide. Worth a code-split before the deploy in Phase 4, not before.
+
+### Phase 2.9 — «Запаси», and a list URL that meant two things · 2026-09-06
+
+The items list is done: search, the sort menu, filter and category chips,
+pagination and page size, the group badge, location and minimum.
+
+**Aligning it turned up a real bug, in the API rather than the SPA.** Feature
+27 says the list's whole view state travels in the URL, and `itemListSearch`
+in `@supplies/core` writes that URL. It was only ever being written in one
+place and read in three — and the readings had drifted: the API had settled on
+`category` and `perPage` where the writer emits `cat` and `per`.
+
+The effect was quiet, which is what makes it worth recording. A filtered list
+in the Next app is a link you can send to someone. Hand that identical query
+string to the API and it answered with a *different* list — all categories,
+default page size — with no error, no warning, and a perfectly plausible
+result. Nothing failed; it was just the wrong answer.
+
+`parseItemListSearch` is now the inverse of `itemListSearch` and the only
+reader, used by the Next page, the API and the SPA. Six unit tests pin the
+round trip, and three e2e checks pin it over HTTP; the category one was run
+against the old controller first and fails there, so it has teeth.
+
+The proof that mattered: `/items?per=10&page=2` open in both clients returns
+byte-identical rows, badges and «11–15 з 15».
+
+Two smaller things:
+
+- **`use-item-sort` moved into `packages/ui`.** Feature 12.2's per-device sort
+  preference is presentation state that both web clients now offer. A second
+  copy would be a second answer to "what did this person choose last time".
+- **`packages/ui` is excluded from the root tsconfig.** It is the one package
+  that legitimately needs the DOM and JSX, and it has its own config. The
+  exclusion is the boundary working rather than a hole in it — the root config
+  still has no DOM lib, so the moment `core` or `db` reaches for `window` it
+  says so. `pnpm -r typecheck` covers every package under its own settings.
+
+### Phase 2.9 — the scan button and «Набори» · 2026-09-07
+
+Both spotted by using the SPA's items page next to the Next one.
+
+**The barcode scan button moved to `packages/ui`** rather than being rebuilt.
+It is a camera, a decoder and a dialog — nothing Next-specific — and a second
+scanner would sooner or later disagree about which formats it reads or how it
+strips non-digits. `@zxing/browser` moved with it. The lookup behind it was
+already shared: `GET /api/barcode/:code/item` answers the same question
+`findItemByBarcodeAction` does, out of `@supplies/db/barcode-service`.
+
+**Moving it exposed a latent bug in the Next app.** The component had `onScan`
+in its effect's dependency array, and every call site writes that handler
+inline — so any parent re-render while the dialog was open tore the camera down
+and started it again. Typing in the search box beside the button was enough.
+The fix is a ref holding the latest callback, so the effect depends only on
+what should actually restart the camera; asking each caller to `useCallback`
+puts the burden in the wrong place and is one forgotten wrap from the same bug.
+Both clients get the fix.
+
+**«Набори» needed the screens to exist first**, so a button linking nowhere was
+not an option — the two group screens landed with it. That in turn needed
+`GET /api/groups/:id`, which did not exist: the API had every group *mutation*
+and no way to read one. Feature 26.2's membership editor came with it, barcode
+scan included.
+
+Verified against all three running on one database: the button appears only
+because the household has a set; the set's editor found «Кава мелена», added it
+(the total became «200 г»), and removed it again, leaving the set as found. The
+scan dialog opens and reports the camera correctly as unavailable in a headless
+pane — the camera itself remains the one thing only a real device can prove,
+as it always has been for the Next app.
+
+`?name=` and `?barcode=` now carry into the SPA's item form, so «Створити»
+under a fruitless scan is not a dead end.
+
+### Phase 2.9 — «Покупки», and two API bugs · 2026-09-07
+
+The shopping screen is the biggest one in the app — 800 lines in the Next
+version across three components — and it ports whole: drag between groups, the
+move menu for when drag is impossible, group create/rename/delete, per-group
+add fields, the buy dialog and its stock-in, check and uncheck, archive and its
+reveal toggle, row editing, the candidate suggestions with their detail lines,
+and «додав Антон» / «купив Оксана» on every row.
+
+**Feature 11's rules had never left `apps/web`.** Creating, renaming, deleting
+and moving between shopping groups lived only in `lib/actions/shopping-groups.ts`
+— five functions the API had no route for. Writing them again in a controller
+would have been the third copy of "a group name is unique within a household"
+and the second of "deleting a group returns its rows to «Загальна група»
+rather than destroying them", so they moved to
+`packages/db/shopping-groups-service` first and both front ends now call them.
+`ShoppingGroupsController` is new, under `/shopping-groups` rather than more
+routes on `/shopping/:id/…`, where a future `/shopping/groups` would collide
+with the row routes.
+
+**A POST with no body was a 500.** Ticking a free-text row off sends nothing —
+a one-off has no stock to record — and Fastify hands Nest `undefined` for that
+body, so `body.rows` threw. Nine handlers had the same shape. `EmptyBodyPipe`
+normalises an absent body to `{}` globally, because fixing it per handler means
+writing `body?.x` in nine places and forgetting it in the tenth. Two e2e checks
+pin it, and both were run against the un-piped app first to confirm they fail
+there.
+
+Also shared rather than copied: `id-set-store` with `use-collapsed-groups` and
+`use-shown-archived` — the per-device collapse and archive-reveal preferences —
+moved into `packages/ui`. The SPA gained a toaster, because the web app reports
+refusals that way on this screen and inline notes would be a different
+interaction for the same events.
+
+Verified against all three running on one database: created «Аптека», moved a
+row into it with the move menu (the default group went 8 → 7, «Аптека» 0 → 1),
+renamed it, deleted it and watched the row come back to 8 with the toast that
+says so; ticked a free-text row off and back; archived it and revealed it
+again; opened the buy dialog on «Хліб житній» and used «Без запасу», which
+flipped the row to «купив Антон» without touching stock. The list was put back
+to its seeded two rows and no groups afterwards.
+
+One thing worth knowing for next time: **`pnpm test:api:e2e` signs you out.**
+The refresh-replay check deliberately revokes every session for
+`anton@example.com`, so a browser logged in as the demo user is logged out by
+the suite. That is the theft response working, not a bug.
+
+### Phase 2.9 — «Налаштування», and a skip revisited · 2026-09-07
+
+Seven panels, all of them: household, categories with Feature 13's
+per-category warn window, locations, item groups with their thresholds and a
+link into each set, Feature 16.3's duplicate report, members and invites,
+Telegram, password.
+
+**The Telegram skip is reversed.** Those two buttons were left out of the API
+on the grounds that they were settings-page conveniences next to a bot the web
+app already links. That reasoning held right up until the SPA had a settings
+page of its own; parity here means the same two buttons, and the alternative
+was telling someone to go and use the other client. The cost is named rather
+than hidden: `apps/api` now depends on `@supplies/bot`, and so on grammy, to
+send a digest. Reading whether a chat is linked never did — that is a row.
+
+**Three more services had never left `apps/web`**, the same finding as Feature
+11 on the shopping screen: `changePassword` and `createInvite` (now
+`packages/db/account-service`, with `email.ts` moving there too) and the
+Telegram link token (`packages/db/telegram-service`). `sendDigestNow` went to
+`bot/digest-now.ts` instead, because `bot` already depends on `packages/db`
+and putting it the other way round would be a cycle.
+
+`SettingsListPanel` moved to `packages/ui` — 276 lines of drag-to-reorder that
+both clients need. Sharing it meant taking `useRouter` and `toast` out: its
+callbacks now return a boolean and the host decides what a refusal looks like.
+The Next app supplies them through a new `useActionRunner`, the SPA through
+its own `useWrite`.
+
+Two bugs found by using it:
+
+- **Pulling `bot/` into the API's compile graph broke the API.** The bot
+  imported across packages by specifier, tsc left those verbatim on emit, and
+  Node then resolved them to `.ts` files outside `dist` — `ERR_MODULE_NOT_FOUND`
+  at boot. This is the trap apps/api/CLAUDE.md already documents for
+  `packages/core` and `packages/db`; the bot had never been in that graph, so
+  it had never had to follow the rule. Its cross-package imports are relative
+  now, and bot/CLAUDE.md says why.
+- **Changing the household warn window left every category placeholder quoting
+  the old one.** Each category's day field shows the household default as its
+  placeholder, meaning "inherit this", and `keys.household` was missing from
+  the invalidation list. The Next app never had it because `router.refresh()`
+  re-renders everything.
+
+Also corrected: `updateHousehold`'s signature omitted `name` while the schema
+parsed it and Prisma saved it — the rename worked and the type denied it.
+
+Verified against all three on one database: saved the warn window and watched
+the dashboard caption follow it to «попередження за 9 дн.»; added a category,
+gave it its own 14-day window, starred it, un-starred it, deleted it; had
+«Продукти» refused with «Категорію не можна видалити: у ній є товари.»; set
+and cleared a set's threshold; created an invite link pointing at
+`APP_URL/join/…`; minted a Telegram deep link with the real bot username; and
+was refused a password change with «Поточний пароль невірний.» Everything was
+put back to the seeded values.
+
+### Phase 2.9 — the item page and its form · 2026-09-07
+
+The last two partial screens are done, and with them the parity gate is one
+row from closed.
+
+**Item detail** shows the batches in the order FEFO will actually draw them —
+by calling `fefoOrder` from `@supplies/core`, not by re-deriving "soonest
+expiry first, then undated oldest-first, expired excluded". That meant a
+`reviveBatch` alongside the existing revivers: the engine wants `Decimal` and
+`Date`, and JSON has neither. Reviving is the cheap half of the bargain; the
+expensive half would have been a second implementation of §3.3 that agreed
+with the server until it did not. Plus per-batch take, correct and discard,
+Feature 4's multi-row restock with its barcode check, the shortfall refusal
+inline, the movement history, and archive with its confirmation.
+
+**The item form** carries the whole of Feature 16.1 (a duplicate warning that
+recomputes as you type and never blocks), Feature 10 and 20 (the barcode
+lookup on scan *or* blur, with the GS1 manufacturer fallback worded as a
+separate fact rather than a name), Feature 18.2's opt-in share, Feature 26's
+set picker that replaces the minimum with a pointer to where it actually
+lives, and §3.2's unit lock.
+
+Both use `useState` where the Next versions use react-hook-form. That is a
+dependency difference, not a behavioural one: the schema is `itemSchema` from
+`@supplies/core/validation/item` in both, so the two forms refuse exactly the
+same items for exactly the same reasons, and the API refuses them again.
+
+Verified against both clients on one database. `/items/<id>` returns
+byte-identical headings, quantity, minimum, batch count and FEFO order in the
+SPA and the Next app. In the SPA: took one (150 → 149), was refused 99999 with
+«Не вистачає 99 850 штук — доступно (не прострочено) лише 149 штук» *inside
+the dialog next to the field*, restocked one (149 → 150), added and removed a
+second row in the multi-row form, corrected a batch 1 → 2 → 1 (151 → 150),
+saw «Усю партію» fill the field with the batch's own quantity, watched
+«Кава мелен» raise the duplicate warning, watched the set picker swap the
+minimum field for its pointer, and typed a barcode whose lookup answered
+«За даними GS1 Україна, виробник — ТОВ «САНДОРА»» with the share checkbox
+offered and unchecked. The item ended where it started: 150, no set, minimum 4.
+
+One test-harness note worth keeping: **React's `onBlur` is delegated from
+`focusout`**, so a synthetic `blur` event never reaches it. The first run of
+the barcode-blur check looked like a broken feature and was a broken test.
+
+### Phase 2.10 — the audit, and the board it produced · 2026-09-07
+
+Seven items, all closed. **The parity gate is closed with them**, which
+unblocks Phase 3.
+
+**Decomposition (2.10.1).** The four route monoliths became routes that
+compose. `shopping.tsx` went 1097 → 187 lines, `items.tsx` 509 → 145,
+`settings.tsx` 736 → 102, `item-detail.tsx` 715 → 311, `item-form.tsx` 544 →
+230. What came out of them is 30 files under `components/{items,shopping,item,
+item-form,settings,auth}/` and eight hooks under `hooks/`.
+
+The split is not by line count. **Hooks hold what is true; components hold
+what it looks like.** `useItemList` owns the debounce, the "which control
+resets the page" rule and the sort precedence — the three things on that
+screen that are easy to get subtly wrong — and they now read in thirty lines
+with no list row in sight. `useShoppingList` owns the grouping and the
+invalidation; `useBuyFlow` owns the one write that reports its own errors,
+because a shortfall belongs beside the field that caused it and the shared
+runner toasts.
+
+One thing the split preserved on purpose: `ItemSearchBar` is rendered
+unconditionally by its parent, and its own doc comment says why. It used to
+sit inside a `page && (…)`, so every debounced keystroke unmounted the field
+and took the caret with it. Having no `data` in scope in that file is now what
+keeps the rule true.
+
+**Code splitting and the boundary (2.10.2).** Ten of twelve routes are `lazy`.
+`/login` and `/dashboard` stay eager because each is somebody's first paint —
+a chunk fetched during a tap is free, a chunk fetched before the app opens is
+not. First paint went **749 KB → 605 KB** (240 → 195 KB gzipped, and that 605 is
+after the four new auth screens); `@dnd-kit` (43 KB) and the Base UI dialog
+(9 KB) left it entirely, since only lazy routes reach them.
+
+The remainder is react-dom, react-router, TanStack Query, Base UI's core and
+the shell, which the first paint genuinely needs — so 605 KB is the honest
+floor for this stack rather than a number still worth attacking.
+
+A blanket `manualChunks` vendor split was tried and reverted, and the config
+says so: naming a chunk *overrides* Rollup's automatic async splitting, so
+dnd-kit, the dialog and the 408 KB `@zxing/browser` were all dragged back into
+the first paint. It bought caching and cost 63 KB on the visit that matters
+most. What survives is a `react` chunk, which is honest about buying the
+second visit rather than the first.
+
+`ErrorBoundary` is a class, because catching a render error is still the one
+thing React has no hook for. It sits INSIDE the shell, not around it: a screen
+that throws leaves the header and the nav standing, since those are how the
+reader reaches a screen that works. `resetKey={pathname}` clears it on
+navigation.
+
+**The last shared rule (2.10.3).** The audit found password reset living only
+in `apps/web/lib/actions/auth.ts`, talking to Prisma directly — token hashing,
+the one-hour expiry, single-use marking, and the enumeration-safe always-ok
+answer. The API could not offer the feature because the rules were not
+reachable from it. All three moved to `@supplies/db/account-service`, and the
+Next actions are now four one-line delegations.
+
+Pulling that thread found something worse. **Registration had two
+implementations and they had already drifted.** `RegistrationService` in the
+API consumed an invite with a conditional `updateMany` inside the transaction;
+the web app's server action did not — so two people opening the same invite
+link at the same moment could both join on one token. The version that kept
+its guarantee is the one that survived; `registration.service.ts` is deleted
+and both callers now go through `registerUser`. What deliberately stays with
+the callers is the session: Next writes a NextAuth cookie, the API issues a
+token pair, and both build it from the same row.
+
+A latent bug fell out on the way: `createInvite` took an `appUrl` and
+`inviteEmail` ignored it in favour of `process.env.APP_URL`, so an invite
+could return one link to the caller and email a different one. Both templates
+now take the base URL as an argument, which makes that disagreement
+impossible to express.
+
+Four endpoints: `POST /auth/forgot-password`, `POST /auth/reset-password`,
+`GET /auth/invite/:token`, and a rewritten `POST /auth/register`. The status
+mapping lives in the controller rather than the service, because a taken email
+is a 409 and a dead invite is a 400 while `unwrap` answers 422 for everything
+— and status codes are HTTP's business.
+
+**Six new e2e checks**, each of which fails against the previous commit. The
+one worth naming asserts that `forgot-password` answers an unknown address
+**byte-identically** to a known one: same status, same body. That is the whole
+security property, and it is exactly the kind of thing that decays silently
+without a test.
+
+**The last five screens (2.10.4).** `/items/archive`, `/register`,
+`/join/:token`, `/forgot-password`, `/reset-password` — plus the two stragglers
+on `/items`, Feature 16.2's create affordance and the archive link. The four
+public routes share `useAuthForm`, which is `useState` where the Next versions
+use react-hook-form and the same schema from `@supplies/core/validation/auth`
+in both, so the two clients refuse the same input for the same reasons.
+
+The join screen fetches the household name before offering the form, because
+«Приєднатися до «Наша родина»» and «Приєднатися» are different questions.
+Holding the single-use token is the authorisation for that name, which is why
+the endpoint is public and why it 404s the moment the token is spent.
+
+**Web's error primitives (2.10.5).** `error.tsx`, `global-error.tsx`,
+`not-found.tsx` and `(app)/loading.tsx` — none of which existed, in an app
+that already called `notFound()` in three places and was therefore shipping
+Next's English default 404. `global-error.tsx` carries its own `<html>` and
+inline styles on purpose: the failure it exists for includes the case where
+the theme provider or the font loader is what threw.
+
+**Boundaries that bite (2.10.6).** The audit's sharpest finding was that
+`packages/core`'s contract is enforced by ESLint and nothing else was.
+`packages/ui` may no longer import `next/*` or `react-router` — both, in
+opposite directions, are the coupling the owner ruled out. `apps/spa` may not
+reach `@supplies/db`, Node builtins, another app, or the two `@supplies/core`
+modules that are server-only despite the wildcard export. `apps/web` may not
+grow a second router or a second cache.
+
+Each rule was **proved to fire** by writing a violating import and watching
+lint fail, then deleting it. A boundary rule that matches nothing is worth
+nothing.
+
+**Deferred, unchanged from the board.** `useActionState` in web is a rewrite
+of seven working forms for idiom alone. Component tests for both clients
+belong with Phase 4.5's CI matrix rather than as a harness with three tests in
+it.
+
+**Not run at the time: the API e2e suite.** It needs the local Postgres and
+Docker was not running. Everything else passed, and the compiled API `dist`
+was checked for the specifier trap that has bitten three times before (no
+non-relative `@supplies/` survives compilation). The suite ran the next day —
+see the entry below, which is where the interesting part of this work turned
+out to be.
+
+### Phase 2.10 — what running it against a real database found · 2026-09-08
+
+The previous entry ended with the API e2e suite unrun, because Docker was
+down. With Postgres up, 37 of the 38 checks passed on the first try and the
+rest of the session was spent on what the failure and the browser walkthrough
+turned up. Three real defects, none of which any amount of typechecking would
+have shown.
+
+**1 · A password reset was telling people their invitation was invalid.**
+
+The failing check expected 422 and got 400 — my assertion was wrong, and
+chasing why led somewhere better. `resetPassword` was returning
+`auth.inviteInvalid`, which renders «Запрошення недійсне або вже
+використане.» The logic matched — a single-use token that is spent, expired or
+invented — so the key had been borrowed, and the copy went along with it. Both
+clients showed it, because the Next app had the same line before the rules
+moved.
+
+`auth.resetLinkInvalid` now exists and says «Посилання для відновлення
+недійсне або вже використане. Запросіть нове.» Reusing a message key because
+the *logic* matches is how copy ends up describing the wrong feature.
+
+The status mapping in `AuthController` became an explicit table at the same
+time. It matched `auth.invite*` by prefix, which happened to be right for both
+keys that existed and would have quietly claimed the next one that was not.
+
+**2 · The SPA reported itself for token theft on every mount.**
+
+Visible as: register through the SPA, land on the dashboard, reload, and find
+yourself signed out. The network log had the answer — **two** `POST
+/auth/refresh` on one load, the first `201`, the second `401`.
+
+`AuthProvider` posted to `/auth/refresh` directly instead of going through
+`refreshOnce`, the single-flight guard in `api/client.ts`. Refresh tokens
+rotate, and the API answers a replayed one by revoking every session —
+correctly, because a replay is what theft looks like. React's StrictMode
+double-invokes effects in development, so the second effect presented the
+token the first had just retired, and the app turned itself in.
+
+StrictMode is what made it certain; nothing about the fault is
+development-only. Two tabs restored at once do the same thing.
+
+The fix is that the bootstrap now calls an exported `refreshSession`, so every
+caller shares one rotation. A second bug fell out while reading that code:
+`apiFetch` cleared the access token on any 401, including one belonging to a
+request that had been in flight *before* a concurrent refresh installed a new
+token — signing someone out on the strength of an answer to a question asked
+before the token existed. It now clears only when the token still installed is
+the one the failing attempt carried.
+
+Verified in the browser: one refresh per load, `201`, and the dashboard
+survives a reload.
+
+**3 · A smoke check that failed while the rule it named was intact.**
+
+`pnpm test:db` §7 asserted that «Хліб житній» was on the shopping list and
+«Кава мелена» was not. It had been failing for days — not because candidate
+exclusion broke, but because this script mutates the demo household by design
+and the browser testing that follows mutates it further. A check that fails
+while its subject is healthy teaches whoever reads the output to ignore it,
+which is worse than no check.
+
+It is now a property test: no candidate may already be on the list, then it
+moves a candidate onto the list itself, watches it leave the candidate set,
+removes it, and watches it come back — asserting the list ends where it
+started. It holds on a freshly seeded database and on one that has been used
+for a week. **All smoke checks pass.**
+
+The same instinct fixed the e2e suite's litter. It hands out an invite and
+asks for a password reset on every run and left both rows behind; ten runs had
+left ten unused invitations in the seeded household, which is the reason
+nobody could look at that table and tell a real invitation from residue. It
+now deletes what it created, scoped by timestamp so a half-failed run cannot
+take out a row it did not make. Confirmed: 38 tests, counts unchanged.
+
+##### Walked through in a browser, against Postgres
+
+Registration through the SPA created «Родина Проба» with all 7 categories and
+5 locations from `@supplies/core/household-defaults` — the shared seeding path
+that used to exist twice — and signed straight in. An invite created through
+`POST /account/invite` was named correctly by `GET /auth/invite/:token`
+(«Наша родина»), accepted through the SPA's join screen, and the new member
+immediately saw the household's real stock and «Останні дії». The token was
+then refused twice over: 404 on lookup, 400 on a second registration.
+
+The reset round trip ran end to end with a planted token, since no mail is
+configured locally: the new password signed in, the old one was refused with
+`auth.invalidCredentials`, and the token was refused with the new
+`auth.resetLinkInvalid`.
+
+All of it cleaned up afterwards — the probe household, the joined user and the
+one invite this run created, each named exactly rather than by a `deleteMany`
+anyone would have to trust.
+
+**Green: lint, four typechecks, 357 unit tests, 20 API unit tests, 38 API e2e,
+every smoke check, 8 Playwright checks, three builds.**
+
+### Phase 2 — closed · 2026-09-08
+
+The last two rows, 2.2 and 2.8. **Phase 2 is done.**
+
+##### 2.2 — the contract, and why it runs the other way
+
+The task said "generate types from the OpenAPI document". Looking at what that
+would actually produce stopped it: the API had **zero** response
+documentation — no DTOs, no `@ApiResponse`, no `@ApiProperty` — so `/docs`
+listed forty URLs and described none of their answers, and a generator pointed
+at it would have emitted `unknown` for every one.
+
+The obvious repair is a DTO class per shape with `@ApiProperty` on each field.
+This API already refused that bargain once: `common/zod.pipe.ts` explains why
+request validation does not use class-validator — two definitions of a valid
+item drift, and the second one always loses. Response shapes are the same
+problem, so they get the same answer rather than the opposite one.
+
+So the direction inverted. `packages/core/src/contracts/` now holds one zod
+object per wire shape, and three things fall out of each that cannot disagree:
+
+- the TypeScript type the SPA consumes (`z.infer`)
+- the OpenAPI schema `/docs` publishes (`z.toJSONSchema`, no new dependency)
+- a parser the API's own e2e suite runs real responses through
+
+The third is what makes the first two true. `apps/spa/src/api/types.ts` was 332
+hand-written lines copied from what the endpoints were observed to send; it is
+now re-exports plus the three revivers JSON forces. **Every SPA screen
+typechecked against the generated types with no edit** — which is the evidence
+the hand-written copies were accurate, and the reason nothing else had to move.
+
+Twelve contract tests parse `/health`, `/meta`, `/auth/*`, `/dashboard`,
+`/attention`, `/movements`, `/household`, `/taxonomy`, `/items` and its paged
+form, `/items/names|archive|all`, `/items/:id` (choosing an item that HAS
+batches, so a wrong batch schema cannot pass by never being exercised),
+`/shopping`, `/groups`, `/groups/:id`, `/restock`, `/barcode/:code/item` and a
+refusal envelope. Fifty checks now, all green.
+
+Stated plainly in the suite, because the limit is easy to miss: a field that
+disappears, is renamed or changes type fails there; a field the API *adds*
+does not, since zod ignores unknown keys. That is the right default for how an
+API evolves, and the mitigation for the gap is that client types come from
+these schemas — a field nobody added here is a field no client can read.
+
+`/docs` went from describing nothing to publishing 28 success schemas and **52
+refusal envelopes**. The second number is the more useful one: the envelope is
+the unusual thing about this API — a message KEY and its params, never prose,
+so three clients render one Ukrainian catalogue. A reader who does not see
+that writes `catch (e) { show(e.message) }` and ships English.
+
+##### 2.8 — Playwright against the SPA
+
+Fourteen checks across desktop and a Pixel 7 viewport, on the **production
+build**, with two `webServer` entries: the compiled API on 3210 and `vite
+preview` on 4173. The SPA is rebuilt inside that command, because
+`VITE_API_URL` is inlined at build time and a bundle built for the default
+3200 would ignore the API the suite just started.
+
+They cover the machinery the Next app does not have: a token held in memory, a
+session restored from an httpOnly cookie, a mutation invalidating a query
+cache, a lazy route chunk arriving. The stock test asserts the number falls
+after «Взяли» — in the Next app that number changes because the server
+re-rendered; here it changes because an invalidation was written correctly,
+and nothing else proves the key map is right. A forgotten key looks exactly
+like a successful write until someone notices the screen disagreeing with the
+database.
+
+**One test says what it cannot do.** The reload test guards the property — one
+refresh, session survives — but it cannot reproduce the StrictMode replay bug
+it was written for, because a production build does not double-invoke effects.
+Verified by reverting the fix and watching it pass anyway. The comment says
+so; a test trusted to catch something it cannot is worse than no test.
+
+That check also corrected the fix's own description. `refreshSession` shares
+one rotation **per document**, so it makes a double mount harmless — and two
+TABS have two module instances and two guards, so a pair restoring at the same
+instant is still a race. A probe with two simultaneous loads did not reproduce
+it (the first rotation lands before the second request goes out), but narrow
+is not never. §10 now carries it as an open item with the two ways to close
+it, to be decided when Phase 3.2 gives the phone the same problem.
+
+##### CI
+
+Both suites are in `ci.yml`. The API's runs before the builds, so a broken
+contract fails in seconds rather than after two production builds and two
+browsers.
+
+**Green: lint, four typechecks, 357 unit, 20 API unit, 50 API e2e, every smoke
+check, 8 Playwright on web, 14 on the SPA, three builds.**
+
+### Phase 3.1 — the scaffold, and Metro against pnpm · 2026-09-08
+
+`apps/mobile` exists: Expo SDK 57, Expo Router, NativeWind 4, TanStack Query,
+`react-native-safe-area-context` wrapping the app from the first commit.
+
+**`metro.config.js` is the whole of this task**, and §9.2 was right to budget
+half a day for it. Three settings, and the third is the one where every
+monorepo guide gives advice that is wrong here:
+
+- `watchFolders` — the workspace root, or an edit to `packages/core` never
+  rebuilds and the app serves a stale copy of a rule you just changed.
+- `nodeModulesPaths` — this app's store, then the root's.
+- **`disableHierarchicalLookup` stays `false`.** Turning it on is the standard
+  npm/yarn workspace fix, because with a hoisted `node_modules` the upward walk
+  finds packages the app never declared. pnpm does not hoist: each package gets
+  a private `node_modules` holding exactly its own dependencies, so the upward
+  walk *is* correct resolution. Turned on, the bundle died on `expo-router` →
+  `@expo/metro-runtime` → `whatwg-fetch` — none of which this app declares, nor
+  should. Adopting twenty of Expo's transitive dependencies to satisfy a
+  setting would have been the wrong repair.
+- `unstable_enablePackageExports` — `packages/core` publishes subpaths only and
+  has no barrel (deliberately: a barrel would drag `node:crypto` into every
+  screen's module graph), so Metro has to honour `exports`.
+
+One dependency is declared here and looks wrong until you know why:
+`react-native-css-interop`. NativeWind's babel preset rewrites this app's own
+JSX to import its runtime, so these files genuinely depend on it and the
+upward walk from `app/` cannot see inside `nativewind`'s private store.
+
+##### What the proof screen actually proves
+
+`app/index.tsx` is not a hello-world. It runs PROJECT_PROMPT.md §3.6 — the
+worked example `packages/core/src/stock.test.ts` reproduces verbatim — on the
+device, and prints what the engine answered:
+
+| | |
+|---|---|
+| Всього | **13 шт.** |
+| Довга форма | **13 штук** — `Intl.PluralRules`, the "many" form |
+| Запас (мінімум 4) | **OK** |
+| Придатність | **EXPIRED** — the item takes the worst state of its batches |
+| Порядок FEFO | **soonest → later → undated** — §3.3, expired excluded |
+
+Then the exported bundle was grepped, which is the part that matters:
+`штук`, `packages/core`, `fefoOrder` and `UNIT_PLURAL` are all in it;
+`@prisma/client`, `PrismaClient` and `node:crypto` are not. The single
+`node:module` hit is a comment in `format.ts` warning about it. **That is
+Phase 0's payoff, collected**: the engine was decoupled from `Prisma.Decimal`
+so a Metro bundle could take it, and now one has.
+
+The bans are enforced rather than hoped for. `eslint.config.mjs` extends the
+browser boundary to `apps/mobile` — `@supplies/db`, Prisma, `node:*`, the two
+server-only core modules, `next/*`, and sibling apps — and each was proved to
+fire by writing a violating import and watching lint fail. The Node-builtin
+ban is the load-bearing one here: a browser fails loudly, while **Metro
+resolves a builtin to nothing and the app crashes on a phone**, which is the
+most expensive place this project has to learn anything.
+
+##### Verified without a device
+
+`expo export --platform android` resolves the whole module graph and writes a
+Hermes bundle with no emulator involved, so a resolution mistake surfaces in
+seconds — `pnpm mobile:bundle`. The screen itself was rendered through
+`expo start --web`: same components, same NativeWind classes, real fetches to
+a running API. Console clean.
+
+Two small things fell out of that:
+
+- `CORS_ORIGINS` gained `http://localhost:8081`. The phone needs none of it —
+  a native fetch sends no `Origin` — but `expo start --web` is how a screen
+  gets looked at without a phone, and a preflight failure there reads as "the
+  API is down".
+- `userInterfaceStyle` is `light`, not `automatic`, and NativeWind's
+  `darkMode` is `class`. `automatic` on an app with exactly one theme is a
+  promise the manifest does not keep, and with NativeWind's default
+  media-query dark mode anything trying to SET the scheme throws. `class` is
+  where this is going anyway: both web clients offer light/dark/system as a
+  choice, and parity means the phone will too.
+
+##### The version matrix is Expo's, not the workspace's
+
+React 19.2.3 and React Native 0.86.3, because `expo install --check` says so —
+which means a second copy of React in the store. That is correct: no runtime is
+shared between a phone and a browser, and fighting an SDK's tested matrix costs
+a day later. TypeScript stays on the workspace's 5.9.3 rather than the
+suggested 6.0.3; the app typechecks, and one compiler across five packages is
+worth more than matching a recommendation.
+
+### Phase 3.1 — the emulator, and what it found in ten minutes · 2026-09-09
+
+Android Studio arrived, so the scaffold got tested on a real Android runtime
+for the first time. **The app crashed on load**, and the cause is worth the
+whole entry.
+
+`packages/core/src/format.ts` built `new Intl.PluralRules("uk-UA")` at module
+scope. **Hermes does not have `Intl.PluralRules`** — while the same file's
+`Intl.DateTimeFormat` and `Intl.NumberFormat`, three lines away, worked
+perfectly. A partial `Intl` looks present right up until the one missing
+constructor runs, and every mobile screen importing the shared formatter died
+with `undefined cannot be used as a constructor`.
+
+**Nothing before this could have caught it.** Node has the full ICU, so 357
+tests passed. Browsers have it, so both web clients were fine. `expo start
+--web` runs under react-native-web *in a browser*, so even the mobile preview
+was green — the same screen, the same components, the same bundle logic,
+rendering correctly while the emulator showed a red box. That is the argument
+for booting a device early rather than after twelve screens are written on top.
+
+##### The fix, and why it is in the package rather than the phone
+
+The reflex is `@formatjs/intl-pluralrules` in the app's entry file. Rejected:
+`packages/core` is portable **by contract**, and a polyfill in one client
+papers over an assumption the *package* got wrong — the next consumer with a
+partial ICU (an older Android, a different engine, an edge runtime) hits it
+again. And the app is Ukrainian-only by design (§8), so what it needs is one
+language's rule, not CLDR's machinery.
+
+`selectUkPlural` writes that rule out — four lines of arithmetic over `i % 10`
+and `i % 100`. Hand-written plural rules are exactly how «5 пляшки» ships, so
+the rule is only acceptable with proof: `format.test.ts` now compares it
+against **Node's real `Intl.PluralRules` for every integer 0–1000** plus a
+spread of decimals, and asserts the boundary cases 11–14 that make
+`n === 1 ? a : b` wrong. 361 unit tests, up from 357.
+
+The rule now runs identically on four runtimes instead of three, and one fewer
+runtime assumption travels with the engine.
+
+##### The emulator, and running it
+
+`cmdline-tools` → `system-images/android-36/google_apis/x86_64` → an AVD named
+`supplies_pixel_7`, all from the CLI. `expo start --android` installed Expo Go
+and opened the app without `ANDROID_HOME` ever being set.
+
+Two Git Bash traps are documented in `apps/mobile/CLAUDE.md` because both cost
+real time: device paths in `adb shell` get rewritten into Windows paths
+(`MSYS_NO_PATHCONV=1`, or use `exec-out`), and `adb logcat -c` between runs —
+without it the previous crash sits in the buffer and reads as the current one,
+which nearly had a fixed bug chased twice.
+
+##### On the device, after the fix
+
+Zero JS errors in a cleared logcat, and every value right: API reachable at
+`10.0.2.2:3200` with the database connected, «13 шт.», **«13 штук»** from the
+rewritten plural rule, stock `OK` against a minimum of 4, expiry `EXPIRED` from
+the worst batch, and FEFO ordering `soonest → later → undated` with the expired
+batch excluded. NativeWind styling rendered natively.
+
+Gate re-run after the core change, since `format.ts` is shared by everything:
+lint, five typechecks, 361 unit tests, 20 API unit, 50 API e2e, every smoke
+check.
+
+### Phase 3.2 — tokens on a phone, and a grace window that had to be earned · 2026-09-09
+
+`expo-secure-store` for the refresh token, an API client with single-flight
+refresh, an auth context that restores a session at launch — and, on the
+server, the fix for the race §10 has been carrying as an open item.
+
+##### The grace window, and the flaw the e2e suite found in it
+
+The race, from Phase 2.8: two browser tabs share one httpOnly cookie, restore
+together, and the loser presents what the winner just rotated. That is
+indistinguishable from a replayed stolen token, so the correct theft response
+fires and the person is signed out of everything for opening a second tab.
+
+`REFRESH_GRACE_MS` (ten seconds) makes a just-rotated token answer once more
+with a pair of its own. Not the winner's pair — each caller keeps its own row,
+so per-device revocation still means what it says.
+
+**The first version of it was wrong, and the e2e suite is what said so.**
+`revokeAllFor` stamps `revokedAt = now()` on every token it kills, so a theft
+response put the whole family inside the grace window — and the attacker who
+triggered it could refresh again with any of them. The window neutered the
+thing it was bolted onto. The test that caught it was the existing
+"revokes every session when a used token is replayed", which started passing
+its first assertion and failing its second.
+
+The repair is a `revokedReason` column (`rotated` / `reuse` / `logout`) and one
+clause: **only a rotation earns grace.** NULL — a row from before the migration
+— gets none, which is the safe reading. Eight unit tests pin it, including the
+theft and logout cases and the pre-migration NULL.
+
+**A correction to what was written before.** SPA_API_PORT.md §10 said the phone
+needed this too. It does not: each device has its own token, and concurrent
+refreshes inside one JS context are handled by the single-flight guard. The
+window is for the cookie clients. The phone costs nothing by it, and the
+open item is now closed for the reason it was actually opened.
+
+##### The phone's half
+
+`token-store.ts` — SecureStore, `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`, refresh
+token only. The access token stays in memory for the same reason as in the
+SPA: it expires in fifteen minutes and a value on disk is a value something
+else can read.
+
+`api/client.ts` is a **sibling of the SPA's, not a copy of it**, and the
+difference is the point. The SPA sends `credentials: "include"` and never sees
+its refresh token, because a browser attaches the cookie. A phone has no
+cookies, so the token comes out of SecureStore and goes back in the request
+body — which is exactly why `POST /auth/login` answers with it *both* ways.
+Sharing the module would mean one client pretending to be the other. What is
+shared is everything above it: the contracts, the catalogue, the rules.
+
+The auth context carries the SPA's lesson forward without repeating its
+mistake: it calls `refreshSession()` rather than posting to `/auth/refresh`
+itself, so a double-invoked effect cannot replay a rotated token.
+
+One thing the round trip forced: **logout has to SEND the token.** `/auth/logout`
+finds it in a cookie or in the body, and posting nothing returns `{ ok: true }`
+— logout is idempotent by design — while leaving the row live. Signing out
+would have been a local illusion.
+
+##### Proved on the emulator, not asserted
+
+Sign in → a row appears with `userAgent: okhttp/4.12.0`, which is the phone.
+**Force-stop the app, relaunch** → «Сесія: anton@example.com» comes back, and
+the database shows the sign-in token marked `rotated` beside a new one issued
+seconds later. Sign out → that row becomes `logout`. All three reasons
+exercised by real traffic, with `reuse` covered by the e2e theft test.
+
+The API happened to restart during that run, which made the check stronger than
+intended: the session survived because the token is in SecureStore and Postgres,
+not in anybody's process memory.
+
+The sign-in control on the status screen is **temporary** and says so — Phase
+3.3 replaces it with the real login screen. It exists because a token round
+trip cannot be verified without a way to start one.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, every smoke
+check.
+
+### Phase 3.3 — Milestone A on a real device · 2026-09-09
+
+Login, the items list, item detail, and take/add. Six routes, driven on the
+emulator against the seeded household.
+
+##### The gate is declarative
+
+`app/_layout.tsx` uses `Stack.Protected` rather than an effect that calls
+`router.replace`. The effect version is the common pattern and it flickers: the
+guarded screen mounts, renders once with no data, and is then navigated away
+from. A guard keeps the route out of the tree entirely, so there is nothing to
+unmount and no frame of the wrong screen.
+
+The loading branch matters as much as the guards. While `refreshSession()` is
+asking SecureStore, **neither** guard is true — rendering the login form for
+the half second before a stored token resolves would show a sign-in screen to
+somebody already signed in. In practice this is what happened on the first
+launch after 3.2: the app went straight to the list, because the token from the
+previous session was still in the keystore.
+
+##### What is shared, and what could not be
+
+Every rule on these screens came from `@supplies/core`: `loginSchema` for the
+form, `itemListSearch` for the query, `fefoOrder` for the batch order,
+`batchExpiryState` for the per-batch chip, `formatQuantityWithUnit` and
+`formatExpiryLabel` for every number and date, and `MESSAGES` for the refusals.
+
+What could not be shared is the presentation, and that is the boundary §4.3
+drew: `packages/ui` renders `<span>` with class strings a browser resolves, so
+the badges, the button and the fields are rebuilt here. **The screens are a
+translation, not a port.**
+
+One place the phone genuinely differs, recorded because it is a real divergence
+from parity rather than an oversight: the web clients keep the whole list view
+state in the URL, so a filtered list is a shareable link and Back restores it.
+A phone has no address bar, and routing on every filter tap would make the back
+gesture undo a chip. So the state is local and only the *search string* becomes
+a request. Feature 28's pager is gone too — `perPage: "all"` and a scroll,
+because a pager on a touch screen is a control nobody uses.
+
+##### Native where it counts
+
+`FlatList`, not a `ScrollView` of rows and not `@expo/ui`'s `List` — that one
+renders native grouped rows and is explicitly **not** virtualized, so a
+household with two hundred items would mount two hundred views.
+
+Take and restock are a `formSheet` route rather than a hand-rolled `<Modal>`:
+the sheet animation, the grabber and drag-to-dismiss come from the platform.
+One file for both, because they differ by a verb, a field and an endpoint —
+splitting them would duplicate the shortfall handling, which is the interesting
+part.
+
+`KeyboardAvoidingView` from the first screen, and `SafeAreaView` inside one
+`Screen` component so no screen can forget it. Both are on SPA_API_PORT.md's
+list of four things that are free now and expensive to retrofit when Phase 5
+adds iOS.
+
+##### Driven, not asserted
+
+Signed in from a restored session → the list rendered the real household. Every
+expiry label was correct Ukrainian on Hermes — «182 дні», «295 днів», «2443 дні
+тому», «595 днів» — which is the hand-written plural rule getting `one`, `few`
+and `many` right across the range.
+
+Opened «Вода негазована 1,5 л»: 240 шт., minimum 4, **97 batches in FEFO
+order** with the 10.03.2027 ones ahead of the 10.06.2027 ones. Took one: 240 →
+**239**, batches 97 → **96**, drawn from the soonest-expiry batch exactly as
+§3.3 requires — and the number changed because the mutation invalidated
+`keys.item(id)`, which is the only thing that proves the invalidation map is
+right.
+
+Asked for 99 999: refused **inside the sheet, beside the field**, with «Не
+вистачає 99 760 штук — доступно (не прострочено) лише 239 штук». That sentence
+is `@supplies/core/messages` rendering the same key the web clients render, and
+its placement is the §3.3 argument: a shortfall names a number, so it belongs
+next to the number that caused it.
+
+The item was restored to 240 afterwards.
+
+##### Two things learned about Expo Router
+
+`experiments.typedRoutes` **does** enforce — `router.push("/nope")` fails
+typecheck — but the types only exist once `expo start` has run. `expo export`
+does not write them, so a clean checkout typechecks with a looser `Href`. CI's
+`mobile:bundle` proves the graph resolves; it does not prove the links are
+real.
+
+And a file created **while Metro is running** gets added to the route union
+even from outside `app/` — `components/ui/button.tsx` appearing as
+`/../components/ui/button`. Reproduced deliberately with a probe file, which
+showed up the instant it was written. It is a watcher artifact, not a
+configuration error: no runtime route, no warning, and a Metro restart clears
+it. Documented so nobody loses an afternoon.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, 51 API e2e, the Android
+bundle.
+
+### Phase 3.4 — the scan, and a claim withdrawn · 2026-09-09
+
+`expo-camera` behind a `fullScreenModal` route, reached from a button sitting
+next to the search box rather than from a menu. Standing in a kitchen holding a
+packet, the barcode **is** the query; a tap deeper and the camera becomes the
+slower way to find something than typing.
+
+##### Three decisions in the screen
+
+Grocery symbologies only — `ean13`, `ean8`, `upc_a`, `upc_e`, `code128`, and
+deliberately not `qr`. Leaving QR on lets a poster, a payment code or a wifi
+sticker fire a lookup, and every one of those is a miss that reads as the app
+being wrong.
+
+A `useRef` latch, not state. The camera fires `onBarcodeScanned` for **every
+frame** it can read a code in, so one packet becomes a dozen lookups and a
+dozen navigations; the latch has to be true before the next frame arrives and a
+state update is not. Belt and braces, `onBarcodeScanned` is handed `undefined`
+once busy, which stops the native side delivering frames at all rather than
+delivering them to a guard.
+
+A hit `replace`s rather than pushes. Coming Back from the item should return to
+the list, not to a camera that would immediately scan the same packet again.
+
+##### The failure that added a state
+
+The first run on the emulator produced a black screen politely captioned
+«Наведіть камеру на штрихкод» — the app confidently instructing someone to use
+hardware it had just failed to open. CameraX had refused with *"No available
+camera can be found. Cams:1 Id:1 Lens:1"*: the AVD had no rear lens. That is
+real on a tablet, or on a phone whose camera another app is holding, so
+`onMountError` now drives an `unavailable` outcome that says so and offers the
+name search instead.
+
+##### "Only provable on a real device" was wrong
+
+That sentence had been in the root CLAUDE.md for a year, about Features 10, 21
+and 26.2. The Android emulator renders a 3D room whose wall poster can be
+replaced with any PNG — at launch with `-virtualscene-poster`, and, once it is
+on `wall` or `table`, at runtime with `adb emu virtualscene-image`. So the
+scanner can be pointed at a barcode unattended.
+
+`pnpm barcode` (`scripts/make-barcode-png.mjs`) draws the EAN-13. It computes
+the check digit from twelve digits and rejects a wrong one from thirteen,
+because a code a scanner would refuse is a confusing thing to spend an hour
+failing to read. Its quiet zone is the symbology's minimum rather than a
+generous margin: the poster is a fixed size in the scene, so every module of
+margin is taken out of the width of the bars. Bench-decoding its output through
+ZXing at descending resolutions held to ~1.9 px per module and failed below —
+which is what said a 1.6 m poster at two metres would work before the emulator
+was restarted to find out.
+
+**The miss is the evidence, not the hit.** A hit navigates to the item, and a
+mis-tap on the list would look identical. So the wall was hung with a valid
+EAN-13 that is *not* in the household, and the screen answered «Штрихкоду
+4820000431132 ще немає серед ваших запасів» — naming digits that could only
+have come off the wall. Swapping the image back without restarting then gave
+the hit, and Back from the item returned to the list rather than the camera.
+
+Still hardware-only, and now stated narrowly instead of broadly: autofocus, a
+curved or crumpled label, glare, and the web clients' `BarcodeDetector` path.
+The emulator's poster is a flat, evenly lit, perfect render.
+
+##### One thing left ugly on purpose
+
+The scan control is the glyph `▣`. The app has no icon system yet, and adding
+`@expo/vector-icons` for a single button would make it the only icon on any
+screen. It belongs to 3.6, where twelve more screens want icons and the choice
+can be made once.
+
+Green: lint, five typechecks, 361 unit, 28 API unit, the Android bundle.
+
+### Phase 3.5 — the build config, and a failure with no logs · 2026-09-09
+
+Three EAS profiles and `app.config.ts`, which exists for exactly one thing a
+JSON file cannot express: **cleartext HTTP, and only outside production.**
+
+Android 9 blocks `http://` from a standalone build. Expo Go hides that, because
+its own manifest permits cleartext, so the failure appears the first time the
+app is a real APK — as every request failing in a way indistinguishable from a
+dead API. `expo-build-properties` can allow it, but app-wide rather than per
+host, so it switches on `EAS_BUILD_PROFILE`: on outside production, off in it.
+A production build therefore cannot talk to a dev machine at all, which is the
+correct failure — production points at the deployed HTTPS API from 4.3.
+
+The API address stays out of the tree (§4.2). `EXPO_PUBLIC_API_URL` is an EAS
+environment variable rather than an `env` block in `eas.json`, because the
+value is the LAN address of whoever is building.
+
+##### Two hours of not seeing an error
+
+The first build errored with `EAS_BUILD_UNKNOWN_GRADLE_ERROR`, and **the CLI
+has no way to show the logs of a finished build.** `eas build:view` prints the
+status; the logs are on a page that needs a signed-in browser. `eas build:list
+--json` at least carries `error.errorCode`, which was how the Gradle failure
+was identified at all.
+
+Reproducing it locally was a partial success. `expo prebuild` succeeded, which
+ruled out the config plugins and — more usefully — proved pnpm's isolated
+`node_modules` does not break Expo's Gradle autolinking, the thing most likely
+to be blamed. Gradle then failed twice for reasons that were **both local**: a
+`local.properties` written with Windows backslashes (`sdk.dir=C\:\Users\…`,
+where `\U` is an invalid unicode escape — the literal message is "Malformed
+\uxxxx encoding"), and then the NDK's CMake step refusing under Android
+Studio's bundled JDK 25. Neither is what an EAS builder on JDK 17 hits.
+
+Streaming without `--no-wait` did not help either — the CLI ends at the same
+sentence. What worked is that **the build record carries a signed URL to the
+whole log**: `eas build:view <id> --json` has a `logFiles` array, the file is
+brotli-encoded, and `curl --raw` is the part that is easy to get wrong. Inside
+is newline-delimited JSON with a `phase` on every line, and the answer:
+
+    Failed to construct transformer: Error: Cannot find module 'babel-preset-expo'
+    Execution failed for task ':app:createBundleReleaseJsAndAssets'
+
+Not Gradle at all — Metro, during the bundle step. `babel.config.js` names
+`babel-preset-expo` directly, so it was always a direct dependency of this app;
+it resolved locally and did not on a release bundle. **Third time pnpm's
+isolation has demanded that a dependency be written down** rather than found by
+accident, after `react-native-css-interop` and `zod`.
+
+`expo doctor` also runs on the builder, and its output was in the same file
+naming three more problems the error message never mentioned:
+`react-native-reanimated` is a required peer of `react-native-css-interop` and
+`react-native-worklets` of reanimated — both carrying doctor's own warning that
+an app *may crash outside Expo Go* without them, which is exactly why the
+emulator never complained — and `newArchEnabled` is not a valid SDK 57 config
+key. Run `npx expo-doctor` before spending a build; it is 21/21 now, with
+`typescript` excluded because the SDK wants 6.0 and this workspace is on 5.9.3
+across five projects.
+
+##### What the APK proved
+
+Installed on the emulator and signed in: `ua.supplies.app/MainActivity` in
+focus, no Expo Go, the release bundle, reaching `http://192.168.53.34:3200`
+over the LAN. That single sign-in is the proof for four separate things at
+once — the release bundle runs, `usesCleartextTraffic` is actually applied (the
+request would fail without it), `EXPO_PUBLIC_API_URL` came through from the EAS
+environment variable, and every native module compiled and linked.
+
+`expo prebuild` also has a side effect worth naming: it writes `android/`
+inside the workspace root that Metro watches, and Metro stops bundling. The
+directory is gitignored now, and the fix is to delete it and restart the dev
+server.
+
+### Phase 3.6 — parity, and four places the phone is not the browser · 2026-09-09
+
+Every screen the SPA has. Four native tabs with the attention counts as badges,
+«Огляд», «Покупки» with the Feature 6 candidates and Feature 11 grouping, the
+item form and the archive, seven settings screens, Feature 26 sets and their
+membership, «Рецепти», and the four public auth routes.
+
+##### The differences are all one difference
+
+A phone is not a small browser, and copying an interaction that depends on a
+mouse or an address bar produces something that works and feels borrowed.
+
+**Drag becomes a long press.** Shopping rows and taxonomy order are
+drag-and-drop on the web; here a row opens a sheet and a taxonomy row has two
+arrows. A drag competing with the vertical scroll of the screen it lives on is
+a gesture people fire by accident — and Feature 11's own note already says the
+collision strategy is the hard part.
+
+**Selects become chips.** Category, location, unit and set are horizontal chip
+rows rather than `@expo/ui`'s `Picker`. Under ten options a chip row is one tap
+where a picker is two, and every option is readable without opening anything.
+
+**Settings becomes an index.** The web renders eight panels on one page, which
+is fine with a wheel. On a phone the bottom panel is eight swipes away every
+time, so the tab is a list of rows and each panel is its own screen.
+
+**The list's view state is local.** Features 27 and 28 put it in the query
+string on the web so a filtered list is a shareable link. There is no address
+bar here and no link to share; `itemListSearch` still builds the request, which
+is the part that matters.
+
+##### The bug the screenshots found
+
+`formatQuantity` had been printing «0.8 кг» — a decimal POINT — on every phone
+screen since Milestone A. `Intl.NumberFormat` exists on Hermes but
+`format(BigInt(n))` throws `TypeError: Cannot convert BigInt to number`, so the
+function fell through to its raw-string fallback: no grouping, and the wire
+format's dot instead of the Ukrainian comma. Nothing crashed and nothing
+logged. It was found by reading a screenshot.
+
+That is the second `Intl` surface to differ on the phone after `PluralRules`,
+so the grouping is now written out and pinned against Node's real
+`Intl.NumberFormat`, and `packages/core/CLAUDE.md` says to check the
+**arguments** and not just the constructor. `formatUsd`'s `style: "currency"`
+was the last unproven one and has now been probed: «0,0123 USD», the same on
+Hermes and in a browser.
+
+Two more found by looking at the emulator rather than by reasoning: the items
+tab lost its top inset when it moved under a headerless tab navigator, and
+adding a fourth tab silently unlabelled the other three — Material's `auto`
+label mode drops every label but the selected one at four items.
+
+##### What pnpm made explicit
+
+`zod` is now a declared dependency of the app. It always was one, travelling
+inside `@supplies/core`, but pnpm does not hoist so the type import did not
+resolve until it was written down. Second time this layout has demanded that,
+after `react-native-css-interop`.
+
+Green throughout: lint, five typechecks, 365 unit, 28 API unit, and an Android
+bundle that still contains no Prisma, no node builtins and no `server-only`.
+
+### Phase 3.7 — push, and a module that must not be imported · 2026-09-09
+
+Feature 35: a `PushDevice` table, two endpoints, registration from the phone,
+and the daily digest going to phones after it goes to chats.
+
+##### Three decisions
+
+**Keyed by token, not by user.** One person may carry two phones and a tablet
+and each of them agrees separately. The token is also reassignable, because two
+people signing into the same phone get the same address from the OS — an
+upsert that only ever inserted would leave the first user receiving the second
+one's reminders.
+
+**Only `DeviceNotRegistered` deletes a row.** It means the app is gone from
+that device and the row can never do anything but slow future sends down. A
+rate limit looks similar and is transient; deleting on that would lose a live
+device over a busy minute.
+
+**Nothing throws.** By the time push runs, the digest has already reached
+Telegram. A push service that is down must not take the run down with it, and
+the caller already has a `failures` counter.
+
+##### Adding `expo-notifications` broke the entire app in Expo Go
+
+Not push — everything. The module throws while it is being evaluated on
+Android in Expo Go, and Expo Router imports every route file to build its
+route table, so one throw turned all twenty-odd screens into «Route
+"./login.tsx" is missing the required default export».
+
+`apps/mobile/lib/push/module.ts` is the answer: nothing imports the package
+directly, and that wrapper loads it with a dynamic `import()` in a try/catch.
+Catching the rejection was not enough — **a resolved import is not a working
+module.** It settles and hands back a half-built namespace whose functions are
+`undefined`, so the first call died inside an unwatched promise and the
+settings screen span forever. The guard checks for the API, not for a
+rejection.
+
+The behaviour is right in production too: a device whose notification module
+will not initialise should lose its reminders, not its inventory.
+
+##### What is left, and who has to do it
+
+Delivery. Remote push needs the APK or a development build — Expo Go on
+Android has not carried it since SDK 53 — and Android needs FCM credentials
+uploaded to the EAS project, which is the household owner's Firebase account
+and not something this repo can hold.
+
+### Phase 3 — two sign-ins that failed after the API said yes · 2026-09-11
+
+Found by using the app, not by any check. `pnpm mobile:dev`, then the same
+account in two places:
+
+- **In the browser** (`expo start --web`), «Щось пішло не так» — while the
+  Network tab showed `201 Created` and both tokens. `expo-secure-store`'s web
+  build is an empty object, so storing the refresh token threw. Fixed with
+  `token-store.web.ts`, which keeps it in memory; the same pass stopped
+  `expo-notifications` rejecting on web the moment the authed layout mounted.
+- **On a real phone**, a spinner that never stopped. With no
+  `EXPO_PUBLIC_API_URL` the app called `10.0.2.2` — the *emulator's* name for
+  its host, and on a real network an address nobody answers — and React
+  Native's `fetch` has no timeout of its own. The app now takes the API's host
+  from the dev server it was loaded from, and every request has a timeout that
+  ends in an error naming the address.
+
+**Why nothing caught either.** Every device check so far ran on the emulator,
+where `10.0.2.2` is correct and packets never vanish — the one configuration in
+which both bugs are invisible. The emulator can be made to lose packets
+(`iptables … --dport 3200 -j DROP`, recipe in apps/mobile/CLAUDE.md), and that
+is how the fix was proved: under the rule, sign-in fails after twenty seconds
+with «API не відповідає (http://192.168.50.34:3200)», and sign-out completes in
+five.
+
+### Phases 3.8–5 — not started
+
+The Play listing, the deploy, iOS. Phase 3 is otherwise done: **the Phase 2.9
+parity gate closed on 2026-09-07**, decision 10 stopped applying, and 3.1–3.7
+landed on 2026-09-08 and 09. All four clients now render the same household
+from the same engine, and the daily reminder reaches all of them.
+
+### Start here
+
+**Phase 0.2 — the `decimal.js` decoupling — is the first commit**, and it is
+worth doing even if everything after it is abandoned: it removes the generated
+Prisma client from the engine's bundle graph, which is a live constraint on the
+current web build. That is F4 from ARCHITECTURE_REVIEW.md, closed at last, on
+its own merits.

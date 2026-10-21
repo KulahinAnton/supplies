@@ -1,0 +1,13 @@
+{
+  "name": "@supplies/db",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@supplies/core": "workspace:*"
+  }
+}

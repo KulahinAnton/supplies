@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Запаси",
+    "slug": "supplies",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "supplies",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "ua.supplies.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#297f48"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ua.supplies.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Щоб сканувати штрихкоди товарів.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#297f48",
+          "defaultChannel": "digest"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#fbfbf9"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://10.0.2.2:3200",
+      "router": {},
+      "eas": {
+        "projectId": "4eaddeb5-ce6d-44e0-b22f-9fc3fc4eec28"
+      }
+    },
+    "owner": "kulahin",
+    "icon": "./assets/icon.png"
+  }
+}

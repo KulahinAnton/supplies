@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "node16",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "moduleResolution": "node16",
+    "declaration": false,
+    "removeComments": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts", "vitest.config.mts", "vitest.e2e.config.mts", "../../packages/core/src/**/*.ts", "../../packages/db/src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "../../packages/core/src/**/*.test.ts", "../../packages/db/src/**/*.test.ts"]
+}

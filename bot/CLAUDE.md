@@ -4,19 +4,19 @@ Spec: [PROJECT_PROMPT.md Feature 9](../PROJECT_PROMPT.md).
 
 ## The rule that matters
 
-**The bot is a second front end, never a second implementation.** Every read goes through `lib/queries.ts`; every write goes through `lib/stock-service.ts` — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `lib/`, and both front ends inherit it.
+**The bot is a second front end, never a second implementation.** Every read goes through the shared query layer; every write goes through the shared stock service — the same module the server actions call. If a rule needs fixing, it gets fixed once, in `packages/`, and every front end inherits it.
 
 `bot/actions.ts` is deliberately three lines per operation. If it ever grows business logic, that logic is in the wrong file.
 
 ## Running it
 
 - `pnpm bot:dev` / `pnpm bot:start` — long polling, for local development (`bot/index.ts`).
-- Production uses the webhook at `app/api/telegram/route.ts` (Node runtime — the bot touches Prisma). Telegram echoes `TELEGRAM_WEBHOOK_SECRET` in the `x-telegram-bot-api-secret-token` header and the route rejects anything else, so the URL alone is not a credential.
+- Production uses the webhook at `apps/web/app/api/telegram/route.ts` (Node runtime — the bot touches Prisma). Whether a call may reach the bot is decided by `bot/webhook-gate.ts`: the secret header must match, and **with no secret configured everything is refused (503)**. Telegram echoes `TELEGRAM_WEBHOOK_SECRET` in the `x-telegram-bot-api-secret-token` header and the route rejects anything else, so the URL alone is not a credential.
 - Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME` (for the deep link), plus `AUTH_SECRET` (signs link tokens).
 
 ## Linking a chat
 
-`/start <token>` where the token is a signed `userId.expiry.signature` triple from `lib/telegram-link.ts`, generated in Settings → Telegram and valid for 15 minutes.
+`/start <token>` where the token is a signed `userId.expiry.signature` triple from `@supplies/core/telegram-link`, generated in Settings → Telegram and valid for 15 minutes.
 
 Stateless on purpose: no table, no cleanup job, and it cannot be replayed once expired. **Rotating `AUTH_SECRET` invalidates every outstanding link token** — correct behaviour, not a bug.
 
@@ -31,7 +31,17 @@ Stateless on purpose: no table, no cleanup job, and it cannot be replayed once e
 | `/list` | the unchecked shopping list |
 | `/add` | guided: item → quantity → expiry |
 | `/took` | guided: item → quantity (FEFO consume) |
+| `/menu` | the home screen (Feature 17.5) |
 | `/cancel` | drop the current conversation |
+
+## The daily digest
+
+`digest.ts` builds and sends it; `apps/web/app/api/cron/digest/route.ts` (Vercel
+Cron, noon Kyiv) and `pnpm digest:run` (hourly, respecting
+`Household.digestHour`) both call it. Timing and its limits:
+[docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) §5. Phones get the same text as a
+push notification after the chats have theirs (Feature 35), and push failures
+never fail the run.
 
 ## Switching between the deployed bot and your machine
 
@@ -83,4 +93,19 @@ Where state can be avoided it is. Inline buttons carry what they need in their c
 
 ## Strings
 
-Bot replies come from `lib/messages.ts` (`MESSAGES` / `renderMessage`) or are inline Ukrainian. There is **no** `bot/i18n.ts` here, unlike AquaBill — this app is Ukrainian-only (PROJECT_PROMPT.md §8).
+Bot replies come from `@supplies/core/messages` (`MESSAGES` / `renderMessage`) or are inline Ukrainian. There is **no** `bot/i18n.ts` here, unlike AquaBill — this app is Ukrainian-only (PROJECT_PROMPT.md §8).
+
+## Cross-package imports are relative
+
+`../packages/core/src/expiry`, not `@supplies/core/expiry` — the same rule
+`packages/db` follows, and for the same reason.
+
+`apps/api` compiles `bot/digest-now.ts` (Feature 19.1's "send the digest now"
+button) with `tsc`, and **tsc never rewrites a module specifier on emit**. A
+package specifier survives into `dist` unchanged, where Node resolves it to a
+`.ts` file outside the build output and dies with `ERR_MODULE_NOT_FOUND`. The
+bot itself runs under `tsx`, where either form works — which is exactly why
+this breaks somewhere else and not here.
+
+The `@supplies/bot` package name is still how *other* packages import this
+one; it is imports going out that must be relative.

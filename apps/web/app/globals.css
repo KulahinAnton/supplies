@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+/*
+  The palette, the radius scale, the dark variant and the base layer live in
+  `packages/ui`, shared with the SPA (docs/ARCHITECTURE.md §6). Anything added
+  below is, by definition, something only the Next app has — which today is
+  the font.
+
+  This import only resolves because `@supplies/ui` declares a **`style`
+  condition** for it in its `exports` map. Tailwind resolves CSS `@import`s
+  itself, with `style` as the condition, and a plain string target is not
+  enough: without that condition the specifier fails to resolve and the whole
+  stylesheet is a syntax error. Which is the good outcome — see the package's
+  own note for the version of this that fails silently.
+*/
+@import "@supplies/ui/theme.css";
+
+@theme inline {
+  /* Maps to the variables app/layout.tsx sets through `next/font`. Do NOT map
+     --font-sans to itself — that self-reference silently drops the font. */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}

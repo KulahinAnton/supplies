@@ -1,5 +1,5 @@
-import { addStock, consume, type BatchRow } from "@/lib/stock-service";
-import type { BotUser } from "@/bot/auth";
+import { addStock, consume, type BatchRow } from "../packages/db/src/stock-service";
+import type { BotUser } from "./auth";
 
 /**
  * The bot's writes. Thin on purpose: these delegate to lib/stock-service.ts,

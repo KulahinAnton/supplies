@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "../packages/db/src/prisma";
 
 /**
  * Feature 17.4 — the chat's half-finished flow.
@@ -79,19 +79,14 @@ export async function clearPending(chatId: number): Promise<void> {
  * keyboard that swallows the Android back button. Both needed a message
  * nobody was going to send.
  *
+ * The version travels on `BotUser` (see `bot/auth.ts`), which already reads
+ * this row — so nothing looks it up twice.
+ *
  * So the chat records what it was sent, and anything the bot sends can settle
  * the debt — the next interaction, or the daily digest, whichever comes first.
  * Nobody has to type `/start`, and no broadcast is needed: a chat that never
  * comes back is a chat that never sees the keyboard anyway.
  */
-export async function keyboardVersionOf(chatId: number): Promise<number> {
-  const link = await prisma.telegramLink.findUnique({
-    where: { chatId: BigInt(chatId) },
-    select: { keyboardVersion: true },
-  });
-  return link?.keyboardVersion ?? 0;
-}
-
 /**
  * Records that this chat now HAS the given keyboard. Call it only after the
  * message carrying that keyboard was accepted by Telegram — marking it first

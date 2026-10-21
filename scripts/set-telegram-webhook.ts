@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { Bot } from "grammy";
-import { registerCommands } from "@/bot/bot";
+import { registerCommands } from "@supplies/bot/bot";
 
 /**
  * Feature 9 — switch the bot between the deployed app and your machine.

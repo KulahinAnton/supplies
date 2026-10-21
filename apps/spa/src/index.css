@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+/*
+  The same tokens the Next app renders with — see docs/ARCHITECTURE.md §6. This
+  file used to be the single line above, which is most of why the SPA and the
+  Next app looked like different products.
+*/
+@import "@supplies/ui/theme.css";
+
+@theme inline {
+  /*
+    The Next app loads Geist through `next/font`, which self-hosts it and
+    inlines a preload. A Vite SPA has no equivalent, and fetching the same face
+    from a CDN would trade a round trip and a third-party request for a
+    difference almost nobody can see — the system UI stack is what Geist is
+    modelled on. This is the one token the two clients deliberately disagree
+    about.
+  */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+}

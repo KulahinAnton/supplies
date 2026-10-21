@@ -1,3 +1,16 @@
+# The root is the workspace and nothing else. Every deployable is under
+# `apps/`, including the Next.js app, which moved out of the root on
+# 2026-09-06 (docs/ARCHITECTURE.md §12, decision 8).
+#
+# `bot` is a package rather than a loose folder because `apps/web` imports the
+# digest from it — the cron route sends it — and a relative path out of an app
+# and back into a sibling directory is the kind of import that survives one
+# refactor and not two.
+packages:
+  - packages/*
+  - apps/*
+  - bot
+
 allowBuilds:
   sharp: true
   unrs-resolver: true
@@ -7,3 +20,12 @@ allowBuilds:
   esbuild: true
   '@parcel/watcher': true
   '@swc/core': true
+  # Telemetry beacon pulled in transitively. Declined: it phones home on
+  # install and nothing here needs it.
+  '@scarf/scarf': false
+  # Both arrive under eas-cli. `dtrace-provider` is bunyan's optional tracing
+  # hook and does not build on Windows anyway; `protobufjs` only regenerates
+  # type files it already ships. `eas --version` and the build commands work
+  # without either, so neither earns a compile step on every install.
+  'dtrace-provider': false
+  'protobufjs': false

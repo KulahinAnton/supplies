@@ -1,13 +1,13 @@
 import { InlineKeyboard } from "grammy";
-import { prisma } from "@/lib/prisma";
-import { getShoppingView } from "@/lib/queries";
+import { prisma } from "../packages/db/src/prisma";
+import { getShoppingView } from "../packages/db/src/queries";
 import {
   DEFAULT_GROUP_ID,
   groupIdForStorage,
   groupShoppingRows,
-} from "@/lib/shopping-groups";
-import type { BotUser } from "@/bot/auth";
-import { CB, type View } from "@/bot/menu";
+} from "../packages/core/src/shopping-groups";
+import type { BotUser } from "./auth";
+import { CB, type View } from "./menu";
 
 /**
  * Feature 17.3 — the shopping list inside the chat.

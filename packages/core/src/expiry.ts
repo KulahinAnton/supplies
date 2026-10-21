@@ -1,0 +1,132 @@
+/**
+ * Expiry states (PROJECT_PROMPT.md §3.5). Pure — no Prisma client, no React.
+ *
+ * `warnDays` is household data (`Household.expiryWarnDays`), never a constant
+ * in this file: the family decides what "soon" means.
+ */
+
+import { addDays, compareDateOnly, daysBetween, toDateOnly } from "./period";
+
+export type ExpiryState = "EXPIRED" | "SOON" | "FRESH" | "NONE";
+
+/**
+ * Feature 13 — how many days ahead counts as "expiring soon" for one item.
+ *
+ * A category's `expiryWarnDays` is **nullable, and null means inherit**. It is
+ * not a copy of the household value: a category left inheriting must follow
+ * the household default when that default changes.
+ *
+ * 0 is a real answer ("warn me only on the day itself"), so this must test for
+ * null explicitly — `??`, never `||`, which would treat 0 as unset.
+ */
+export function resolveWarnDays(
+  categoryWarnDays: number | null | undefined,
+  householdWarnDays: number,
+): number {
+  return categoryWarnDays ?? householdWarnDays;
+}
+
+/** Batch shape this module needs. Real `StockBatch` rows satisfy it. */
+export type ExpiryBatch = {
+  quantity: { isZero(): boolean; isNegative(): boolean };
+  expiresAt: Date | null;
+};
+
+/**
+ * Severity order for "the item takes the worst state of its batches".
+ * NONE is the least severe: an undated batch is not a problem, it is an
+ * absence of information.
+ */
+const SEVERITY: Record<ExpiryState, number> = {
+  EXPIRED: 3,
+  SOON: 2,
+  FRESH: 1,
+  NONE: 0,
+};
+
+export function batchExpiryState(
+  expiresAt: Date | null,
+  today: Date,
+  warnDays: number,
+): ExpiryState {
+  if (!expiresAt) return "NONE";
+  const day = toDateOnly(expiresAt);
+  const from = toDateOnly(today);
+  if (compareDateOnly(day, from) < 0) return "EXPIRED";
+  // Inclusive on both ends: expiring today is SOON, and so is the last day of
+  // the warning window.
+  if (compareDateOnly(day, addDays(from, warnDays)) <= 0) return "SOON";
+  return "FRESH";
+}
+
+/** Batches with no quantity left are history and never drive a warning. */
+function isLive(batch: ExpiryBatch): boolean {
+  return !batch.quantity.isZero() && !batch.quantity.isNegative();
+}
+
+/**
+ * The worst state among an item's live batches (§3.5). An item with no live
+ * batches has nothing to expire, so it reports NONE — its problem, if any, is
+ * being out of stock, which is `stockState`'s business.
+ */
+export function itemExpiryState(
+  batches: readonly ExpiryBatch[],
+  today: Date,
+  warnDays: number,
+): ExpiryState {
+  let worst: ExpiryState = "NONE";
+  for (const batch of batches) {
+    if (!isLive(batch)) continue;
+    const state = batchExpiryState(batch.expiresAt, today, warnDays);
+    if (SEVERITY[state] > SEVERITY[worst]) worst = state;
+  }
+  return worst;
+}
+
+/** Whole days until `expiresAt`; negative once it has passed. */
+export function daysUntil(expiresAt: Date, today: Date): number {
+  return daysBetween(today, expiresAt);
+}
+
+/** True for states the dashboard should surface (§3.5 → Feature 5). */
+export function needsAttention(state: ExpiryState): boolean {
+  return state === "EXPIRED" || state === "SOON";
+}
+
+/**
+ * Sort comparator putting the most urgent batch first: expired before soon,
+ * earlier dates before later, undated last. Used by the dashboard and by the
+ * FEFO planner's presentation layer.
+ */
+export function byUrgency(a: ExpiryBatch, b: ExpiryBatch): number {
+  if (a.expiresAt && b.expiresAt) return compareDateOnly(a.expiresAt, b.expiresAt);
+  if (a.expiresAt) return -1;
+  if (b.expiresAt) return 1;
+  return 0;
+}
+
+/**
+ * Feature 30 — the attention list, split into what is already gone and what
+ * still has time.
+ *
+ * Reported: one list mixing the two "makes it hard to see what I need to use
+ * faster and what is already expired". Both halves were there — sorted, and
+ * each row badged — but a badge has to be read one row at a time, and the two
+ * halves call for opposite actions: bin the first, eat the second.
+ *
+ * A splitter rather than three filters at three call sites: the dashboard, the
+ * digest and the bot's /expiring all show this list, and they must agree about
+ * which half a thing is in. `needsAttention` decides what enters the list at
+ * all, and this decides which half — one rule each, no third opinion.
+ *
+ * Order is preserved inside each half, so a caller that sorted by urgency
+ * still gets its order.
+ */
+export function splitExpiring<T extends { expiry: ExpiryState }>(
+  items: readonly T[],
+): { expired: T[]; soon: T[] } {
+  return {
+    expired: items.filter((item) => item.expiry === "EXPIRED"),
+    soon: items.filter((item) => item.expiry === "SOON"),
+  };
+}
