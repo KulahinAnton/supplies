@@ -303,6 +303,32 @@ than something to slip into a build fix. Excluding it keeps doctor's output at
 21/21, so the next failure is visible instead of being the sixth line of a
 standing complaint.
 
+## A fresh checkout has no Expo types, unless something tracked asks for them
+
+`expo start` writes `expo-env.d.ts` (one line, `/// <reference types="expo/types" />`)
+and `.expo/types/`, and both are gitignored. Expo's global types, `process.env`
+included, reach the program only through that reference. So on any machine that
+has run Metro the types are complete, and on CI, which never has, `process.env`
+had no type: the type-aware lint read `EXPO_PUBLIC_API_URL` as `any` and failed,
+the first time the branch met CI, while passing everywhere else.
+
+`expo-types.d.ts` is the same reference, tracked. Do not delete it because
+`expo-env.d.ts` "already does that"; that file only exists where Metro has run.
+To reproduce CI locally, move `expo-env.d.ts` and `.expo/types/` aside and run
+`pnpm exec eslint apps/mobile`.
+
+## `expo-doctor` in CI skips the version check, on purpose
+
+The version check compares the lockfile with what Expo published *most
+recently*, so its answer changes without the commit changing. On 2026-10-21 it
+went red four hours after Expo released twelve SDK 57 patches, and
+`expo install --fix` could only install them by adding eight exceptions to
+pnpm's `minimumReleaseAge` cooldown, which exists to keep packages that new
+out. So CI runs doctor with `EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1` as
+the gate, plus a second, non-blocking doctor run that still shows the drift.
+Upgrade with `npx expo install --fix` once the new versions are a day or more
+old, and check that it did not touch `pnpm-workspace.yaml`.
+
 ## Typed routes, and a watcher quirk worth recognising
 
 `experiments.typedRoutes` generates `.expo/types/router.d.ts`, and it does

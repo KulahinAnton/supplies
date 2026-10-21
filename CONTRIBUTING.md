@@ -46,7 +46,9 @@ whole gate, including the parts that were working.
   unit tests, `pnpm test:db`, `pnpm test:api:e2e` (including the wire
   contracts), a production build, then Playwright over the Next app and over
   the SPA.
-- **mobile**: `expo-doctor` and a device-free Android bundle, which is how a
+- **mobile**: `expo-doctor` (with its version-drift check reported but not
+  blocking, since that depends on what Expo published last, not on the commit)
+  and a device-free Android bundle, which is how a
   missing peer dependency or a Metro resolution mistake is caught before an
   EAS build fails on it.
 

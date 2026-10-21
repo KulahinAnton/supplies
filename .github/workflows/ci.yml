@@ -36,6 +36,12 @@ jobs:
       DATABASE_URL: postgresql://supplies:supplies@localhost:5432/supplies
       # Auth.js needs a secret to boot; this one is CI-only and worthless.
       AUTH_SECRET: ci-only-not-a-real-secret-000000000000000
+      # So does the API, and it refuses one shorter than 32 characters, or
+      # none: it has no default by design (apps/api/src/config/env.ts). Both
+      # API suites, and the API the SPA's Playwright run starts, read it. Locally
+      # it comes from .env, which is why its absence here went unnoticed until
+      # this workflow first ran on the branch that added the API.
+      API_JWT_SECRET: ci-only-not-a-real-api-secret-00000000000
       APP_URL: http://localhost:3000
 
     steps:
@@ -132,10 +138,30 @@ jobs:
 
       # This is the check that would have caught an EAS build failing on a
       # missing peer dependency, two hours before the build did. It also names
-      # config keys the SDK has dropped and packages that have drifted from the
-      # versions it expects.
+      # config keys the SDK has dropped and duplicate native modules. All of
+      # that is a property of the commit, so it blocks.
+      #
+      # The dependency-version check is skipped HERE because it is not a
+      # property of the commit: it compares the lockfile with whatever Expo has
+      # published most recently. On 2026-10-21 it turned a branch red four
+      # hours after Expo released twelve SDK 57 patches, with no code changed.
+      # Installing those to go green meant overriding pnpm's
+      # minimumReleaseAge cooldown, which exists to keep packages that young
+      # out. A check whose answer depends on the calendar does not belong in a
+      # gate.
       - name: Expo doctor
         working-directory: apps/mobile
+        run: npx --yes expo-doctor
+        env:
+          EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK: "1"
+
+      # The same drift, reported without failing the run, so it stays visible:
+      # the step shows as failed inside a green job until someone runs
+      # `npx expo install --fix` once the new versions are old enough for the
+      # cooldown.
+      - name: Expo SDK patch drift (informational)
+        working-directory: apps/mobile
+        continue-on-error: true
         run: npx --yes expo-doctor
 
       # Resolves the entire module graph and writes a Hermes bundle with no

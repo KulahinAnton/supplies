@@ -243,6 +243,16 @@ Expo SDK 57 expects TypeScript 6.0. The workspace is on 5.9.3, and
 `expo.install.exclude` hides the warning. Upgrade the whole workspace at once,
 as its own PR, rather than letting the phone drift onto a different compiler.
 
+### 6.4 Expo SDK 57 patch updates · P2 · S
+
+Expo published patches for twelve SDK 57 packages on 2026-10-21 (`expo`
+57.0.21 → 57.0.31, `expo-router` 57.0.20 → 57.0.29, and ten more). CI reports
+the drift without blocking ([apps/mobile/CLAUDE.md](../apps/mobile/CLAUDE.md)).
+From 2026-10-23, when they are past pnpm's release-age cooldown, run
+`npx expo install --fix` in `apps/mobile`. Make sure it adds nothing to
+`minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, then rebuild the bundle,
+run `expo-doctor` and open the app on the emulator.
+
 ## 7. Tests
 
 ### 7.1 Component tests for the shared UI · P2 · M
