@@ -105,9 +105,11 @@ re-runnable.
 - **The Next app** (`apps/web/e2e/`) is built and served on **port 3100**, not
   3000, so a run can never silently attach to your dev server and prove nothing
   about the build.
-- **The SPA** (`apps/spa/e2e/`) rebuilds first, because `VITE_API_URL` is
-  inlined at build time, then serves it with `vite preview` on 4173 against an
-  API that Playwright starts on 3210.
+- **The SPA** (`apps/spa/e2e/`) builds both things it runs. The SPA, because
+  `VITE_API_URL` is inlined at build time, served with `vite preview` on 4173.
+  And the API, compiled fresh and started on 3210, because `start` runs
+  `dist/` and a leftover `dist/` from `pnpm api:dev` is not a build anyone
+  chose.
 
 Two projects each: `chromium` (desktop) and `mobile` (Pixel 7 viewport). The
 app is used standing in a shop, so a layout that only works at 1280 px is not

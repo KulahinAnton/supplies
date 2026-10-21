@@ -57,11 +57,17 @@ export default defineConfig({
        * CORS_ORIGINS has to name the preview origin below, or every request
        * fails as an opaque TypeError and the failure reads as "the API is
        * down" rather than "the API refused this origin".
+       *
+       * **Built here, like the SPA below.** `start` runs the compiled
+       * `dist/`, which nothing else in CI produces: the first CI run on this
+       * branch died with the server unable to start. Locally it had always
+       * passed, against whatever `dist/` the last `pnpm api:dev` left behind —
+       * which is a suite testing an API build nobody chose.
        */
-      command: "pnpm --filter @supplies/api start",
+      command: "pnpm --filter @supplies/api build && pnpm --filter @supplies/api start",
       url: "http://localhost:3210/health",
       reuseExistingServer: false,
-      timeout: 120_000,
+      timeout: 180_000,
       env: {
         API_PORT: "3210",
         CORS_ORIGINS: "http://localhost:4173",

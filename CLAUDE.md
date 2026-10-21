@@ -83,7 +83,7 @@ loads `../../.env` with `override: false`, so a real environment variable
 | `pnpm test` | vitest over `packages/**` and `bot/**`, no database |
 | `pnpm test:db` | live-database smoke test (`scripts/smoke.ts`). Needs Docker and a seed. Mutates and restores the demo household |
 | `pnpm test:api:e2e` | the API against the same live database, contracts included. **Signs the demo user out** (the replay check revokes every session) |
-| `pnpm test:e2e` / `test:e2e:spa` | Playwright over each web client's production build (Next on :3100; SPA on :4173 with an API on :3210) |
+| `pnpm test:e2e` / `test:e2e:spa` | Playwright over each web client's production build (Next on :3100, from `pnpm build`; SPA on :4173 with an API on :3210, both compiled by the suite itself) |
 | `pnpm db:up` · `db:migrate` · `db:seed` · `db:studio` | database ([prisma/CLAUDE.md](prisma/CLAUDE.md)) |
 | `pnpm bot:dev` · `bot:local` · `bot:webhook:set` / `:delete` | the bot ([bot/CLAUDE.md](bot/CLAUDE.md)) |
 | `pnpm digest:run [--force]` | the daily digest, respecting `digestHour` |
